@@ -1,0 +1,29 @@
+{
+  "" : {
+    "diagnostics" : "/Users/estebanavila/Documents/Codex/2026-07-11/new-chat/work/SalonJoystick3D/DerivedData/Build/Intermediates.noindex/SalonJoystick3D.build/Debug-iphonesimulator/SalonJoystick3D.build/Objects-normal/arm64/SalonJoystick3D-primary.dia",
+    "emit-module-dependencies" : "/Users/estebanavila/Documents/Codex/2026-07-11/new-chat/work/SalonJoystick3D/DerivedData/Build/Intermediates.noindex/SalonJoystick3D.build/Debug-iphonesimulator/SalonJoystick3D.build/Objects-normal/arm64/SalonJoystick3D-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/estebanavila/Documents/Codex/2026-07-11/new-chat/work/SalonJoystick3D/DerivedData/Build/Intermediates.noindex/SalonJoystick3D.build/Debug-iphonesimulator/SalonJoystick3D.build/Objects-normal/arm64/SalonJoystick3D-primary-emit-module.dia",
+    "pch" : "/Users/estebanavila/Documents/Codex/2026-07-11/new-chat/work/SalonJoystick3D/DerivedData/Build/Intermediates.noindex/SalonJoystick3D.build/Debug-iphonesimulator/SalonJoystick3D.build/Objects-normal/arm64/SalonJoystick3D-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/estebanavila/Documents/Codex/2026-07-11/new-chat/work/SalonJoystick3D/DerivedData/Build/Intermediates.noindex/SalonJoystick3D.build/Debug-iphonesimulator/SalonJoystick3D.build/Objects-normal/arm64/SalonJoystick3D-primary.swiftdeps"
+  },
+  "/Users/estebanavila/Documents/Codex/2026-07-11/new-chat/work/SalonJoystick3D/Sources/SalonJoystick3D/ContentView.swift" : {
+    "const-values" : "/Users/estebanavila/Documents/Codex/2026-07-11/new-chat/work/SalonJoystick3D/DerivedData/Build/Intermediates.noindex/SalonJoystick3D.build/Debug-iphonesimulator/SalonJoystick3D.build/Objects-normal/arm64/ContentView.swiftconstvalues",
+    "dependencies" : "/Users/estebanavila/Documents/Codex/2026-07-11/new-chat/work/SalonJoystick3D/DerivedData/Build/Intermediates.noindex/SalonJoystick3D.build/Debug-iphonesimulator/SalonJoystick3D.build/Objects-normal/arm64/ContentView.d",
+    "diagnostics" : "/Users/estebanavila/Documents/Codex/2026-07-11/new-chat/work/SalonJoystick3D/DerivedData/Build/Intermediates.noindex/SalonJoystick3D.build/Debug-iphonesimulator/SalonJoystick3D.build/Objects-normal/arm64/ContentView.dia",
+    "index-unit-output-path" : "/SalonJoystick3D.build/Debug-iphonesimulator/SalonJoystick3D.build/Objects-normal/arm64/ContentView.o",
+    "llvm-bc" : "/Users/estebanavila/Documents/Codex/2026-07-11/new-chat/work/SalonJoystick3D/DerivedData/Build/Intermediates.noindex/SalonJoystick3D.build/Debug-iphonesimulator/SalonJoystick3D.build/Objects-normal/arm64/ContentView.bc",
+    "object" : "/Users/estebanavila/Documents/Codex/2026-07-11/new-chat/work/SalonJoystick3D/DerivedData/Build/Intermediates.noindex/SalonJoystick3D.build/Debug-iphonesimulator/SalonJoystick3D.build/Objects-normal/arm64/ContentView.o",
+    "swift-dependencies" : "/Users/estebanavila/Documents/Codex/2026-07-11/new-chat/work/SalonJoystick3D/DerivedData/Build/Intermediates.noindex/SalonJoystick3D.build/Debug-iphonesimulator/SalonJoystick3D.build/Objects-normal/arm64/ContentView.swiftdeps",
+    "swiftmodule" : "/Users/estebanavila/Documents/Codex/2026-07-11/new-chat/work/SalonJoystick3D/DerivedData/Build/Intermediates.noindex/SalonJoystick3D.build/Debug-iphonesimulator/SalonJoystick3D.build/Objects-normal/arm64/ContentView~partial.swiftmodule"
+  },
+  "/Users/estebanavila/Documents/Codex/2026-07-11/new-chat/work/SalonJoystick3D/Sources/SalonJoystick3D/SalonJoystick3DApp.swift" : {
+    "const-values" : "/Users/estebanavila/Documents/Codex/2026-07-11/new-chat/work/SalonJoystick3D/DerivedData/Build/Intermediates.noindex/SalonJoystick3D.build/Debug-iphonesimulator/SalonJoystick3D.build/Objects-normal/arm64/SalonJoystick3DApp.swiftconstvalues",
+    "dependencies" : "/Users/estebanavila/Documents/Codex/2026-07-11/new-chat/work/SalonJoystick3D/DerivedData/Build/Intermediates.noindex/SalonJoystick3D.build/Debug-iphonesimulator/SalonJoystick3D.build/Objects-normal/arm64/SalonJoystick3DApp.d",
+    "diagnostics" : "/Users/estebanavila/Documents/Codex/2026-07-11/new-chat/work/SalonJoystick3D/DerivedData/Build/Intermediates.noindex/SalonJoystick3D.build/Debug-iphonesimulator/SalonJoystick3D.build/Objects-normal/arm64/SalonJoystick3DApp.dia",
+    "index-unit-output-path" : "/SalonJoystick3D.build/Debug-iphonesimulator/SalonJoystick3D.build/Objects-normal/arm64/SalonJoystick3DApp.o",
+    "llvm-bc" : "/Users/estebanavila/Documents/Codex/2026-07-11/new-chat/work/SalonJoystick3D/DerivedData/Build/Intermediates.noindex/SalonJoystick3D.build/Debug-iphonesimulator/SalonJoystick3D.build/Objects-normal/arm64/SalonJoystick3DApp.bc",
+    "object" : "/Users/estebanavila/Documents/Codex/2026-07-11/new-chat/work/SalonJoystick3D/DerivedData/Build/Intermediates.noindex/SalonJoystick3D.build/Debug-iphonesimulator/SalonJoystick3D.build/Objects-normal/arm64/SalonJoystick3DApp.o",
+    "swift-dependencies" : "/Users/estebanavila/Documents/Codex/2026-07-11/new-chat/work/SalonJoystick3D/DerivedData/Build/Intermediates.noindex/SalonJoystick3D.build/Debug-iphonesimulator/SalonJoystick3D.build/Objects-normal/arm64/SalonJoystick3DApp.swiftdeps",
+    "swiftmodule" : "/Users/estebanavila/Documents/Codex/2026-07-11/new-chat/work/SalonJoystick3D/DerivedData/Build/Intermediates.noindex/SalonJoystick3D.build/Debug-iphonesimulator/SalonJoystick3D.build/Objects-normal/arm64/SalonJoystick3DApp~partial.swiftmodule"
+  }
+}
