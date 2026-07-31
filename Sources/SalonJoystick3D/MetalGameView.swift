@@ -69,6 +69,9 @@ struct MetalGameView: UIViewRepresentable {
             let renderer = try MetalRayRenderer(view: view, audio: model.audio)
             context.coordinator.renderer = renderer
             renderer.onFPSUpdate = model.showsFPS ? context.coordinator.onFPSUpdate : nil
+            renderer.onToolStatusUpdate = { [weak model] status in
+                model?.reportToolStatus(status)
+            }
             renderer.onNearbyLightUpdate = { [weak model] fixture in
                 model?.reportNearbyLight(fixture)
             }

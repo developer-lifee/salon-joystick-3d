@@ -12,6 +12,7 @@ enum GameHeldTool: Int, CaseIterable, Identifiable {
     case none
     case flashlight
     case laser
+    case mirror
 
     var id: Self { self }
 
@@ -20,6 +21,7 @@ enum GameHeldTool: Int, CaseIterable, Identifiable {
         case .none: "power"
         case .flashlight: "flashlight.on.fill"
         case .laser: "scope"
+        case .mirror: "rectangle.portrait.fill"
         }
     }
 
@@ -28,8 +30,15 @@ enum GameHeldTool: Int, CaseIterable, Identifiable {
         case .none: "Guardar herramienta"
         case .flashlight: "Linterna"
         case .laser: "Láser"
+        case .mirror: "Espejo defensivo"
         }
     }
+}
+
+struct GameToolStatus: Equatable {
+    var activeRemaining: Float = 0
+    var cooldownRemaining: Float = 0
+    var label: String = ""
 }
 
 enum GameLightFixture: Int, CaseIterable, Identifiable {
@@ -234,6 +243,15 @@ struct ContentView: View {
                 .accessibilityHint("Toca para cambiar de herramienta")
                 .accessibilityIdentifier("toolButton")
 
+                if !model.toolStatus.label.isEmpty {
+                    Text(model.toolStatus.label)
+                        .font(.caption.monospacedDigit().bold())
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(.black.opacity(0.62), in: RoundedRectangle(cornerRadius: 6))
+                }
+
                 Button {
                     model.requestJump()
                 } label: {
@@ -287,6 +305,30 @@ struct ContentView: View {
                         }
                     }
 
+                    Section("Partida local") {
+                        Picker("Modo", selection: $model.multiplayer.mode) {
+                            ForEach(LocalMatchMode.allCases) { mode in
+                                Text(mode.label).tag(mode)
+                            }
+                        }
+                        Button {
+                            model.multiplayer.host()
+                        } label: {
+                            Label("Crear sala", systemImage: "wifi")
+                        }
+                        Button {
+                            model.multiplayer.join()
+                        } label: {
+                            Label("Buscar jugador", systemImage: "person.2")
+                        }
+                        if model.multiplayer.isConnected {
+                            Label("Jugador conectado", systemImage: "checkmark.circle.fill")
+                            Button("Desconectar", role: .destructive) {
+                                model.multiplayer.stop()
+                            }
+                        }
+                    }
+
                     Button {
                         showsCoffeeStore = true
                     } label: {
@@ -322,7 +364,7 @@ struct ContentView: View {
 }
 
 private struct CoffeeTipView: View {
-    static let productID = "com.codex.salonjoystick3d.coffee"
+    static let productID = "com.estebanavila.RtPruebas.tip.coffee"
 
     @Environment(\.dismiss) private var dismiss
 
@@ -350,13 +392,10 @@ private struct CoffeeTipView: View {
 
 final class GameModel: ObservableObject {
     let audio = ChiptuneAudioEngine()
+    let multiplayer = LocalMultiplayerSession()
 
     @Published var cameraMode = GameCameraMode.thirdPerson {
-        didSet {
-            if cameraMode == .thirdPerson && heldTool == .laser {
-                heldTool = .flashlight
-            }
-        }
+        didSet { }
     }
     @Published var renderResolution = GameRenderResolution.balanced
     @Published var heldTool = GameHeldTool.flashlight
@@ -376,6 +415,7 @@ final class GameModel: ObservableObject {
     @Published private(set) var framesPerSecond: Double = 0
     @Published var joystick = CGVector(dx: 0, dy: 0)
     @Published private(set) var jumpRequestID = 0
+    @Published private(set) var toolStatus = GameToolStatus()
 
     init() {
         audio.start()
@@ -386,9 +426,7 @@ final class GameModel: ObservableObject {
     }
 
     func cycleHeldTool() {
-        let tools: [GameHeldTool] = cameraMode == .firstPerson
-            ? [.none, .flashlight, .laser]
-            : [.none, .flashlight]
+        let tools: [GameHeldTool] = [.none, .flashlight, .laser, .mirror]
         let currentIndex = tools.firstIndex(of: heldTool) ?? 0
         heldTool = tools[(currentIndex + 1) % tools.count]
     }
@@ -412,6 +450,13 @@ final class GameModel: ObservableObject {
     func reportFPS(_ value: Double) {
         DispatchQueue.main.async { [weak self] in
             self?.framesPerSecond = value
+        }
+    }
+
+    func reportToolStatus(_ status: GameToolStatus) {
+        DispatchQueue.main.async { [weak self] in
+            guard self?.toolStatus != status else { return }
+            self?.toolStatus = status
         }
     }
 }
@@ -2289,14 +2334,9 @@ final class ChiptuneAudioEngine {
             let slapEnvelope = attack * exp(-time * (10.0 + Double(variant)))
             let trailEnvelope = attack * exp(-time * 5.5)
             let highPass = noise - lowPass
-            let bubbleFrequency = 235.0 + Double(variant) * 24.0 - progress * 105.0
-            bubblePhase += 2 * Double.pi * bubbleFrequency / format.sampleRate
             let slap = highPass * 0.42 * slapEnvelope
             let body = lowPass * 0.31 * trailEnvelope
-            let bubble = sin(bubblePhase) * 0.105 * trailEnvelope
-            let droplet = sin(2 * Double.pi * (510.0 + Double(variant) * 63.0) * time) *
-                exp(-pow((time - 0.17 - Double(variant) * 0.018) / 0.026, 2.0)) * 0.055
-            let sample = Float(slap + body + bubble + droplet)
+            let sample = Float(slap + body)
             channels[0][frame] = sample
             channels[1][frame] = sample * (variant == 1 ? 0.86 : 0.94)
         }

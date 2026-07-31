@@ -437,6 +437,7 @@ enum MetalRayRendererError: Error {
 final class MetalRayRenderer: NSObject, MTKViewDelegate {
     var onFPSUpdate: ((Double) -> Void)?
     var onNearbyLightUpdate: ((GameLightFixture?) -> Void)?
+    var onToolStatusUpdate: ((GameToolStatus) -> Void)?
 
     private let device: MTLDevice
     private let commandQueue: MTLCommandQueue
@@ -449,6 +450,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private let laserResultBuffer: MTLBuffer
     private let staticMesh: RTMeshResources
     private let playerMesh: RTMeshResources
+    private let npcMesh: RTMeshResources
     private let waterMesh: RTMeshResources
     private let floatMesh: RTMeshResources
     private let instanceBuffer: MTLBuffer
@@ -474,6 +476,16 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private var horizontalVelocity = SIMD2<Float>.zero
     private var verticalVelocity: Float = 0
     private var playerYaw: Float = .pi
+    private var npcPositions = [
+        SIMD3<Float>(-7.2, 0, 3.7),
+        SIMD3<Float>(6.7, 0, -6.0)
+    ]
+    private var npcYaws = [Float.pi * 0.25, Float.pi * 1.7]
+    private var npcRespawnTimers = [Float](repeating: 0, count: 2)
+    private let npcSpawnPositions = [
+        SIMD3<Float>(-7.2, 0, 3.7),
+        SIMD3<Float>(6.7, 0, -6.0)
+    ]
     private var floatPosition = SIMD3<Float>(-2.6, 0.015, -2.0)
     private var floatVelocity = SIMD2<Float>.zero
     private var floatYaw: Float = 0
@@ -493,6 +505,12 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private var lastCameraRight = SIMD3<Float>(1, 0, 0)
     private var lastCameraUp = SIMD3<Float>(0, 1, 0)
     private var lastCameraForward = SIMD3<Float>(0, 0, -1)
+    private var lastHeldTool = GameHeldTool.none
+    private var laserActiveRemaining: Float = 0
+    private var laserCooldownRemaining: Float = 0
+    private var mirrorActiveRemaining: Float = 0
+    private var mirrorCooldownRemaining: Float = 0
+    private var toolStatusCountdown: Float = 0
 
     init(view: MTKView, audio: ChiptuneAudioEngine) throws {
         guard let device = view.device ?? MTLCreateSystemDefaultDevice(), device.supportsRaytracing else {
@@ -558,10 +576,12 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         let staticBuilder = Self.makeStaticScene()
         let playerBuilder = Self.makePlayerMesh()
+        let npcBuilder = Self.makeNPCMesh()
         let waterBuilder = Self.makeWaterMesh()
         let floatBuilder = Self.makeFloatMesh()
         self.staticMesh = try Self.makeMesh(builder: staticBuilder, device: device, queue: commandQueue)
         self.playerMesh = try Self.makeMesh(builder: playerBuilder, device: device, queue: commandQueue)
+        self.npcMesh = try Self.makeMesh(builder: npcBuilder, device: device, queue: commandQueue)
         self.waterMesh = try Self.makeMesh(
             builder: waterBuilder,
             device: device,
@@ -570,7 +590,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         )
         self.floatMesh = try Self.makeMesh(builder: floatBuilder, device: device, queue: commandQueue)
 
-        let instanceLength = MemoryLayout<MTLAccelerationStructureInstanceDescriptor>.stride * 4
+        let instanceLength = MemoryLayout<MTLAccelerationStructureInstanceDescriptor>.stride * 6
         guard let instanceBuffer = device.makeBuffer(length: instanceLength, options: .storageModeShared) else {
             throw MetalRayRendererError.resourceCreationFailed
         }
@@ -581,9 +601,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             staticMesh.accelerationStructure,
             playerMesh.accelerationStructure,
             waterMesh.accelerationStructure,
-            floatMesh.accelerationStructure
+            floatMesh.accelerationStructure,
+            npcMesh.accelerationStructure
         ]
-        descriptor.instanceCount = 4
+        descriptor.instanceCount = 6
         descriptor.instanceDescriptorBuffer = instanceBuffer
         self.instanceDescriptor = descriptor
 
@@ -615,7 +636,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         self.joystick = joystick
         self.cameraMode = cameraMode
         self.rayBouncesEnabled = rayBouncesEnabled
-        self.heldTool = cameraMode == .firstPerson || heldTool != .laser ? heldTool : .none
+        self.heldTool = heldTool
         self.lightStates = lightStates
         if handledJumpRequestID != jumpRequestID {
             handledJumpRequestID = jumpRequestID
@@ -628,7 +649,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if cameraMode == .firstPerson {
             firstPersonPitch = max(-0.82, min(0.82, firstPersonPitch - deltaY * 0.0045))
         } else {
-            orbitPitch = max(0.22, min(0.72, orbitPitch - deltaY * 0.0045))
+            orbitPitch = max(-0.34, min(1.02, orbitPitch - deltaY * 0.0045))
         }
     }
 
@@ -773,6 +794,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     }
 
     private func updateSimulation(dt: Float) {
+        updateToolTimers(dt: dt)
+        updateNPCSimulation(dt: dt)
+        checkCombatHits()
         let wasRidingFloat = isStandingOnFloat(playerPosition)
         let floatDisplacement = updateFloatSimulation(dt: dt)
         if wasRidingFloat {
@@ -859,7 +883,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             audio.playWaterDisturbance(intensity: entryIntensity)
         }
 
-        if landingSpeed > 0 {
+        let enteredWaterThisFrame = currentWaterImmersion > 0 && previousWaterImmersion <= 0
+        if landingSpeed > 0 && !enteredWaterThisFrame && currentWaterImmersion <= 0 {
             let impact = min(1, max(0.15, (landingSpeed - 1.0) / 4.2))
             if currentWaterImmersion <= 0 || willBeOnFloat {
                 audio.playLanding(intensity: impact)
@@ -907,6 +932,142 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if glideStateChanged || abs(glideIntensity - lastSubmittedGlideIntensity) >= 0.035 {
             lastSubmittedGlideIntensity = glideIntensity
             audio.setGlideIntensity(glideIntensity)
+        }
+    }
+
+    private func updateToolTimers(dt: Float) {
+        if laserCooldownRemaining > 0 { laserCooldownRemaining = max(0, laserCooldownRemaining - dt) }
+        if mirrorCooldownRemaining > 0 { mirrorCooldownRemaining = max(0, mirrorCooldownRemaining - dt) }
+
+        if heldTool != lastHeldTool {
+            lastHeldTool = heldTool
+            if heldTool == .laser && laserCooldownRemaining <= 0 {
+                laserActiveRemaining = 4.0
+            } else if heldTool == .mirror && mirrorCooldownRemaining <= 0 {
+                mirrorActiveRemaining = 3.0
+            }
+        }
+
+        if heldTool == .laser && laserActiveRemaining > 0 {
+            laserActiveRemaining = max(0, laserActiveRemaining - dt)
+            if laserActiveRemaining == 0 { laserCooldownRemaining = 6.0 }
+        }
+        if heldTool == .mirror && mirrorActiveRemaining > 0 {
+            mirrorActiveRemaining = max(0, mirrorActiveRemaining - dt)
+            if mirrorActiveRemaining == 0 { mirrorCooldownRemaining = 5.0 }
+        }
+
+        toolStatusCountdown -= dt
+        if toolStatusCountdown <= 0 {
+            toolStatusCountdown = 0.08
+            let active: Float
+            let cooldown: Float
+            switch heldTool {
+            case .laser:
+                active = laserActiveRemaining; cooldown = laserCooldownRemaining
+            case .mirror:
+                active = mirrorActiveRemaining; cooldown = mirrorCooldownRemaining
+            default:
+                active = 0; cooldown = 0
+            }
+            let label: String
+            if cooldown > 0.01 {
+                label = String(format: "Recarga %.1f s", cooldown)
+            } else if active > 0.01 {
+                label = String(format: "Activo %.1f s", active)
+            } else {
+                label = ""
+            }
+            onToolStatusUpdate?(GameToolStatus(activeRemaining: active, cooldownRemaining: cooldown, label: label))
+        }
+    }
+
+    private func updateNPCSimulation(dt: Float) {
+        for index in npcPositions.indices {
+            if npcRespawnTimers[index] > 0 {
+                npcRespawnTimers[index] = max(0, npcRespawnTimers[index] - dt)
+                npcPositions[index].y = -10
+                if npcRespawnTimers[index] == 0 {
+                    npcPositions[index] = npcSpawnPositions[index]
+                }
+                continue
+            }
+
+            let offset = SIMD2<Float>(
+                playerPosition.x - npcPositions[index].x,
+                playerPosition.z - npcPositions[index].z
+            )
+            let distance = simd_length(offset)
+            guard distance > 2.1 else { continue }
+            let direction = offset / max(distance, 0.001)
+            let speed: Float = 0.78 + Float(index) * 0.12
+            npcPositions[index].x += direction.x * speed * dt
+            npcPositions[index].z += direction.y * speed * dt
+            npcPositions[index].x = max(-9.0, min(9.0, npcPositions[index].x))
+            npcPositions[index].z = max(-9.0, min(9.0, npcPositions[index].z))
+            npcYaws[index] = atan2(direction.x, direction.y)
+        }
+    }
+
+    private func checkCombatHits() {
+        guard heldTool == .laser, laserActiveRemaining > 0 else { return }
+
+        let origin = playerPosition + SIMD3<Float>(0, 1.18, 0) + lastCameraRight * 0.30
+        let aimPoint = lastCameraPosition + lastCameraForward * 18
+        let direction = simd_normalize(aimPoint - origin)
+        var closestIndex: Int?
+        var closestDistance: Float = 30
+
+        for index in npcPositions.indices where npcRespawnTimers[index] <= 0 {
+            let center = npcPositions[index] + SIMD3<Float>(0, 0.85, 0)
+            let alongRay = simd_dot(center - origin, direction)
+            guard alongRay > 0, alongRay < closestDistance else { continue }
+            let closestPoint = origin + direction * alongRay
+            guard simd_distance(center, closestPoint) < 0.48 else { continue }
+            closestIndex = index
+            closestDistance = alongRay
+        }
+
+        if let closestIndex {
+            npcRespawnTimers[closestIndex] = 1.6
+            npcPositions[closestIndex].y = -10
+        }
+
+        // The rear wall mirror can send the player's own beam back at them.
+        let mirrorZ: Float = -9.43
+        guard direction.z < -0.001 else { return }
+        let mirrorDistance = (mirrorZ - origin.z) / direction.z
+        guard mirrorDistance > 0, mirrorDistance < 30 else { return }
+        let mirrorPoint = origin + direction * mirrorDistance
+        guard mirrorPoint.x > 1.35, mirrorPoint.x < 5.65,
+              mirrorPoint.y > 0.72, mirrorPoint.y < 3.38 else { return }
+        let reflected = SIMD3<Float>(direction.x, direction.y, -direction.z)
+        let playerCenter = playerPosition + SIMD3<Float>(0, 0.85, 0)
+        let toPlayer = playerCenter - mirrorPoint
+        let reflectedDistance = simd_dot(toPlayer, reflected)
+        guard reflectedDistance > 0, reflectedDistance < 22 else { return }
+        let reflectedClosestPoint = mirrorPoint + reflected * reflectedDistance
+        if simd_distance(playerCenter, reflectedClosestPoint) < 0.52 {
+            laserActiveRemaining = 0
+            laserCooldownRemaining = 6.0
+        }
+
+        // A reflected beam is still a gameplay beam: it can tag any rival
+        // that lies on the outgoing segment after the mirror.
+        var reflectedTarget: Int?
+        var closestReflectedDistance: Float = 22
+        for index in npcPositions.indices where npcRespawnTimers[index] <= 0 {
+            let center = npcPositions[index] + SIMD3<Float>(0, 0.85, 0)
+            let alongRay = simd_dot(center - mirrorPoint, reflected)
+            guard alongRay > 0, alongRay < closestReflectedDistance else { continue }
+            let closestPoint = mirrorPoint + reflected * alongRay
+            guard simd_distance(center, closestPoint) < 0.48 else { continue }
+            reflectedTarget = index
+            closestReflectedDistance = alongRay
+        }
+        if let reflectedTarget {
+            npcRespawnTimers[reflectedTarget] = 1.6
+            npcPositions[reflectedTarget].y = -10
         }
     }
 
@@ -1113,7 +1274,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             let horizontalDistance = cos(orbitPitch) * distance
             var desired = SIMD3<Float>(
                 smoothedCameraTarget.x + sin(cameraYaw) * horizontalDistance,
-                smoothedCameraTarget.y + sin(orbitPitch) * distance,
+                max(0.38, smoothedCameraTarget.y + sin(orbitPitch) * distance),
                 smoothedCameraTarget.z + cos(cameraYaw) * horizontalDistance
             )
             desired.x = max(-9.18, min(9.18, desired.x))
@@ -1138,6 +1299,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let aimPoint = cameraPosition + cameraForward * 18
         let toolDirection = simd_normalize(aimPoint - toolOrigin)
 
+        let renderTool: GameHeldTool
+        switch heldTool {
+        case .laser: renderTool = laserActiveRemaining > 0 ? .laser : .none
+        case .mirror: renderTool = mirrorActiveRemaining > 0 ? .mirror : .none
+        default: renderTool = heldTool
+        }
+
         var uniforms = RTUniforms(
             viewport: SIMD4<Float>(Float(texture.width), Float(texture.height), elapsedTime, rayBouncesEnabled ? 1 : 0),
             cameraPosition: SIMD4<Float>(cameraPosition, 1),
@@ -1155,7 +1323,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             waterImpulse: pendingWaterImpulse,
             toolOrigin: SIMD4<Float>(toolOrigin, 1),
             toolDirection: SIMD4<Float>(toolDirection, 0),
-            toolParameters: SIMD4<Float>(Float(heldTool.rawValue), 0, 0, 0),
+            toolParameters: SIMD4<Float>(Float(renderTool.rawValue), 0, 0, 0),
             lightStates: SIMD4<Float>(
                 lightStates.effectiveIntensity(.post),
                 lightStates.effectiveIntensity(.piscinaNeon),
@@ -1178,7 +1346,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             Self.makeInstanceDescriptor(translation: .zero, yaw: 0, mask: 0x01, accelerationStructureIndex: 0),
             Self.makeInstanceDescriptor(translation: playerPosition, yaw: playerYaw, mask: 0x02, accelerationStructureIndex: 1),
             Self.makeInstanceDescriptor(translation: .zero, yaw: 0, mask: 0x04, accelerationStructureIndex: 2),
-            Self.makeInstanceDescriptor(translation: floatPosition, yaw: floatYaw, mask: 0x01, accelerationStructureIndex: 3)
+            Self.makeInstanceDescriptor(translation: floatPosition, yaw: floatYaw, mask: 0x01, accelerationStructureIndex: 3),
+            Self.makeInstanceDescriptor(translation: npcPositions[0], yaw: npcYaws[0], mask: 0x01, accelerationStructureIndex: 4),
+            Self.makeInstanceDescriptor(translation: npcPositions[1], yaw: npcYaws[1], mask: 0x01, accelerationStructureIndex: 4)
         ]
         descriptors.withUnsafeBytes { bytes in
             guard let baseAddress = bytes.baseAddress else { return }
@@ -1298,6 +1468,12 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private static func makePlayerMesh() -> RTMeshBuilder {
         var builder = RTMeshBuilder()
         builder.addCharacter(origin: .zero, color: SIMD3<Float>(0.08, 0.82, 0.68), holdsTool: true)
+        return builder
+    }
+
+    private static func makeNPCMesh() -> RTMeshBuilder {
+        var builder = RTMeshBuilder()
+        builder.addCharacter(origin: .zero, color: SIMD3<Float>(0.92, 0.18, 0.34), holdsTool: true)
         return builder
     }
 
