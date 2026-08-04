@@ -24,6 +24,10 @@ struct RTLaserResult {
     float4 primaryStart;
     float4 primaryEnd;
     float4 reflectedEnd;
+    float4 bot0Start;
+    float4 bot0End;
+    float4 bot1Start;
+    float4 bot1End;
 };
 
 struct RTTriangleData {
@@ -119,8 +123,11 @@ inline float laserBeamIntensity(
 
     float3 closestOnCameraRay = cameraOrigin + cameraDirection * cameraDistance;
     float distance = length(closestOnSegment - closestOnCameraRay);
-    float radius = 0.012f + cameraDistance * 0.0011f;
-    return 1.0f - smoothstep(radius, radius * 2.6f, distance);
+    float coreRadius = 0.024f + cameraDistance * 0.0022f;
+    float glowRadius = 0.095f + cameraDistance * 0.0075f;
+    float core = 1.0f - smoothstep(0.0f, coreRadius, distance);
+    float glow = 1.0f - smoothstep(coreRadius, glowRadius, distance);
+    return core * 2.8f + glow * 0.75f;
 }
 
 inline float3 mirroredLightContribution(
@@ -259,7 +266,7 @@ kernel void traceToolLaser(
     result.primaryStart = float4(origin, 1.0f);
     result.primaryEnd = float4(origin, 0.0f);
     result.reflectedEnd = float4(origin, 0.0f);
-    if (uniforms.toolParameters.x < 1.5f) {
+    if (uniforms.toolParameters.x < 1.5f || uniforms.toolParameters.x > 2.5f) {
         return;
     }
 
@@ -362,6 +369,31 @@ kernel void raytracePatio(
     currentRay.direction = normalize(uv.x * uniforms.cameraRight.xyz +
                                      uv.y * uniforms.cameraUp.xyz +
                                      uniforms.cameraForward.xyz);
+
+    bool isSplitScreen = uniforms.toolParameters.w > 0.5f;
+    if (isSplitScreen) {
+        uint halfHeight = height / 2;
+        bool isBottomViewport = (tid.y >= halfHeight);
+        float subScreenHeight = float(halfHeight);
+        float localY = isBottomViewport ? float(tid.y - halfHeight) : float(tid.y);
+        uv.y = ((localY + 0.5f) / subScreenHeight) * 2.0f - 1.0f;
+        uv.y = -uv.y;
+
+        if (isBottomViewport) {
+            float3 p2Origin = float3(-3.8f, 1.15f, -3.8f);
+            float3 p2Forward = normalize(float3(0.0f, 0.5f, 0.0f) - p2Origin);
+            float3 p2Right = normalize(cross(p2Forward, float3(0.0f, 1.0f, 0.0f)));
+            float3 p2Up = cross(p2Right, p2Forward);
+            currentRay.origin = p2Origin;
+            currentRay.direction = normalize(uv.x * p2Right + uv.y * p2Up + p2Forward);
+        }
+
+        if (abs(int(tid.y) - int(halfHeight)) <= 2) {
+            output.write(half4(0.0h, 0.85h, 1.0h, 1.0h), tid);
+            return;
+        }
+    }
+
     currentRay.max_distance = 80.0f;
     float3 primaryDirection = currentRay.direction;
     float firstSurfaceDistance = currentRay.max_distance;
@@ -400,6 +432,11 @@ kernel void raytracePatio(
             normal = simulatedWaterNormal(position, waterState);
         } else if (puddleSurface) {
             normal = shallowPuddleNormal(position, uniforms.waterSimulation.y);
+        } else if (kind > 2.5f && kind < 3.5f) {
+            float2 grid = fract(position.xz * 2.2f);
+            float grout = step(0.04f, grid.x) * step(0.04f, grid.y);
+            float3 groutBump = float3((1.0f - grout) * 0.12f, 0.0f, (1.0f - grout) * 0.12f);
+            normal = normalize(normal + groutBump);
         }
 
         float3 albedo = material.albedoReflectivity.xyz;
@@ -688,7 +725,7 @@ kernel void raytracePatio(
         currentRay.max_distance = 80.0f;
     }
 
-    if (uniforms.toolParameters.x > 1.5f && laserResult.primaryEnd.w > 0.5f) {
+    if (uniforms.toolParameters.x > 1.5f && uniforms.toolParameters.x < 2.5f && laserResult.primaryEnd.w > 0.5f) {
         float primaryBeam = laserBeamIntensity(
             uniforms.cameraPosition.xyz,
             primaryDirection,
@@ -705,8 +742,30 @@ kernel void raytracePatio(
                 laserResult.reflectedEnd.xyz
             )
             : 0.0f;
-        accumulated += float3(5.5f, 0.008f, 0.003f) *
-                       (primaryBeam * 0.62f + reflectedBeam * 0.46f);
+        accumulated += float3(7.8f, 0.25f, 0.05f) *
+                       (primaryBeam * 0.85f + reflectedBeam * 0.65f);
+    }
+
+    if (laserResult.bot0End.w > 0.5f) {
+        float botBeam = laserBeamIntensity(
+            uniforms.cameraPosition.xyz,
+            primaryDirection,
+            firstSurfaceDistance,
+            laserResult.bot0Start.xyz,
+            laserResult.bot0End.xyz
+        );
+        accumulated += float3(9.5f, 0.08f, 0.02f) * (botBeam * 0.95f);
+    }
+
+    if (laserResult.bot1End.w > 0.5f) {
+        float botBeam = laserBeamIntensity(
+            uniforms.cameraPosition.xyz,
+            primaryDirection,
+            firstSurfaceDistance,
+            laserResult.bot1Start.xyz,
+            laserResult.bot1End.xyz
+        );
+        accumulated += float3(9.5f, 0.08f, 0.02f) * (botBeam * 0.95f);
     }
 
     output.write(half4(half3(toneMap(clamp(accumulated, 0.0f, 96.0f))), half(1.0f)), tid);

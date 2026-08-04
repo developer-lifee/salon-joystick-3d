@@ -18,10 +18,10 @@ enum GameHeldTool: Int, CaseIterable, Identifiable {
 
     var icon: String {
         switch self {
-        case .none: "power"
+        case .none: "hand.raised.fill"
         case .flashlight: "flashlight.on.fill"
-        case .laser: "scope"
-        case .mirror: "rectangle.portrait.fill"
+        case .laser: "bolt.fill"
+        case .mirror: "shield.fill"
         }
     }
 
@@ -149,10 +149,79 @@ struct ContentView: View {
     @State private var showsCoffeeStore = false
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            MetalGameView(model: model)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .ignoresSafeArea()
+        if model.multiplayer.isConnected && model.multiplayer.role == .remoteController {
+            TacticalRemoteControllerView(model: model)
+        } else {
+            ZStack(alignment: .bottomLeading) {
+                MetalGameView(model: model)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .ignoresSafeArea()
+
+                if model.gameState == .mainMenu {
+                    MainMenuView(model: model, showsCoffeeStore: $showsCoffeeStore)
+                } else {
+
+            // GTA-Style Aim Crosshair Overlay
+            if model.heldTool == .laser {
+                ZStack {
+                    Circle()
+                        .stroke(Color.red.opacity(0.85), lineWidth: 1.5)
+                        .frame(width: 28, height: 28)
+                        .shadow(color: .red.opacity(0.8), radius: 4)
+
+                    Circle()
+                        .fill(Color.cyan)
+                        .frame(width: 4, height: 4)
+
+                    Rectangle()
+                        .fill(Color.red.opacity(0.6))
+                        .frame(width: 8, height: 1.5)
+                        .offset(x: -18)
+
+                    Rectangle()
+                        .fill(Color.red.opacity(0.6))
+                        .frame(width: 8, height: 1.5)
+                        .offset(x: 18)
+
+                    Rectangle()
+                        .fill(Color.red.opacity(0.6))
+                        .frame(width: 1.5, height: 8)
+                        .offset(y: -18)
+
+                    Rectangle()
+                        .fill(Color.red.opacity(0.6))
+                        .frame(width: 1.5, height: 8)
+                        .offset(y: 18)
+                }
+                .allowsHitTesting(false)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Image(systemName: "heart.fill")
+                        .foregroundStyle(.red)
+                    ProgressView(value: Double(model.playerHealth), total: 100.0)
+                        .tint(model.playerHealth > 30 ? .green : .red)
+                        .frame(width: 100)
+                    Text("\(Int(model.playerHealth)) HP")
+                        .font(.caption.monospacedDigit().bold())
+                        .foregroundStyle(.white)
+                }
+
+                HStack(spacing: 6) {
+                    Image(systemName: "star.fill")
+                        .foregroundStyle(.yellow)
+                    Text("Puntos: \(model.playerScore)")
+                        .font(.caption.bold())
+                        .foregroundStyle(.white)
+                }
+            }
+            .padding(10)
+            .background(.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
+            .padding(.leading, 14)
+            .padding(.top, 48)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
             VStack(alignment: .leading, spacing: 10) {
                 Text("Patio nocturno")
@@ -221,27 +290,82 @@ struct ContentView: View {
                     }
                 }
 
-                Button {
-                    model.cycleHeldTool()
-                } label: {
-                    Image(systemName: model.heldTool.icon)
-                        .font(.system(size: 25, weight: .semibold))
-                        .foregroundStyle(model.heldTool == .none ? .white.opacity(0.72) : .black)
-                        .frame(width: 62, height: 62)
+                HStack(spacing: 12) {
+                    Button {
+                        model.heldTool = (model.heldTool == .mirror ? .none : .mirror)
+                    } label: {
+                        VStack(spacing: 3) {
+                            Image(systemName: "shield.fill")
+                                .font(.system(size: 22, weight: .bold))
+                            Text("Espejo")
+                                .font(.system(size: 10, weight: .bold))
+                        }
+                        .foregroundStyle(model.heldTool == .mirror ? .white : .cyan)
+                        .frame(width: 58, height: 58)
                         .background(
-                            model.heldTool == .none ? .black.opacity(0.64) : .white.opacity(0.94),
+                            model.heldTool == .mirror
+                                ? AnyShapeStyle(Color.cyan)
+                                : AnyShapeStyle(Color.black.opacity(0.72)),
                             in: Circle()
                         )
                         .overlay {
                             Circle()
-                                .stroke(.white.opacity(model.heldTool == .none ? 0.22 : 0.72), lineWidth: 2)
+                                .stroke(Color.cyan.opacity(0.88), lineWidth: 2)
                         }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Espejo Defensivo")
+
+                    Button {
+                        model.heldTool = (model.heldTool == .laser ? .none : .laser)
+                    } label: {
+                        VStack(spacing: 3) {
+                            Image(systemName: "bolt.fill")
+                                .font(.system(size: 22, weight: .bold))
+                            Text("Láser")
+                                .font(.system(size: 10, weight: .bold))
+                        }
+                        .foregroundStyle(model.heldTool == .laser ? .white : .red)
+                        .frame(width: 58, height: 58)
+                        .background(
+                            model.heldTool == .laser
+                                ? AnyShapeStyle(Color.red)
+                                : AnyShapeStyle(Color.black.opacity(0.72)),
+                            in: Circle()
+                        )
+                        .overlay {
+                            Circle()
+                                .stroke(Color.red.opacity(0.88), lineWidth: 2)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Láser")
+
+                    Button {
+                        model.heldTool = (model.heldTool == .flashlight ? .none : .flashlight)
+                    } label: {
+                        VStack(spacing: 3) {
+                            Image(systemName: "flashlight.on.fill")
+                                .font(.system(size: 20, weight: .bold))
+                            Text("Luz")
+                                .font(.system(size: 10, weight: .bold))
+                        }
+                        .foregroundStyle(model.heldTool == .flashlight ? .black : .yellow)
+                        .frame(width: 52, height: 52)
+                        .background(
+                            model.heldTool == .flashlight
+                                ? AnyShapeStyle(Color.yellow)
+                                : AnyShapeStyle(Color.black.opacity(0.72)),
+                            in: Circle()
+                        )
+                        .overlay {
+                            Circle()
+                                .stroke(Color.yellow.opacity(0.88), lineWidth: 2)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Linterna")
                 }
-                .buttonStyle(.plain)
-                .contentShape(Circle())
-                .accessibilityLabel("Herramienta: \(model.heldTool.label)")
-                .accessibilityHint("Toca para cambiar de herramienta")
-                .accessibilityIdentifier("toolButton")
 
                 if !model.toolStatus.label.isEmpty {
                     Text(model.toolStatus.label)
@@ -305,24 +429,34 @@ struct ContentView: View {
                         }
                     }
 
-                    Section("Partida local") {
-                        Picker("Modo", selection: $model.multiplayer.mode) {
+                    Section("Partida local (Multijugador)") {
+                        Picker("Modo de Juego", selection: $model.multiplayer.mode) {
                             ForEach(LocalMatchMode.allCases) { mode in
                                 Text(mode.label).tag(mode)
+                            }
+                        }
+                        Picker("Rol de Dispositivo", selection: $model.multiplayer.role) {
+                            ForEach(LocalDeviceRole.allCases) { role in
+                                Text(role.label).tag(role)
                             }
                         }
                         Button {
                             model.multiplayer.host()
                         } label: {
-                            Label("Crear sala", systemImage: "wifi")
+                            Label("Crear sala (Host 3D)", systemImage: "wifi")
                         }
                         Button {
                             model.multiplayer.join()
                         } label: {
-                            Label("Buscar jugador", systemImage: "person.2")
+                            Label("Unirse a sala", systemImage: "person.2")
                         }
                         if model.multiplayer.isConnected {
-                            Label("Jugador conectado", systemImage: "checkmark.circle.fill")
+                            Label(
+                                model.multiplayer.role == .remoteController
+                                    ? "Control Remoto Conectado"
+                                    : "Jugador Conectado",
+                                systemImage: "checkmark.circle.fill"
+                            )
                             Button("Desconectar", role: .destructive) {
                                 model.multiplayer.stop()
                             }
@@ -343,6 +477,37 @@ struct ContentView: View {
                 }
                 .accessibilityLabel("Ajustes de renderizado")
 
+                Button {
+                    let audioOn = model.footstepsEnabled
+                    model.footstepsEnabled = !audioOn
+                    model.waterSoundEnabled = !audioOn
+                    model.musicEnabled = !audioOn
+                } label: {
+                    Image(systemName: model.footstepsEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(model.footstepsEnabled ? .green : .red)
+                        .frame(width: 44, height: 44)
+                        .background(.black.opacity(0.68), in: Circle())
+                        .overlay {
+                            Circle().stroke((model.footstepsEnabled ? Color.green : Color.red).opacity(0.6), lineWidth: 1.5)
+                        }
+                }
+                .accessibilityLabel("Controles de audio")
+
+                Button {
+                    model.togglePause()
+                } label: {
+                    Image(systemName: model.gameState == .paused ? "play.fill" : "pause.fill")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .background(.black.opacity(0.68), in: Circle())
+                        .overlay {
+                            Circle().stroke(.white.opacity(0.3), lineWidth: 1.5)
+                        }
+                }
+                .accessibilityLabel("Pausa")
+
                 if model.showsFPS {
                     Text("\(Int(model.framesPerSecond.rounded())) FPS")
                         .font(.caption.monospacedDigit().bold())
@@ -354,11 +519,22 @@ struct ContentView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             .safeAreaPadding(.top, 8)
-            .padding(.trailing, 14)
-        }
-        .background(Color.black)
-        .sheet(isPresented: $showsCoffeeStore) {
-            CoffeeTipView()
+
+            if model.gameState == .paused {
+                PauseMenuView(model: model)
+            }
+            }
+            }
+            .background(Color.black)
+            .sheet(isPresented: $model.showsMultiplayerSheet) {
+                MultiplayerSettingsSheet(model: model)
+            }
+            .sheet(isPresented: $model.showsSettingsSheet) {
+                GameOptionsSheet(model: model)
+            }
+            .sheet(isPresented: $showsCoffeeStore) {
+                CoffeeTipView()
+            }
         }
     }
 }
@@ -390,9 +566,19 @@ private struct CoffeeTipView: View {
     }
 }
 
+enum GameState: String {
+    case mainMenu
+    case playing
+    case paused
+}
+
+@MainActor
 final class GameModel: ObservableObject {
     let audio = ChiptuneAudioEngine()
-    let multiplayer = LocalMultiplayerSession()
+    @Published var multiplayer = LocalMultiplayerSession()
+    @Published var gameState: GameState = .mainMenu
+    @Published var showsSettingsSheet = false
+    @Published var showsMultiplayerSheet = false
 
     @Published var cameraMode = GameCameraMode.thirdPerson {
         didSet { }
@@ -416,9 +602,44 @@ final class GameModel: ObservableObject {
     @Published var joystick = CGVector(dx: 0, dy: 0)
     @Published private(set) var jumpRequestID = 0
     @Published private(set) var toolStatus = GameToolStatus()
+    @Published var playerScore = 0
+    @Published var playerHealth: Float = 100.0
 
     init() {
         audio.start()
+    }
+
+    func startGame() {
+        playerHealth = 100.0
+        playerScore = 0
+        heldTool = .none
+        gameState = .playing
+    }
+
+    func returnToMainMenu() {
+        gameState = .mainMenu
+        heldTool = .none
+    }
+
+    func togglePause() {
+        if gameState == .playing {
+            gameState = .paused
+        } else if gameState == .paused {
+            gameState = .playing
+        }
+    }
+
+    func addScore(_ points: Int) {
+        playerScore += points
+    }
+
+    func takeDamage(_ damage: Float) {
+        playerHealth = max(0, playerHealth - damage)
+        if playerHealth <= 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+                self?.playerHealth = 100.0
+            }
+        }
     }
 
     func requestJump() {
@@ -2096,6 +2317,7 @@ final class ChiptuneAudioEngine {
     private var glideBuffer: AVAudioPCMBuffer?
     private var splashBuffers: [AVAudioPCMBuffer] = []
     private var landingBuffers: [AVAudioPCMBuffer] = []
+    private var laserIgnitionBuffer: AVAudioPCMBuffer?
     private var nextSplash = 0
     private var nextLanding = 0
     private var nodesAttached = false
@@ -2152,6 +2374,7 @@ final class ChiptuneAudioEngine {
                     makeSplashBuffer(variant: 2)
                 ].compactMap { $0 }
                 landingBuffers = [makeLandingBuffer(variant: 0), makeLandingBuffer(variant: 1)].compactMap { $0 }
+                laserIgnitionBuffer = makeLaserIgnitionBuffer()
             }
 
             let session = AVAudioSession.sharedInstance()
@@ -2241,6 +2464,46 @@ final class ChiptuneAudioEngine {
                 self.landingNode.play()
             }
         }
+    }
+
+    func playLaserIgnition() {
+        audioQueue.async { [weak self] in
+            guard let self else { return }
+            guard self.started, self.effectsEnabled else { return }
+            if let laserIgnitionBuffer = self.laserIgnitionBuffer {
+                self.effectsNode.volume = 0.88
+                self.effectsNode.scheduleBuffer(laserIgnitionBuffer)
+                if !self.effectsNode.isPlaying {
+                    self.effectsNode.play()
+                }
+            }
+        }
+    }
+
+    private func makeLaserIgnitionBuffer() -> AVAudioPCMBuffer? {
+        let duration = 0.45
+        let frameCount = AVAudioFrameCount(format.sampleRate * duration)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
+              let channels = buffer.floatChannelData else {
+            return nil
+        }
+        buffer.frameLength = frameCount
+
+        for frame in 0..<Int(frameCount) {
+            let time = Double(frame) / format.sampleRate
+            let progress = time / duration
+            let frequency = 950.0 - progress * 710.0 + sin(time * 120.0) * 45.0
+            let phase = 2.0 * Double.pi * frequency * time
+            let attack = min(1.0, time / 0.008)
+            let decay = exp(-time * 5.2)
+            let buzz = (sin(phase) + sin(phase * 2.0) * 0.35 + sin(phase * 3.0) * 0.18) * attack * decay * 0.28
+            let sample = Float(buzz)
+
+            channels[0][frame] = sample
+            channels[1][frame] = sample
+        }
+
+        return buffer
     }
 
     private func makeMusicBuffer() -> AVAudioPCMBuffer? {
@@ -2450,6 +2713,475 @@ struct JoystickView: View {
             .accessibilityLabel("Joystick de movimiento")
             .accessibilityIdentifier("movementJoystick")
             .accessibilityAddTraits(.allowsDirectInteraction)
+        }
+    }
+}
+
+struct TacticalRemoteControllerView: View {
+    @ObservedObject var model: GameModel
+    @State private var feedback = UIImpactFeedbackGenerator(style: .medium)
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            VStack(spacing: 20) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(Color.green)
+                                .frame(width: 8, height: 8)
+                            Text("CONTROL REMOTO TÁCTICO P2")
+                                .font(.caption.bold())
+                                .foregroundStyle(.green)
+                        }
+                        Text("Conectado a la Arena 3D")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 4) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "heart.fill")
+                                .foregroundStyle(.red)
+                            Text("\(Int(model.playerHealth)) HP")
+                                .font(.headline.monospacedDigit().bold())
+                                .foregroundStyle(.white)
+                        }
+                        HStack(spacing: 4) {
+                            Image(systemName: "star.fill")
+                                .foregroundStyle(.yellow)
+                            Text("Puntos: \(model.playerScore)")
+                                .font(.subheadline.bold())
+                                .foregroundStyle(.white)
+                        }
+                    }
+                }
+                .padding(16)
+                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+
+                Spacer()
+
+                HStack(alignment: .bottom, spacing: 30) {
+                    VStack(spacing: 12) {
+                        Text("MOVIMIENTO 360°")
+                            .font(.caption2.bold())
+                            .foregroundStyle(.white.opacity(0.6))
+                        JoystickView { vector in
+                            model.joystick = vector
+                            sendInput(joystick: vector)
+                        }
+                        .frame(width: 175, height: 175)
+                    }
+
+                    Spacer()
+
+                    VStack(spacing: 16) {
+                        HStack(spacing: 16) {
+                            Button {
+                                feedback.impactOccurred()
+                                model.heldTool = (model.heldTool == .mirror ? .none : .mirror)
+                                sendInput(tool: model.heldTool.rawValue)
+                            } label: {
+                                VStack(spacing: 4) {
+                                    Image(systemName: "shield.fill")
+                                        .font(.system(size: 26, weight: .bold))
+                                    Text("ESPEJO")
+                                        .font(.system(size: 11, weight: .bold))
+                                }
+                                .foregroundStyle(model.heldTool == .mirror ? .white : .cyan)
+                                .frame(width: 78, height: 78)
+                                .background(
+                                    model.heldTool == .mirror
+                                        ? AnyShapeStyle(Color.cyan)
+                                        : AnyShapeStyle(Color.cyan.opacity(0.20)),
+                                    in: Circle()
+                                )
+                                .overlay {
+                                    Circle()
+                                        .stroke(Color.cyan, lineWidth: 2.5)
+                                }
+                            }
+                            .buttonStyle(.plain)
+
+                            Button {
+                                feedback.impactOccurred()
+                                model.heldTool = (model.heldTool == .laser ? .none : .laser)
+                                sendInput(tool: model.heldTool.rawValue)
+                            } label: {
+                                VStack(spacing: 4) {
+                                    Image(systemName: "bolt.fill")
+                                        .font(.system(size: 26, weight: .bold))
+                                    Text("LÁSER")
+                                        .font(.system(size: 11, weight: .bold))
+                                }
+                                .foregroundStyle(model.heldTool == .laser ? .white : .red)
+                                .frame(width: 78, height: 78)
+                                .background(
+                                    model.heldTool == .laser
+                                        ? AnyShapeStyle(Color.red)
+                                        : AnyShapeStyle(Color.red.opacity(0.20)),
+                                    in: Circle()
+                                )
+                                .overlay {
+                                    Circle()
+                                        .stroke(Color.red, lineWidth: 2.5)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        Button {
+                            feedback.impactOccurred()
+                            model.requestJump()
+                            sendInput(jump: true)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "arrow.up")
+                                    .font(.system(size: 20, weight: .bold))
+                                Text("SALTAR")
+                                    .font(.headline.bold())
+                            }
+                            .foregroundStyle(.white)
+                            .frame(width: 172, height: 48)
+                            .background(Color.green.opacity(0.85), in: RoundedRectangle(cornerRadius: 24))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 24)
+                                    .stroke(Color.white.opacity(0.6), lineWidth: 1.5)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 28)
+            }
+        }
+    }
+
+    private func sendInput(joystick: CGVector? = nil, jump: Bool? = nil, tool: Int? = nil) {
+        let packet = LocalMatchPacket(
+            kind: .controllerInput,
+            peerID: "",
+            timestamp: Date().timeIntervalSince1970,
+            joystickX: Float(joystick?.dx ?? model.joystick.dx),
+            joystickY: Float(joystick?.dy ?? model.joystick.dy),
+            jumpPressed: jump,
+            role: LocalDeviceRole.remoteController.rawValue
+        )
+        model.multiplayer.send(packet)
+    }
+}
+
+struct MainMenuView: View {
+    @ObservedObject var model: GameModel
+    @Binding var showsCoffeeStore: Bool
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [.black.opacity(0.85), .black.opacity(0.65), .black.opacity(0.92)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+
+            VStack(spacing: 20) {
+                Spacer()
+
+                VStack(spacing: 6) {
+                    Text("LASER TRACER 3D")
+                        .font(.system(size: 38, weight: .black, design: .rounded))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.cyan, .blue, .purple],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .shadow(color: .cyan.opacity(0.85), radius: 14)
+
+                    Text("RAY TRACING COMBAT & DEFENSIVE SHIELD")
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .tracking(2)
+                }
+                .padding(.horizontal, 20)
+
+                Spacer()
+
+                VStack(spacing: 12) {
+                    Button {
+                        model.startGame()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "play.fill")
+                                .font(.title3.bold())
+                            Text("JUGAR EN SOLITARIO")
+                                .font(.headline.bold())
+                        }
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: 320, minHeight: 52)
+                        .background(
+                            LinearGradient(colors: [.blue, .cyan], startPoint: .leading, endPoint: .trailing),
+                            in: RoundedRectangle(cornerRadius: 16)
+                        )
+                        .shadow(color: .cyan.opacity(0.6), radius: 10)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        model.showsMultiplayerSheet = true
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "person.2.fill")
+                                .font(.title3.bold())
+                            Text("MULTIJUGADOR LOCAL")
+                                .font(.headline.bold())
+                        }
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: 320, minHeight: 52)
+                        .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Color.white.opacity(0.3), lineWidth: 1.5)
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        showsCoffeeStore = true
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "cup.and.saucer.fill")
+                                .font(.title3.bold())
+                            Text("INVITAR UN CAFÉ ☕️")
+                                .font(.headline.bold())
+                        }
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: 320, minHeight: 52)
+                        .background(
+                            LinearGradient(colors: [.orange, .yellow], startPoint: .leading, endPoint: .trailing),
+                            in: RoundedRectangle(cornerRadius: 16)
+                        )
+                        .shadow(color: .orange.opacity(0.5), radius: 8)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        let audioOn = model.footstepsEnabled
+                        model.footstepsEnabled = !audioOn
+                        model.waterSoundEnabled = !audioOn
+                        model.musicEnabled = !audioOn
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: model.footstepsEnabled ? "speaker.wave.3.fill" : "speaker.slash.fill")
+                                .font(.title3.bold())
+                            Text(model.footstepsEnabled ? "AUDIO Y EFECTOS: ACTIVADO" : "AUDIO Y EFECTOS: SILENCIADO")
+                                .font(.subheadline.bold())
+                        }
+                        .foregroundStyle(model.footstepsEnabled ? Color.green : Color.red)
+                        .frame(maxWidth: 320, minHeight: 48)
+                        .background(Color.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(model.footstepsEnabled ? Color.green.opacity(0.6) : Color.red.opacity(0.6), lineWidth: 1.5)
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        model.showsSettingsSheet = true
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "gearshape.fill")
+                                .font(.subheadline.bold())
+                            Text("AJUSTES DE GRÁFICOS Y CÁMARA")
+                                .font(.subheadline.bold())
+                        }
+                        .foregroundStyle(.white.opacity(0.8))
+                        .frame(maxWidth: 320, minHeight: 44)
+                        .background(Color.black.opacity(0.4), in: RoundedRectangle(cornerRadius: 14))
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Spacer()
+
+                Text("LASER TRACER 3D • METAL RAY TRACING ENGINE")
+                    .font(.caption2.monospaced().bold())
+                    .foregroundStyle(.white.opacity(0.5))
+                    .padding(.bottom, 16)
+            }
+        }
+    }
+}
+
+struct PauseMenuView: View {
+    @ObservedObject var model: GameModel
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.78)
+                .ignoresSafeArea()
+
+            VStack(spacing: 20) {
+                Text("PAUSA")
+                    .font(.system(size: 32, weight: .black, design: .rounded))
+                    .foregroundStyle(.white)
+
+                VStack(spacing: 14) {
+                    Button {
+                        model.gameState = .playing
+                    } label: {
+                        Text("Continuar")
+                            .font(.headline.bold())
+                            .foregroundStyle(.black)
+                            .frame(width: 240, height: 48)
+                            .background(Color.white, in: RoundedRectangle(cornerRadius: 14))
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        model.startGame()
+                    } label: {
+                        Text("Reiniciar Partida")
+                            .font(.headline.bold())
+                            .foregroundStyle(.white)
+                            .frame(width: 240, height: 48)
+                            .background(Color.white.opacity(0.18), in: RoundedRectangle(cornerRadius: 14))
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        model.returnToMainMenu()
+                    } label: {
+                        Text("Menú Principal")
+                            .font(.headline.bold())
+                            .foregroundStyle(.red)
+                            .frame(width: 240, height: 48)
+                            .background(Color.red.opacity(0.18), in: RoundedRectangle(cornerRadius: 14))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(32)
+            .background(Color.black.opacity(0.85), in: RoundedRectangle(cornerRadius: 24))
+            .overlay {
+                RoundedRectangle(cornerRadius: 24)
+                    .stroke(Color.white.opacity(0.2), lineWidth: 1.5)
+            }
+        }
+    }
+}
+
+struct MultiplayerSettingsSheet: View {
+    @ObservedObject var model: GameModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Modo de Juego") {
+                    Picker("Modo", selection: $model.multiplayer.mode) {
+                        ForEach(LocalMatchMode.allCases) { mode in
+                            Text(mode.label).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                Section("Rol de este Dispositivo") {
+                    Picker("Rol", selection: $model.multiplayer.role) {
+                        ForEach(LocalDeviceRole.allCases) { role in
+                            Text(role.label).tag(role)
+                        }
+                    }
+                }
+
+                Section("Conexión Local Wi-Fi / Bluetooth") {
+                    Button {
+                        model.multiplayer.host()
+                    } label: {
+                        Label("Crear sala (Host 3D)", systemImage: "wifi")
+                    }
+
+                    Button {
+                        model.multiplayer.join()
+                    } label: {
+                        Label("Unirse a sala cercana", systemImage: "person.2")
+                    }
+
+                    if model.multiplayer.isConnected {
+                        HStack {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                            Text(model.multiplayer.role == .remoteController ? "Control Remoto Conectado" : "Jugador Conectado")
+                        }
+
+                        Button("Desconectar", role: .destructive) {
+                            model.multiplayer.stop()
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Multijugador Local")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Listo") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct GameOptionsSheet: View {
+    @ObservedObject var model: GameModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Cámara y Vista") {
+                    Picker("Modo de cámara", selection: $model.cameraMode) {
+                        Text("3ª Persona").tag(GameCameraMode.thirdPerson)
+                        Text("1ª Persona").tag(GameCameraMode.firstPerson)
+                    }
+                    .pickerStyle(.segmented)
+
+                    Toggle("Invertir eje Y", isOn: $model.invertsCameraY)
+                    Toggle("Mostrar contador de FPS", isOn: $model.showsFPS)
+                }
+
+                Section("Rendimiento Gráfico") {
+                    Picker("Resolución interna", selection: $model.renderResolution) {
+                        ForEach(GameRenderResolution.allCases) { resolution in
+                            Text(resolution.label).tag(resolution)
+                        }
+                    }
+                }
+
+                Section("Audio y Efectos") {
+                    Toggle("Música de fondo", isOn: $model.musicEnabled)
+                    Toggle("Efectos de sonido y pasos", isOn: $model.footstepsEnabled)
+                    Toggle("Sonido de agua", isOn: $model.waterSoundEnabled)
+                }
+            }
+            .navigationTitle("Ajustes y Opciones")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Listo") {
+                        dismiss()
+                    }
+                }
+            }
         }
     }
 }

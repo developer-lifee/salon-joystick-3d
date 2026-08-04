@@ -7,111 +7,102 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		1071300BD63EB6A804394FE6 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EFB404B0B80DDB00FFB1E4B /* ContentView.swift */; };
-		18AD7E419EBC42A6A0173641 /* MetalGameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18AD7E429EBC42A6A0173642 /* MetalGameView.swift */; };
-		18AD7E439EBC42A6A0173643 /* MetalRayRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18AD7E449EBC42A6A0173644 /* MetalRayRenderer.swift */; };
-		18AD7E4BEBC42A6A0173644 /* LocalMultiplayerSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18AD7E4CEBC42A6A0173644 /* LocalMultiplayerSession.swift */; };
-		18AD7E459EBC42A6A0173645 /* RayShaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = 18AD7E469EBC42A6A0173646 /* RayShaders.metal */; };
-		18AD7E479EBC42A6A0173647 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 18AD7E489EBC42A6A0173648 /* Metal.framework */; };
-		18AD7E499EBC42A6A0173649 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 18AD7E4A9EBC42A6A017364A /* MetalKit.framework */; };
-		18AD7E4B9EBC42A6A017364B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 18AD7E4C9EBC42A6A017364C /* Assets.xcassets */; };
-		64DC6C42FD35347CEAAA4866 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2E43D41C1C2422CDFD2179A1 /* Foundation.framework */; };
-		8A0E643A090802DE27611F4C /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 609C073BF74F25DA37828270 /* SwiftUI.framework */; };
-		A22CF8B1AF07B4DB0DE9CA2D /* SalonJoystick3DApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDFDC10B8FC4FC6F58CF482E /* SalonJoystick3DApp.swift */; };
+		224DE7C2D8F863DE9BA08A1E /* MetalRayRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 356A2AF4DCDAD8542138634B /* MetalRayRenderer.swift */; };
+		34EA48A21209FB01DACE9292 /* MetalGameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 367165F07D980A2DAC66567F /* MetalGameView.swift */; };
+		407769F4D8510968A154EA00 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF3127C699C29D621F5CC3BB /* ContentView.swift */; };
+		5E7F6F8BFD981A6108955331 /* RayShaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = BCB2C87F3C34756C6635E37F /* RayShaders.metal */; };
+		678E78A9AEA983B0488E39BB /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1728A44941C8C2D8CBC69696 /* Foundation.framework */; };
+		A63A0A584944E0262197EBDA /* SalonJoystick3DApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB9D1EDA5368FFDFC6C80E1E /* SalonJoystick3DApp.swift */; };
+		A7AB8919FB72D0C7FC54B308 /* SceneKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 00272F5F87AEDBFD43402365 /* SceneKit.framework */; };
+		B301129AEA9E429AB209A839 /* LocalMultiplayerSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6A9A2C82A7A9978383C5758 /* LocalMultiplayerSession.swift */; };
+		B54A49E936B3B34CB84B112C /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 14304A1F7A500749524529CF /* SwiftUI.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		18AD7E429EBC42A6A0173642 /* MetalGameView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MetalGameView.swift; path = Sources/SalonJoystick3D/MetalGameView.swift; sourceTree = "<group>"; };
-		18AD7E449EBC42A6A0173644 /* MetalRayRenderer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MetalRayRenderer.swift; path = Sources/SalonJoystick3D/MetalRayRenderer.swift; sourceTree = "<group>"; };
-		18AD7E4CEBC42A6A0173644 /* LocalMultiplayerSession.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LocalMultiplayerSession.swift; path = Sources/SalonJoystick3D/LocalMultiplayerSession.swift; sourceTree = "<group>"; };
-		18AD7E469EBC42A6A0173646 /* RayShaders.metal */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.metal; name = RayShaders.metal; path = Sources/SalonJoystick3D/RayShaders.metal; sourceTree = "<group>"; };
-		18AD7E489EBC42A6A0173648 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
-		18AD7E4A9EBC42A6A017364A /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
-		18AD7E4C9EBC42A6A017364C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		2E43D41C1C2422CDFD2179A1 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
-		59F90DB929460A2E31D7CB38 /* SalonJoystick3D.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SalonJoystick3D.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		609C073BF74F25DA37828270 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/SwiftUI.framework; sourceTree = DEVELOPER_DIR; };
-		63ED2440300694B700E366E0 /* SalonJoystick3D-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "SalonJoystick3D-Info.plist"; sourceTree = "<group>"; };
-		6EFB404B0B80DDB00FFB1E4B /* ContentView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ContentView.swift; path = Sources/SalonJoystick3D/ContentView.swift; sourceTree = "<group>"; };
-		FDFDC10B8FC4FC6F58CF482E /* SalonJoystick3DApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SalonJoystick3DApp.swift; path = Sources/SalonJoystick3D/SalonJoystick3DApp.swift; sourceTree = "<group>"; };
+		00272F5F87AEDBFD43402365 /* SceneKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SceneKit.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/SceneKit.framework; sourceTree = DEVELOPER_DIR; };
+		14304A1F7A500749524529CF /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/SwiftUI.framework; sourceTree = DEVELOPER_DIR; };
+		1728A44941C8C2D8CBC69696 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		356A2AF4DCDAD8542138634B /* MetalRayRenderer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MetalRayRenderer.swift; path = Sources/SalonJoystick3D/MetalRayRenderer.swift; sourceTree = "<group>"; };
+		367165F07D980A2DAC66567F /* MetalGameView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MetalGameView.swift; path = Sources/SalonJoystick3D/MetalGameView.swift; sourceTree = "<group>"; };
+		A6A9A2C82A7A9978383C5758 /* LocalMultiplayerSession.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LocalMultiplayerSession.swift; path = Sources/SalonJoystick3D/LocalMultiplayerSession.swift; sourceTree = "<group>"; };
+		BCB2C87F3C34756C6635E37F /* RayShaders.metal */ = {isa = PBXFileReference; includeInIndex = 1; name = RayShaders.metal; path = Sources/SalonJoystick3D/RayShaders.metal; sourceTree = "<group>"; };
+		CB9D1EDA5368FFDFC6C80E1E /* SalonJoystick3DApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SalonJoystick3DApp.swift; path = Sources/SalonJoystick3D/SalonJoystick3DApp.swift; sourceTree = "<group>"; };
+		EF3127C699C29D621F5CC3BB /* ContentView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ContentView.swift; path = Sources/SalonJoystick3D/ContentView.swift; sourceTree = "<group>"; };
+		FABC19BAE2B2D203DD0CC57D /* SalonJoystick3D.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SalonJoystick3D.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		95CEFBF4D3598C5424A07413 /* Frameworks */ = {
+		8B66A190E5355D2DF810C6C4 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				64DC6C42FD35347CEAAA4866 /* Foundation.framework in Frameworks */,
-				18AD7E479EBC42A6A0173647 /* Metal.framework in Frameworks */,
-				18AD7E499EBC42A6A0173649 /* MetalKit.framework in Frameworks */,
-				8A0E643A090802DE27611F4C /* SwiftUI.framework in Frameworks */,
+				678E78A9AEA983B0488E39BB /* Foundation.framework in Frameworks */,
+				A7AB8919FB72D0C7FC54B308 /* SceneKit.framework in Frameworks */,
+				B54A49E936B3B34CB84B112C /* SwiftUI.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		0BA5F64AB64715A78FC01838 /* Products */ = {
+		06BE97F851BC197395704309 = {
 			isa = PBXGroup;
 			children = (
-				59F90DB929460A2E31D7CB38 /* SalonJoystick3D.app */,
+				11477B8A8A21B2B0A6A30B17 /* Products */,
+				6F7ABFB991C3EB8A00E57261 /* Frameworks */,
+				2774B3F43826614C663D7D61 /* Sources/SalonJoystick3D */,
+			);
+			sourceTree = "<group>";
+		};
+		11477B8A8A21B2B0A6A30B17 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				FABC19BAE2B2D203DD0CC57D /* SalonJoystick3D.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		38B3026F6EE3C5A3A9DED65D /* Sources/SalonJoystick3D */ = {
+		2774B3F43826614C663D7D61 /* Sources/SalonJoystick3D */ = {
 			isa = PBXGroup;
 			children = (
-				6EFB404B0B80DDB00FFB1E4B /* ContentView.swift */,
-				18AD7E429EBC42A6A0173642 /* MetalGameView.swift */,
-				18AD7E449EBC42A6A0173644 /* MetalRayRenderer.swift */,
-				18AD7E4CEBC42A6A0173644 /* LocalMultiplayerSession.swift */,
-				18AD7E469EBC42A6A0173646 /* RayShaders.metal */,
-				FDFDC10B8FC4FC6F58CF482E /* SalonJoystick3DApp.swift */,
+				EF3127C699C29D621F5CC3BB /* ContentView.swift */,
+				A6A9A2C82A7A9978383C5758 /* LocalMultiplayerSession.swift */,
+				367165F07D980A2DAC66567F /* MetalGameView.swift */,
+				356A2AF4DCDAD8542138634B /* MetalRayRenderer.swift */,
+				BCB2C87F3C34756C6635E37F /* RayShaders.metal */,
+				CB9D1EDA5368FFDFC6C80E1E /* SalonJoystick3DApp.swift */,
 			);
 			name = Sources/SalonJoystick3D;
 			sourceTree = "<group>";
 		};
-		770E055BA08C304F9A099B3A /* Frameworks */ = {
+		6F7ABFB991C3EB8A00E57261 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				8DC77F1551B299EF479CE33C /* iOS */,
+				9BB196F512C92E04E8675FCC /* iOS */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		8DC77F1551B299EF479CE33C /* iOS */ = {
+		9BB196F512C92E04E8675FCC /* iOS */ = {
 			isa = PBXGroup;
 			children = (
-				2E43D41C1C2422CDFD2179A1 /* Foundation.framework */,
-				18AD7E489EBC42A6A0173648 /* Metal.framework */,
-				18AD7E4A9EBC42A6A017364A /* MetalKit.framework */,
-				609C073BF74F25DA37828270 /* SwiftUI.framework */,
+				1728A44941C8C2D8CBC69696 /* Foundation.framework */,
+				00272F5F87AEDBFD43402365 /* SceneKit.framework */,
+				14304A1F7A500749524529CF /* SwiftUI.framework */,
 			);
 			name = iOS;
-			sourceTree = "<group>";
-		};
-		CB07C6CFD92146830FFF18AB = {
-			isa = PBXGroup;
-			children = (
-				18AD7E4C9EBC42A6A017364C /* Assets.xcassets */,
-				63ED2440300694B700E366E0 /* SalonJoystick3D-Info.plist */,
-				0BA5F64AB64715A78FC01838 /* Products */,
-				770E055BA08C304F9A099B3A /* Frameworks */,
-				38B3026F6EE3C5A3A9DED65D /* Sources/SalonJoystick3D */,
-			);
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		855F1D4574AC4742653321A0 /* SalonJoystick3D */ = {
+		9F0442E4D745DD03EEA5B33C /* SalonJoystick3D */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 8B05C15C76D3575C5847D841 /* Build configuration list for PBXNativeTarget "SalonJoystick3D" */;
+			buildConfigurationList = 776170E3F78527BC6BC72479 /* Build configuration list for PBXNativeTarget "SalonJoystick3D" */;
 			buildPhases = (
-				34CBC2F00F6724D34830FDD9 /* Sources */,
-				95CEFBF4D3598C5424A07413 /* Frameworks */,
-				0A0BA31337991DF7445C986E /* Resources */,
+				34200FB3ADFA04F1C9EC44A3 /* Sources */,
+				8B66A190E5355D2DF810C6C4 /* Frameworks */,
+				F34B82B8E8CBE24F3D7D0B88 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -119,25 +110,19 @@
 			);
 			name = SalonJoystick3D;
 			productName = SalonJoystick3D;
-			productReference = 59F90DB929460A2E31D7CB38 /* SalonJoystick3D.app */;
+			productReference = FABC19BAE2B2D203DD0CC57D /* SalonJoystick3D.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		06393E0CA4E01913A52D3FB3 /* Project object */ = {
+		97FB7818458F808E5867123A /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
 				LastSwiftUpdateCheck = 1600;
 				LastUpgradeCheck = 1600;
-				TargetAttributes = {
-					855F1D4574AC4742653321A0 = {
-						DevelopmentTeam = PHVD7727SU;
-						ProvisioningStyle = Automatic;
-					};
-				};
 			};
-			buildConfigurationList = 256C4D24C851E8DC7C73F819 /* Build configuration list for PBXProject "SalonJoystick3D" */;
+			buildConfigurationList = 979F940B253AE975DB2C8A63 /* Build configuration list for PBXProject "SalonJoystick3D" */;
 			compatibilityVersion = "Xcode 3.2";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -145,45 +130,46 @@
 				en,
 				Base,
 			);
-			mainGroup = CB07C6CFD92146830FFF18AB;
-			productRefGroup = 0BA5F64AB64715A78FC01838 /* Products */;
+			mainGroup = 06BE97F851BC197395704309;
+			minimizedProjectReferenceProxies = 0;
+			preferredProjectObjectVersion = 100;
+			productRefGroup = 11477B8A8A21B2B0A6A30B17 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				855F1D4574AC4742653321A0 /* SalonJoystick3D */,
+				9F0442E4D745DD03EEA5B33C /* SalonJoystick3D */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		0A0BA31337991DF7445C986E /* Resources */ = {
+		F34B82B8E8CBE24F3D7D0B88 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				18AD7E4B9EBC42A6A017364B /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		34CBC2F00F6724D34830FDD9 /* Sources */ = {
+		34200FB3ADFA04F1C9EC44A3 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				1071300BD63EB6A804394FE6 /* ContentView.swift in Sources */,
-				18AD7E419EBC42A6A0173641 /* MetalGameView.swift in Sources */,
-				18AD7E439EBC42A6A0173643 /* MetalRayRenderer.swift in Sources */,
-				18AD7E4BEBC42A6A0173644 /* LocalMultiplayerSession.swift in Sources */,
-				18AD7E459EBC42A6A0173645 /* RayShaders.metal in Sources */,
-				A22CF8B1AF07B4DB0DE9CA2D /* SalonJoystick3DApp.swift in Sources */,
+				407769F4D8510968A154EA00 /* ContentView.swift in Sources */,
+				B301129AEA9E429AB209A839 /* LocalMultiplayerSession.swift in Sources */,
+				34EA48A21209FB01DACE9292 /* MetalGameView.swift in Sources */,
+				224DE7C2D8F863DE9BA08A1E /* MetalRayRenderer.swift in Sources */,
+				5E7F6F8BFD981A6108955331 /* RayShaders.metal in Sources */,
+				A63A0A584944E0262197EBDA /* SalonJoystick3DApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		7DEA11C6FEA9F5D0B82F2B03 /* Release */ = {
+		38D84887C3AABDABE326FD7A /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -231,43 +217,35 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
 		};
-		A9524BFAC4FF3D9147851F11 /* Release */ = {
+		4869071C64A21BE911F1117C /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
-				DEVELOPMENT_TEAM = PHVD7727SU;
-				GENERATE_INFOPLIST_FILE = YES;
+				DEVELOPMENT_TEAM = 9KM9NF8G7G;
+				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "SalonJoystick3D-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Ray Tracing Game";
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.simulation-games";
-				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "SalonJoystick3D necesita la red local para conectar jugadores cercanos.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UIStatusBarStyle = "";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.estebanavila.RtPruebas;
 				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphonesimulator iphoneos";
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
 		};
-		C07307D4F94F168036FF4C94 /* Debug */ = {
+		BD3A1481DB3C0AD0EE176432 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -328,58 +306,49 @@
 			};
 			name = Debug;
 		};
-		C4F15E6329101F8FCA766555 /* Debug */ = {
+		D524B795F53874065E78AEAB /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
-				DEVELOPMENT_TEAM = PHVD7727SU;
-				GENERATE_INFOPLIST_FILE = YES;
+				DEVELOPMENT_TEAM = 9KM9NF8G7G;
+				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "SalonJoystick3D-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Ray Tracing Game";
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.simulation-games";
-				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "SalonJoystick3D necesita la red local para conectar jugadores cercanos.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UIStatusBarStyle = "";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.estebanavila.RtPruebas;
 				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphonesimulator iphoneos";
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		256C4D24C851E8DC7C73F819 /* Build configuration list for PBXProject "SalonJoystick3D" */ = {
+		776170E3F78527BC6BC72479 /* Build configuration list for PBXNativeTarget "SalonJoystick3D" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				C07307D4F94F168036FF4C94 /* Debug */,
-				7DEA11C6FEA9F5D0B82F2B03 /* Release */,
+				4869071C64A21BE911F1117C /* Release */,
+				D524B795F53874065E78AEAB /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		8B05C15C76D3575C5847D841 /* Build configuration list for PBXNativeTarget "SalonJoystick3D" */ = {
+		979F940B253AE975DB2C8A63 /* Build configuration list for PBXProject "SalonJoystick3D" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				A9524BFAC4FF3D9147851F11 /* Release */,
-				C4F15E6329101F8FCA766555 /* Debug */,
+				BD3A1481DB3C0AD0EE176432 /* Debug */,
+				38D84887C3AABDABE326FD7A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
-	rootObject = 06393E0CA4E01913A52D3FB3 /* Project object */;
+	rootObject = 97FB7818458F808E5867123A /* Project object */;
 }

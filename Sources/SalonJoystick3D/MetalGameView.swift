@@ -24,6 +24,7 @@ private final class PointResolutionMTKView: MTKView {
 
 struct MetalGameView: UIViewRepresentable {
     @ObservedObject var model: GameModel
+    var onFallbackRequested: (() -> Void)? = nil
 
     func makeCoordinator() -> Coordinator {
         Coordinator(model: model)
@@ -75,9 +76,25 @@ struct MetalGameView: UIViewRepresentable {
             renderer.onNearbyLightUpdate = { [weak model] fixture in
                 model?.reportNearbyLight(fixture)
             }
+            renderer.onScoreUpdate = { [weak model] points in
+                Task { @MainActor in
+                    model?.addScore(points)
+                }
+            }
+            renderer.onDamageTaken = { [weak model] damage in
+                Task { @MainActor in
+                    model?.takeDamage(damage)
+                }
+            }
             view.delegate = renderer
         } catch {
-            context.coordinator.showRendererError(error, in: view)
+            if let onFallbackRequested {
+                DispatchQueue.main.async {
+                    onFallbackRequested()
+                }
+            } else {
+                context.coordinator.showRendererError(error, in: view)
+            }
         }
 
         return view
@@ -89,6 +106,7 @@ struct MetalGameView: UIViewRepresentable {
         context.coordinator.renderer?.onFPSUpdate = model.showsFPS
             ? context.coordinator.onFPSUpdate
             : nil
+        context.coordinator.renderer?.isSplitScreenMode = model.multiplayer.isConnected && model.multiplayer.role == .full3DRender
         context.coordinator.renderer?.setInput(
             joystick: model.joystick,
             cameraMode: model.cameraMode,
@@ -106,7 +124,9 @@ struct MetalGameView: UIViewRepresentable {
 
         init(model: GameModel) {
             onFPSUpdate = { [weak model] framesPerSecond in
-                model?.reportFPS(framesPerSecond)
+                Task { @MainActor in
+                    model?.reportFPS(framesPerSecond)
+                }
             }
         }
 

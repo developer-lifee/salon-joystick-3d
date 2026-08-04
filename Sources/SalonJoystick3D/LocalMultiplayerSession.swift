@@ -21,6 +21,7 @@ struct LocalMatchPacket: Codable {
         case laser
         case hit
         case start
+        case controllerInput
     }
 
     var kind: Kind
@@ -31,6 +32,25 @@ struct LocalMatchPacket: Codable {
     var pitch: Float?
     var tool: Int?
     var timestamp: TimeInterval
+    var joystickX: Float?
+    var joystickY: Float?
+    var jumpPressed: Bool?
+    var role: String?
+    var health: Float?
+    var score: Int?
+}
+
+enum LocalDeviceRole: String, Codable, CaseIterable, Identifiable {
+    case full3DRender = "3DRender"
+    case remoteController = "RemoteController"
+
+    var id: Self { self }
+    var label: String {
+        switch self {
+        case .full3DRender: "Renderizado 3D Completo"
+        case .remoteController: "Control Remoto Táctico (Segunda Pantalla)"
+        }
+    }
 }
 
 @MainActor
@@ -39,6 +59,7 @@ final class LocalMultiplayerSession: NSObject, ObservableObject {
     @Published private(set) var isConnected = false
     @Published private(set) var peers: [MCPeerID] = []
     @Published var mode: LocalMatchMode = .versus
+    @Published var role: LocalDeviceRole = .full3DRender
     @Published private(set) var lastError: String?
 
     private let serviceType = "salon-laser"

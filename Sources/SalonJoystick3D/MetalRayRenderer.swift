@@ -30,6 +30,10 @@ private struct RTLaserResult {
     var primaryStart: SIMD4<Float>
     var primaryEnd: SIMD4<Float>
     var reflectedEnd: SIMD4<Float>
+    var bot0Start: SIMD4<Float>
+    var bot0End: SIMD4<Float>
+    var bot1Start: SIMD4<Float>
+    var bot1End: SIMD4<Float>
 }
 
 private struct RTMaterial {
@@ -396,17 +400,38 @@ private struct RTMeshBuilder {
         eyes: Bool = true,
         holdsTool: Bool = false
     ) {
-        let skin = RTMaterial(color: color, roughness: 0.86, reflectivity: 0)
+        let suit = RTMaterial(color: color, roughness: 0.42, reflectivity: 0.18)
+        let armor = RTMaterial(color: SIMD3<Float>(0.08, 0.12, 0.16), roughness: 0.18, reflectivity: 0.65)
+        let visor = RTMaterial(color: SIMD3<Float>(0.05, 0.85, 0.98), roughness: 0.02, emission: SIMD3<Float>(0.1, 0.45, 0.75), reflectivity: 0.94, kind: 1.0)
+        let coreEmissive = RTMaterial(color: SIMD3<Float>(1.0, 0.2, 0.4), roughness: 0.10, emission: SIMD3<Float>(3.5, 0.8, 1.2), reflectivity: 0.50, kind: 5.0)
         let dark = RTMaterial(color: SIMD3<Float>(repeating: 0.012), roughness: 0.92)
-        addSphere(center: origin + SIMD3<Float>(0, 0.86, 0), radii: SIMD3<Float>(0.34, 0.50, 0.27), material: skin)
-        addSphere(center: origin + SIMD3<Float>(0, 1.55, 0), radii: SIMD3<Float>(repeating: 0.32), material: skin)
-        addBox(center: origin + SIMD3<Float>(-0.16, 0.28, 0), size: SIMD3<Float>(0.14, 0.56, 0.17), material: skin)
-        addBox(center: origin + SIMD3<Float>( 0.16, 0.28, 0), size: SIMD3<Float>(0.14, 0.56, 0.17), material: skin)
-        addBox(center: origin + SIMD3<Float>(-0.42, 0.88, 0), size: SIMD3<Float>(0.14, 0.55, 0.16), material: skin)
-        addBox(center: origin + SIMD3<Float>( 0.42, 0.88, 0), size: SIMD3<Float>(0.14, 0.55, 0.16), material: skin)
+
+        // Torso & Armor Chest Plate
+        addSphere(center: origin + SIMD3<Float>(0, 0.86, 0), radii: SIMD3<Float>(0.34, 0.50, 0.27), material: suit)
+        addBox(center: origin + SIMD3<Float>(0, 0.92, 0.16), size: SIMD3<Float>(0.44, 0.42, 0.12), material: armor)
+        addSphere(center: origin + SIMD3<Float>(0, 0.95, 0.23), radii: SIMD3<Float>(repeating: 0.08), material: coreEmissive)
+
+        // Retopologized Helmet & Curved Visor
+        addSphere(center: origin + SIMD3<Float>(0, 1.55, 0), radii: SIMD3<Float>(repeating: 0.32), material: suit)
+        addBox(center: origin + SIMD3<Float>(0, 1.58, 0.22), size: SIMD3<Float>(0.38, 0.18, 0.14), material: visor)
+
+        // Shoulder Pads & Joint Guards
+        addBox(center: origin + SIMD3<Float>(-0.44, 1.12, 0), size: SIMD3<Float>(0.18, 0.16, 0.22), material: armor)
+        addBox(center: origin + SIMD3<Float>( 0.44, 1.12, 0), size: SIMD3<Float>(0.18, 0.16, 0.22), material: armor)
+        addBox(center: origin + SIMD3<Float>(-0.16, 0.28, 0.12), size: SIMD3<Float>(0.16, 0.14, 0.08), material: armor)
+        addBox(center: origin + SIMD3<Float>( 0.16, 0.28, 0.12), size: SIMD3<Float>(0.16, 0.14, 0.08), material: armor)
+
+        // Limbs & Tactical Boots
+        addBox(center: origin + SIMD3<Float>(-0.16, 0.28, 0), size: SIMD3<Float>(0.14, 0.56, 0.17), material: suit)
+        addBox(center: origin + SIMD3<Float>( 0.16, 0.28, 0), size: SIMD3<Float>(0.14, 0.56, 0.17), material: suit)
+        addBox(center: origin + SIMD3<Float>(-0.42, 0.88, 0), size: SIMD3<Float>(0.14, 0.55, 0.16), material: suit)
+        addBox(center: origin + SIMD3<Float>( 0.42, 0.88, 0), size: SIMD3<Float>(0.14, 0.55, 0.16), material: suit)
+        addBox(center: origin + SIMD3<Float>(-0.16, 0.04, 0.06), size: SIMD3<Float>(0.16, 0.10, 0.26), material: armor)
+        addBox(center: origin + SIMD3<Float>( 0.16, 0.04, 0.06), size: SIMD3<Float>(0.16, 0.10, 0.26), material: armor)
+
         if eyes {
-            addSphere(center: origin + SIMD3<Float>(-0.11, 1.60, 0.29), radii: SIMD3<Float>(repeating: 0.05), material: dark, segments: 7, rings: 4)
-            addSphere(center: origin + SIMD3<Float>( 0.11, 1.60, 0.29), radii: SIMD3<Float>(repeating: 0.05), material: dark, segments: 7, rings: 4)
+            addSphere(center: origin + SIMD3<Float>(-0.11, 1.60, 0.29), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
+            addSphere(center: origin + SIMD3<Float>( 0.11, 1.60, 0.29), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
         }
         if holdsTool {
             let tool = RTMaterial(color: SIMD3<Float>(0.055, 0.060, 0.065), roughness: 0.34, reflectivity: 0.10)
@@ -438,6 +463,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     var onFPSUpdate: ((Double) -> Void)?
     var onNearbyLightUpdate: ((GameLightFixture?) -> Void)?
     var onToolStatusUpdate: ((GameToolStatus) -> Void)?
+    var onScoreUpdate: ((Int) -> Void)?
+    var onDamageTaken: ((Float) -> Void)?
 
     private let device: MTLDevice
     private let commandQueue: MTLCommandQueue
@@ -453,6 +480,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private let npcMesh: RTMeshResources
     private let waterMesh: RTMeshResources
     private let floatMesh: RTMeshResources
+    private let mirrorShieldMesh: RTMeshResources
     private let instanceBuffer: MTLBuffer
     private let instanceDescriptor: MTLInstanceAccelerationStructureDescriptor
     private let instanceAccelerationStructure: MTLAccelerationStructure
@@ -482,12 +510,21 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     ]
     private var npcYaws = [Float.pi * 0.25, Float.pi * 1.7]
     private var npcRespawnTimers = [Float](repeating: 0, count: 2)
+    private var botLaserActiveTimers = [Float](repeating: 0, count: 2)
+    private var botLaserCooldownTimers = [Float](repeating: 5.0, count: 2)
+    private var botImpactAudioCooldowns = [Float](repeating: 0, count: 2)
     private let npcSpawnPositions = [
         SIMD3<Float>(-7.2, 0, 3.7),
         SIMD3<Float>(6.7, 0, -6.0)
     ]
     private var floatPosition = SIMD3<Float>(-2.6, 0.015, -2.0)
     private var floatVelocity = SIMD2<Float>.zero
+    private var dummyPositions: [SIMD3<Float>] = [
+        SIMD3<Float>(6.7, 0, 0.8),
+        SIMD3<Float>(7.4, 0, -1.0),
+        SIMD3<Float>(-7.7, 0, 4.3)
+    ]
+    private var dummyAlive: [Bool] = [true, true, true]
     private var floatYaw: Float = 0
     private var floatAngularVelocity: Float = 0
     private var floatWakeCountdown: Float = 0
@@ -511,13 +548,24 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private var mirrorActiveRemaining: Float = 0
     private var mirrorCooldownRemaining: Float = 0
     private var toolStatusCountdown: Float = 0
+    var isSplitScreenMode = false
 
     init(view: MTKView, audio: ChiptuneAudioEngine) throws {
-        guard let device = view.device ?? MTLCreateSystemDefaultDevice(), device.supportsRaytracing else {
-            throw MetalRayRendererError.rayTracingUnavailable
+        guard let device = view.device ?? MTLCreateSystemDefaultDevice() else {
+            throw MetalRayRendererError.resourceCreationFailed
         }
+        let library: MTLLibrary
+        if let defaultLib = device.makeDefaultLibrary(), defaultLib.makeFunction(name: "raytracePatio") != nil {
+            library = defaultLib
+        } else if let shaderURL = Bundle.main.url(forResource: "RayShaders", withExtension: "metal"),
+                  let shaderSource = try? String(contentsOf: shaderURL, encoding: .utf8),
+                  let compiledLib = try? device.makeLibrary(source: shaderSource, options: nil) {
+            library = compiledLib
+        } else {
+            throw MetalRayRendererError.shaderMissing
+        }
+
         guard let commandQueue = device.makeCommandQueue(),
-              let library = device.makeDefaultLibrary(),
               let function = library.makeFunction(name: "raytracePatio"),
               let waterFunction = library.makeFunction(name: "updateWaterHeight"),
               let waterVertexFunction = library.makeFunction(name: "updateWaterVertices"),
@@ -579,6 +627,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let npcBuilder = Self.makeNPCMesh()
         let waterBuilder = Self.makeWaterMesh()
         let floatBuilder = Self.makeFloatMesh()
+        let mirrorShieldBuilder = Self.makeMirrorShieldMesh()
         self.staticMesh = try Self.makeMesh(builder: staticBuilder, device: device, queue: commandQueue)
         self.playerMesh = try Self.makeMesh(builder: playerBuilder, device: device, queue: commandQueue)
         self.npcMesh = try Self.makeMesh(builder: npcBuilder, device: device, queue: commandQueue)
@@ -589,8 +638,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             allowsRefit: true
         )
         self.floatMesh = try Self.makeMesh(builder: floatBuilder, device: device, queue: commandQueue)
+        self.mirrorShieldMesh = try Self.makeMesh(builder: mirrorShieldBuilder, device: device, queue: commandQueue)
 
-        let instanceLength = MemoryLayout<MTLAccelerationStructureInstanceDescriptor>.stride * 6
+        let instanceLength = MemoryLayout<MTLAccelerationStructureInstanceDescriptor>.stride * 10
         guard let instanceBuffer = device.makeBuffer(length: instanceLength, options: .storageModeShared) else {
             throw MetalRayRendererError.resourceCreationFailed
         }
@@ -602,9 +652,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             playerMesh.accelerationStructure,
             waterMesh.accelerationStructure,
             floatMesh.accelerationStructure,
-            npcMesh.accelerationStructure
+            npcMesh.accelerationStructure,
+            mirrorShieldMesh.accelerationStructure
         ]
-        descriptor.instanceCount = 6
+        descriptor.instanceCount = 10
         descriptor.instanceDescriptorBuffer = instanceBuffer
         self.instanceDescriptor = descriptor
 
@@ -943,6 +994,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             lastHeldTool = heldTool
             if heldTool == .laser && laserCooldownRemaining <= 0 {
                 laserActiveRemaining = 4.0
+                audio.playLaserIgnition()
             } else if heldTool == .mirror && mirrorCooldownRemaining <= 0 {
                 mirrorActiveRemaining = 3.0
             }
@@ -951,6 +1003,36 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if heldTool == .laser && laserActiveRemaining > 0 {
             laserActiveRemaining = max(0, laserActiveRemaining - dt)
             if laserActiveRemaining == 0 { laserCooldownRemaining = 6.0 }
+
+            let origin = smoothedCameraTarget
+            let forward = lastCameraForward
+            for i in dummyPositions.indices where dummyAlive[i] {
+                let center = dummyPositions[i] + SIMD3<Float>(0, 0.85, 0)
+                let toCenter = center - origin
+                let proj = simd_dot(toCenter, forward)
+                if proj > 0 && proj < 22.0 {
+                    let closest = origin + forward * proj
+                    if simd_distance(center, closest) < 0.70 {
+                        dummyAlive[i] = false
+                        audio.playWaterDisturbance(intensity: 0.90)
+                        onScoreUpdate?(300)
+                    }
+                }
+            }
+            for i in npcPositions.indices where npcRespawnTimers[i] <= 0 {
+                let center = npcPositions[i] + SIMD3<Float>(0, 0.85, 0)
+                let toCenter = center - origin
+                let proj = simd_dot(toCenter, forward)
+                if proj > 0 && proj < 22.0 {
+                    let closest = origin + forward * proj
+                    if simd_distance(center, closest) < 0.70 {
+                        npcRespawnTimers[i] = 5.0
+                        npcPositions[i].y = -10
+                        audio.playWaterDisturbance(intensity: 0.90)
+                        onScoreUpdate?(400)
+                    }
+                }
+            }
         }
         if heldTool == .mirror && mirrorActiveRemaining > 0 {
             mirrorActiveRemaining = max(0, mirrorActiveRemaining - dt)
@@ -983,12 +1065,24 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     }
 
     private func updateNPCSimulation(dt: Float) {
+        let results = laserResultBuffer.contents().assumingMemoryBound(to: RTLaserResult.self)
+
         for index in npcPositions.indices {
+            if index == 0 {
+                results.pointee.bot0Start = .zero
+                results.pointee.bot0End = .zero
+            } else {
+                results.pointee.bot1Start = .zero
+                results.pointee.bot1End = .zero
+            }
+
             if npcRespawnTimers[index] > 0 {
                 npcRespawnTimers[index] = max(0, npcRespawnTimers[index] - dt)
                 npcPositions[index].y = -10
                 if npcRespawnTimers[index] == 0 {
                     npcPositions[index] = npcSpawnPositions[index]
+                    botLaserCooldownTimers[index] = 2.0 + Float(index) * 1.2
+                    botLaserActiveTimers[index] = 0
                 }
                 continue
             }
@@ -998,14 +1092,68 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 playerPosition.z - npcPositions[index].z
             )
             let distance = simd_length(offset)
-            guard distance > 2.1 else { continue }
-            let direction = offset / max(distance, 0.001)
-            let speed: Float = 0.78 + Float(index) * 0.12
-            npcPositions[index].x += direction.x * speed * dt
-            npcPositions[index].z += direction.y * speed * dt
-            npcPositions[index].x = max(-9.0, min(9.0, npcPositions[index].x))
-            npcPositions[index].z = max(-9.0, min(9.0, npcPositions[index].z))
+            let direction = distance > 0.001 ? offset / distance : SIMD2<Float>(0, 1)
+
+            // Aggressive tracking & speed
+            let speed: Float = 2.4 + Float(index) * 0.45
+            if distance > 0.65 {
+                npcPositions[index].x += direction.x * speed * dt
+                npcPositions[index].z += direction.y * speed * dt
+                npcPositions[index].x = max(-9.0, min(9.0, npcPositions[index].x))
+                npcPositions[index].z = max(-9.0, min(9.0, npcPositions[index].z))
+            }
             npcYaws[index] = atan2(direction.x, direction.y)
+
+            // Bot Laser Combat AI with symmetric active/cooldown windows & 3D visual beams
+            if botLaserCooldownTimers[index] > 0 {
+                botLaserCooldownTimers[index] = max(0, botLaserCooldownTimers[index] - dt)
+                if botLaserCooldownTimers[index] == 0 && distance < 12.0 {
+                    botLaserActiveTimers[index] = 2.2
+                }
+            } else if botLaserActiveTimers[index] > 0 {
+                botLaserActiveTimers[index] = max(0, botLaserActiveTimers[index] - dt)
+
+                let botHandOrigin = npcPositions[index] + SIMD3<Float>(0.42, 0.88, 0.20)
+                let playerTarget = playerPosition + SIMD3<Float>(0, 1.10, 0)
+                let playerIsUsingMirror = (heldTool == .mirror && mirrorActiveRemaining > 0)
+                let playerFacing = SIMD3<Float>(-sin(playerYaw), 0, -cos(playerYaw))
+                let incomingLaserDir = distance > 0.001 ? -direction : SIMD2<Float>(0, -1)
+                let isFacingLaser = (playerFacing.x * incomingLaserDir.x + playerFacing.z * incomingLaserDir.y) > 0.25
+
+                let startVec = SIMD4<Float>(botHandOrigin, 1.0)
+                let endVec: SIMD4<Float>
+
+                if playerIsUsingMirror && isFacingLaser {
+                    // Reflected beam sends laser back into the attacking bot!
+                    endVec = SIMD4<Float>(botHandOrigin, 1.0)
+                    npcRespawnTimers[index] = 5.0
+                    npcPositions[index].y = -10
+                    botLaserActiveTimers[index] = 0
+                    botLaserCooldownTimers[index] = 5.0
+                    audio.playWaterDisturbance(intensity: 0.95)
+                    onScoreUpdate?(500)
+                } else {
+                    endVec = SIMD4<Float>(playerTarget, 1.0)
+                    botImpactAudioCooldowns[index] -= dt
+                    if botImpactAudioCooldowns[index] <= 0 {
+                        botImpactAudioCooldowns[index] = 0.45
+                        audio.playLanding(intensity: 0.55)
+                    }
+                    onDamageTaken?(12.0 * dt)
+                }
+
+                if index == 0 {
+                    results.pointee.bot0Start = startVec
+                    results.pointee.bot0End = endVec
+                } else {
+                    results.pointee.bot1Start = startVec
+                    results.pointee.bot1End = endVec
+                }
+
+                if botLaserActiveTimers[index] == 0 {
+                    botLaserCooldownTimers[index] = 3.5 + Float(index) * 0.8
+                }
+            }
         }
     }
 
@@ -1029,8 +1177,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
 
         if let closestIndex {
-            npcRespawnTimers[closestIndex] = 1.6
+            npcRespawnTimers[closestIndex] = 2.0
             npcPositions[closestIndex].y = -10
+            audio.playWaterDisturbance(intensity: 0.85)
+            onScoreUpdate?(250)
         }
 
         // The rear wall mirror can send the player's own beam back at them.
@@ -1083,6 +1233,20 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     }
 
     private func groundHeight(at position: SIMD3<Float>, insidePool: Bool) -> Float {
+        // Tobogán Platform Top (North side deck)
+        if position.x >= -2.8 && position.x <= -0.2 && position.z >= -8.3 && position.z <= -6.1 {
+            return 2.50
+        }
+        // Tobogán Access Stairs (From Z=-9.0 up to Z=-8.3)
+        if position.x >= -2.8 && position.x <= -0.2 && position.z >= -9.0 && position.z < -8.3 {
+            let progress = (-8.3 - position.z) / 0.7
+            return (1.0 - progress) * 2.50
+        }
+        // Tobogán Water Slide Ramp (Slanted directly SOUTH into pool water from Z=-6.1 down to Z=-2.0!)
+        if position.x >= -2.8 && position.x <= -0.2 && position.z > -6.1 && position.z <= -2.0 {
+            let progress = (position.z - (-6.1)) / 4.1
+            return (1.0 - progress) * 2.50
+        }
         guard insidePool else { return 0 }
         let floatCenter = SIMD2<Float>(floatPosition.x, floatPosition.z)
         let distance = simd_distance(SIMD2<Float>(position.x, position.z), floatCenter)
@@ -1291,13 +1455,15 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let aspect = Float(texture.width) / max(1, Float(texture.height))
         let imagePlaneHeight = tan(fieldOfView * .pi / 360)
         let toolOrigin: SIMD3<Float>
+        let toolDirection: SIMD3<Float>
         if cameraMode == .firstPerson {
             toolOrigin = cameraPosition + right * 0.18 - up * 0.16 + cameraForward * 0.10
+            let aimPoint = cameraPosition + cameraForward * 18
+            toolDirection = simd_normalize(aimPoint - toolOrigin)
         } else {
-            toolOrigin = playerPosition + SIMD3<Float>(0, 1.18, 0) + right * 0.30
+            toolOrigin = playerPosition + SIMD3<Float>(0, 1.25, 0) + right * 0.32 + cameraForward * 0.25
+            toolDirection = cameraForward
         }
-        let aimPoint = cameraPosition + cameraForward * 18
-        let toolDirection = simd_normalize(aimPoint - toolOrigin)
 
         let renderTool: GameHeldTool
         switch heldTool {
@@ -1323,7 +1489,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             waterImpulse: pendingWaterImpulse,
             toolOrigin: SIMD4<Float>(toolOrigin, 1),
             toolDirection: SIMD4<Float>(toolDirection, 0),
-            toolParameters: SIMD4<Float>(Float(renderTool.rawValue), 0, 0, 0),
+            toolParameters: SIMD4<Float>(Float(renderTool.rawValue), 0, 0, isSplitScreenMode ? 1.0 : 0.0),
             lightStates: SIMD4<Float>(
                 lightStates.effectiveIntensity(.post),
                 lightStates.effectiveIntensity(.piscinaNeon),
@@ -1342,13 +1508,29 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     }
 
     private func writeInstanceDescriptors() {
+        let isMirrorActive = (heldTool == .mirror && mirrorActiveRemaining > 0)
+        let shieldPos: SIMD3<Float>
+        if isMirrorActive {
+            shieldPos = playerPosition + SIMD3<Float>(-sin(playerYaw) * 0.48, 0, -cos(playerYaw) * 0.48)
+        } else {
+            shieldPos = SIMD3<Float>(0, -100, 0)
+        }
+
+        let d0 = dummyAlive[0] ? dummyPositions[0] : SIMD3<Float>(0, -100, 0)
+        let d1 = dummyAlive[1] ? dummyPositions[1] : SIMD3<Float>(0, -100, 0)
+        let d2 = dummyAlive[2] ? dummyPositions[2] : SIMD3<Float>(0, -100, 0)
+
         let descriptors = [
             Self.makeInstanceDescriptor(translation: .zero, yaw: 0, mask: 0x01, accelerationStructureIndex: 0),
             Self.makeInstanceDescriptor(translation: playerPosition, yaw: playerYaw, mask: 0x02, accelerationStructureIndex: 1),
             Self.makeInstanceDescriptor(translation: .zero, yaw: 0, mask: 0x04, accelerationStructureIndex: 2),
             Self.makeInstanceDescriptor(translation: floatPosition, yaw: floatYaw, mask: 0x01, accelerationStructureIndex: 3),
             Self.makeInstanceDescriptor(translation: npcPositions[0], yaw: npcYaws[0], mask: 0x01, accelerationStructureIndex: 4),
-            Self.makeInstanceDescriptor(translation: npcPositions[1], yaw: npcYaws[1], mask: 0x01, accelerationStructureIndex: 4)
+            Self.makeInstanceDescriptor(translation: npcPositions[1], yaw: npcYaws[1], mask: 0x01, accelerationStructureIndex: 4),
+            Self.makeInstanceDescriptor(translation: shieldPos, yaw: playerYaw, mask: 0x01, accelerationStructureIndex: 5),
+            Self.makeInstanceDescriptor(translation: d0, yaw: 0, mask: 0x01, accelerationStructureIndex: 4),
+            Self.makeInstanceDescriptor(translation: d1, yaw: 0.5, mask: 0x01, accelerationStructureIndex: 4),
+            Self.makeInstanceDescriptor(translation: d2, yaw: 1.2, mask: 0x01, accelerationStructureIndex: 4)
         ]
         descriptors.withUnsafeBytes { bytes in
             guard let baseAddress = bytes.baseAddress else { return }
@@ -1477,6 +1659,15 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         return builder
     }
 
+    private static func makeMirrorShieldMesh() -> RTMeshBuilder {
+        var builder = RTMeshBuilder()
+        let mirrorFrame = RTMaterial(color: SIMD3<Float>(0.02, 0.72, 0.95), roughness: 0.08, emission: SIMD3<Float>(0.05, 0.40, 0.65), reflectivity: 0.88, kind: 1.0)
+        let mirrorGlass = RTMaterial(color: SIMD3<Float>(0.20, 0.85, 0.98), roughness: 0.01, emission: SIMD3<Float>(0.08, 0.45, 0.75), reflectivity: 0.97, kind: 1.0)
+        builder.addBox(center: SIMD3<Float>(0, 1.05, 0), size: SIMD3<Float>(0.92, 1.12, 0.045), material: mirrorFrame)
+        builder.addBox(center: SIMD3<Float>(0, 1.05, 0), size: SIMD3<Float>(0.84, 1.04, 0.035), material: mirrorGlass)
+        return builder
+    }
+
     private static func makeFloatMesh() -> RTMeshBuilder {
         var builder = RTMeshBuilder()
         let orange = RTMaterial(
@@ -1562,6 +1753,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             kind: 4
         )
 
+
+
         builder.addBox(center: SIMD3<Float>(0, -0.12, -7.1), size: SIMD3<Float>(20, 0.24, 5.4), material: deck)
         builder.addBox(center: SIMD3<Float>(0, -0.12, 5.6), size: SIMD3<Float>(20, 0.24, 8.4), material: deck)
         builder.addBox(center: SIMD3<Float>(-7.7, -0.12, -1.5), size: SIMD3<Float>(4.4, 0.24, 5.4), material: deck)
@@ -1570,6 +1763,33 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         builder.addBox(center: SIMD3<Float>(0, 2.5, 9.8), size: SIMD3<Float>(20, 5, 0.32), material: wall)
         builder.addBox(center: SIMD3<Float>(-9.8, 2.5, 0), size: SIMD3<Float>(0.32, 5, 20), material: wall)
         builder.addBox(center: SIMD3<Float>(9.8, 2.5, 0), size: SIMD3<Float>(0.32, 5, 20), material: wall)
+        let slideCyan = RTMaterial(color: SIMD3<Float>(0.05, 0.82, 0.95), roughness: 0.05, emission: SIMD3<Float>(0.10, 0.35, 0.45), reflectivity: 0.88, kind: 1.0)
+        let stairPink = RTMaterial(color: SIMD3<Float>(0.95, 0.18, 0.52), roughness: 0.20, emission: SIMD3<Float>(0.20, 0.04, 0.10), reflectivity: 0.40)
+        let platformDeck = RTMaterial(color: SIMD3<Float>(0.14, 0.18, 0.22), roughness: 0.40, reflectivity: 0.20)
+
+        // 3D Tobogán de Agua (Water Slide on North Deck slanting directly SOUTH into Pool Water!)
+        builder.addBox(center: SIMD3<Float>(-1.5, 2.50, -7.2), size: SIMD3<Float>(2.4, 0.20, 2.2), material: platformDeck)
+        builder.addBox(center: SIMD3<Float>(-2.7, 3.10, -7.2), size: SIMD3<Float>(0.12, 1.0, 2.2), material: metal)
+        builder.addBox(center: SIMD3<Float>(-0.3, 3.10, -7.2), size: SIMD3<Float>(0.12, 1.0, 2.2), material: metal)
+        builder.addBox(center: SIMD3<Float>(-1.5, 3.10, -8.3), size: SIMD3<Float>(2.4, 1.0, 0.12), material: metal)
+
+        // Tobogán Back Access Stairs (From North Deck Z=-8.8 up to Platform Z=-7.2)
+        for step in 0..<12 {
+            let stepProgress = Float(step) / 11.0
+            let stepY = stepProgress * 2.50
+            let stepZ = -8.8 + stepProgress * 1.60
+            builder.addBox(center: SIMD3<Float>(-1.5, stepY, stepZ), size: SIMD3<Float>(2.2, 0.18, 0.32), material: stairPink)
+        }
+
+        // Tobogán Water Slide Ramp (Slanted directly SOUTH into the pool water from Z=-6.1 down to Z=-2.0!)
+        for step in 0..<16 {
+            let stepProgress = Float(step) / 15.0
+            let stepY = (1.0 - stepProgress) * 2.50
+            let stepZ = -6.1 + stepProgress * 4.10
+            builder.addBox(center: SIMD3<Float>(-1.5, stepY, stepZ), size: SIMD3<Float>(2.0, 0.16, 0.38), material: slideCyan)
+            builder.addBox(center: SIMD3<Float>(-2.5, stepY + 0.18, stepZ), size: SIMD3<Float>(0.10, 0.36, 0.38), material: metal)
+            builder.addBox(center: SIMD3<Float>(-0.5, stepY + 0.18, stepZ), size: SIMD3<Float>(0.10, 0.36, 0.38), material: metal)
+        }
 
         builder.addBox(center: SIMD3<Float>(-1.5, -0.72, -1.5), size: SIMD3<Float>(7.8, 0.12, 5.4), material: poolTile)
         builder.addBox(center: SIMD3<Float>(-1.5, -0.34, -4.14), size: SIMD3<Float>(7.8, 0.68, 0.12), material: poolTile)
