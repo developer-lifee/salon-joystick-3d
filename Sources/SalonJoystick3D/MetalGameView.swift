@@ -113,7 +113,8 @@ struct MetalGameView: UIViewRepresentable {
             rayBouncesEnabled: true,
             heldTool: model.heldTool,
             lightStates: model.lightStates,
-            jumpRequestID: model.jumpRequestID
+            jumpRequestID: model.jumpRequestID,
+            isSlowMotionActive: model.isSlowMotionActive
         )
     }
 

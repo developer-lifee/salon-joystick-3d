@@ -197,6 +197,17 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             }
 
+            if model.isSlowMotionActive {
+                RadialGradient(
+                    colors: [.clear, .yellow.opacity(0.15), .black.opacity(0.55)],
+                    center: .center,
+                    startRadius: 80,
+                    endRadius: 480
+                )
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+            }
+
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     Image(systemName: "heart.fill")
@@ -340,6 +351,56 @@ struct ContentView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Láser")
+
+                    Button {
+                        model.toggleSlowMotion()
+                    } label: {
+                        VStack(spacing: 3) {
+                            Image(systemName: "hourglass")
+                                .font(.system(size: 22, weight: .bold))
+                            Text("Slow-Mo")
+                                .font(.system(size: 10, weight: .bold))
+                        }
+                        .foregroundStyle(model.isSlowMotionActive ? .black : .yellow)
+                        .frame(width: 58, height: 58)
+                        .background(
+                            model.isSlowMotionActive
+                                ? AnyShapeStyle(Color.yellow)
+                                : AnyShapeStyle(Color.black.opacity(0.72)),
+                            in: Circle()
+                        )
+                        .overlay {
+                            Circle()
+                                .stroke(Color.yellow.opacity(0.88), lineWidth: 2)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Cámara Lenta Slow Motion")
+
+                    Button {
+                        model.showsLightRadialMenu.toggle()
+                    } label: {
+                        VStack(spacing: 3) {
+                            Image(systemName: "bolt.shield.fill")
+                                .font(.system(size: 22, weight: .bold))
+                            Text("Warp")
+                                .font(.system(size: 10, weight: .bold))
+                        }
+                        .foregroundStyle(model.showsLightRadialMenu ? .black : .cyan)
+                        .frame(width: 58, height: 58)
+                        .background(
+                            model.showsLightRadialMenu
+                                ? AnyShapeStyle(Color.cyan)
+                                : AnyShapeStyle(Color.black.opacity(0.72)),
+                            in: Circle()
+                        )
+                        .overlay {
+                            Circle()
+                                .stroke(Color.cyan.opacity(0.88), lineWidth: 2)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Teletransporte Minato Warp")
 
                     Button {
                         model.heldTool = (model.heldTool == .flashlight ? .none : .flashlight)
@@ -604,6 +665,27 @@ final class GameModel: ObservableObject {
     @Published private(set) var toolStatus = GameToolStatus()
     @Published var playerScore = 0
     @Published var playerHealth: Float = 100.0
+    @Published var isSlowMotionActive = false
+    @Published var showsLightRadialMenu = false
+    @Published private(set) var warpRequestID = 0
+    @Published private(set) var requestedWarpPosition = SIMD3<Float>.zero
+
+    func toggleSlowMotion() {
+        isSlowMotionActive.toggle()
+        audio.playLaserIgnition()
+    }
+
+    func warpToLightFixture(_ fixture: GameLightFixture) {
+        let pos: SIMD3<Float> = switch fixture {
+        case .post: SIMD3<Float>(-7.55, 0.2, 6.65)
+        case .piscinaNeon: SIMD3<Float>(-5.25, 0.2, -9.15)
+        case .sheeritNeon: SIMD3<Float>(5.45, 0.2, 9.15)
+        case .poolStrips: SIMD3<Float>(-1.5, 0.2, -1.5)
+        }
+        warpRequestID += 1
+        requestedWarpPosition = pos
+        audio.playLaserIgnition()
+    }
 
     init() {
         audio.start()
@@ -2889,132 +2971,117 @@ struct MainMenuView: View {
             )
             .ignoresSafeArea()
 
-            VStack(spacing: 20) {
-                Spacer()
+            GeometryReader { proxy in
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 16) {
+                        Spacer(minLength: 20)
 
-                VStack(spacing: 6) {
-                    Text("LASER TRACER 3D")
-                        .font(.system(size: 38, weight: .black, design: .rounded))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.cyan, .blue, .purple],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .shadow(color: .cyan.opacity(0.85), radius: 14)
+                        VStack(spacing: 4) {
+                            Text("LASER TRACER 3D")
+                                .font(.system(size: 36, weight: .black, design: .rounded))
+                                .minimumScaleFactor(0.6)
+                                .lineLimit(1)
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [.cyan, .blue, .purple],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .shadow(color: .cyan.opacity(0.85), radius: 14)
 
-                    Text("RAY TRACING COMBAT & DEFENSIVE SHIELD")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.85))
-                        .tracking(2)
+                            Text("RAY TRACING COMBAT & DEFENSIVE SHIELD")
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .minimumScaleFactor(0.6)
+                                .lineLimit(1)
+                                .foregroundStyle(.white.opacity(0.85))
+                                .tracking(2)
+                        }
+                        .padding(.horizontal, 20)
+
+                        VStack(spacing: 12) {
+                            Button {
+                                model.startGame()
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "play.fill")
+                                        .font(.title3.bold())
+                                    Text("JUGAR EN SOLITARIO")
+                                        .font(.headline.bold())
+                                }
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: 320, minHeight: 52)
+                                .background(
+                                    LinearGradient(colors: [.blue, .cyan], startPoint: .leading, endPoint: .trailing),
+                                    in: RoundedRectangle(cornerRadius: 16)
+                                )
+                                .shadow(color: .cyan.opacity(0.6), radius: 10)
+                            }
+                            .buttonStyle(.plain)
+
+                            Button {
+                                model.showsMultiplayerSheet = true
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "person.2.fill")
+                                        .font(.title3.bold())
+                                    Text("MULTIJUGADOR LOCAL")
+                                        .font(.headline.bold())
+                                }
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: 320, minHeight: 52)
+                                .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(Color.white.opacity(0.3), lineWidth: 1.5)
+                                }
+                            }
+                            .buttonStyle(.plain)
+
+                            Button {
+                                showsCoffeeStore = true
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Text("☕️")
+                                        .font(.title3)
+                                    Text("INVITAR UN CAFÉ")
+                                        .font(.headline.bold())
+                                }
+                                .foregroundStyle(.yellow)
+                                .frame(maxWidth: 320, minHeight: 52)
+                                .background(Color.yellow.opacity(0.15), in: RoundedRectangle(cornerRadius: 16))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(Color.yellow.opacity(0.6), lineWidth: 1.5)
+                                }
+                            }
+                            .buttonStyle(.plain)
+
+                            Button {
+                                model.showsSettingsSheet = true
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "gearshape.fill")
+                                        .font(.subheadline.bold())
+                                    Text("AJUSTES DE GRÁFICOS Y CÁMARA")
+                                        .font(.subheadline.bold())
+                                }
+                                .foregroundStyle(.white.opacity(0.8))
+                                .frame(maxWidth: 320, minHeight: 44)
+                                .background(Color.black.opacity(0.4), in: RoundedRectangle(cornerRadius: 14))
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        Spacer(minLength: 20)
+
+                        Text("LASER TRACER 3D • METAL RAY TRACING ENGINE")
+                            .font(.caption2.monospaced().bold())
+                            .foregroundStyle(.white.opacity(0.5))
+                            .padding(.bottom, 16)
+                    }
+                    .frame(minHeight: proxy.size.height)
                 }
-                .padding(.horizontal, 20)
-
-                Spacer()
-
-                VStack(spacing: 12) {
-                    Button {
-                        model.startGame()
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "play.fill")
-                                .font(.title3.bold())
-                            Text("JUGAR EN SOLITARIO")
-                                .font(.headline.bold())
-                        }
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: 320, minHeight: 52)
-                        .background(
-                            LinearGradient(colors: [.blue, .cyan], startPoint: .leading, endPoint: .trailing),
-                            in: RoundedRectangle(cornerRadius: 16)
-                        )
-                        .shadow(color: .cyan.opacity(0.6), radius: 10)
-                    }
-                    .buttonStyle(.plain)
-
-                    Button {
-                        model.showsMultiplayerSheet = true
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "person.2.fill")
-                                .font(.title3.bold())
-                            Text("MULTIJUGADOR LOCAL")
-                                .font(.headline.bold())
-                        }
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: 320, minHeight: 52)
-                        .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(Color.white.opacity(0.3), lineWidth: 1.5)
-                        }
-                    }
-                    .buttonStyle(.plain)
-
-                    Button {
-                        showsCoffeeStore = true
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "cup.and.saucer.fill")
-                                .font(.title3.bold())
-                            Text("INVITAR UN CAFÉ ☕️")
-                                .font(.headline.bold())
-                        }
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: 320, minHeight: 52)
-                        .background(
-                            LinearGradient(colors: [.orange, .yellow], startPoint: .leading, endPoint: .trailing),
-                            in: RoundedRectangle(cornerRadius: 16)
-                        )
-                        .shadow(color: .orange.opacity(0.5), radius: 8)
-                    }
-                    .buttonStyle(.plain)
-
-                    Button {
-                        let audioOn = model.footstepsEnabled
-                        model.footstepsEnabled = !audioOn
-                        model.waterSoundEnabled = !audioOn
-                        model.musicEnabled = !audioOn
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: model.footstepsEnabled ? "speaker.wave.3.fill" : "speaker.slash.fill")
-                                .font(.title3.bold())
-                            Text(model.footstepsEnabled ? "AUDIO Y EFECTOS: ACTIVADO" : "AUDIO Y EFECTOS: SILENCIADO")
-                                .font(.subheadline.bold())
-                        }
-                        .foregroundStyle(model.footstepsEnabled ? Color.green : Color.red)
-                        .frame(maxWidth: 320, minHeight: 48)
-                        .background(Color.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(model.footstepsEnabled ? Color.green.opacity(0.6) : Color.red.opacity(0.6), lineWidth: 1.5)
-                        }
-                    }
-                    .buttonStyle(.plain)
-
-                    Button {
-                        model.showsSettingsSheet = true
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: "gearshape.fill")
-                                .font(.subheadline.bold())
-                            Text("AJUSTES DE GRÁFICOS Y CÁMARA")
-                                .font(.subheadline.bold())
-                        }
-                        .foregroundStyle(.white.opacity(0.8))
-                        .frame(maxWidth: 320, minHeight: 44)
-                        .background(Color.black.opacity(0.4), in: RoundedRectangle(cornerRadius: 14))
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                Spacer()
-
-                Text("LASER TRACER 3D • METAL RAY TRACING ENGINE")
-                    .font(.caption2.monospaced().bold())
-                    .foregroundStyle(.white.opacity(0.5))
-                    .padding(.bottom, 16)
             }
         }
     }

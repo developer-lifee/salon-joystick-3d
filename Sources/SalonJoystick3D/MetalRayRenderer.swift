@@ -676,19 +676,23 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         try buildInitialInstanceAccelerationStructure()
     }
 
+    private var isSlowMotionActive = false
+
     func setInput(
         joystick: CGVector,
         cameraMode: GameCameraMode,
         rayBouncesEnabled: Bool,
         heldTool: GameHeldTool,
         lightStates: GameLightStates,
-        jumpRequestID: Int
+        jumpRequestID: Int,
+        isSlowMotionActive: Bool = false
     ) {
         self.joystick = joystick
         self.cameraMode = cameraMode
         self.rayBouncesEnabled = rayBouncesEnabled
         self.heldTool = heldTool
         self.lightStates = lightStates
+        self.isSlowMotionActive = isSlowMotionActive
         if handledJumpRequestID != jumpRequestID {
             handledJumpRequestID = jumpRequestID
             jumpQueued = true
@@ -740,8 +744,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
 
         let now = CACurrentMediaTime()
-        let dt = Float(min(1.0 / 30.0, max(0, now - lastFrameTime)))
+        let rawDt = Float(min(1.0 / 30.0, max(0, now - lastFrameTime)))
         lastFrameTime = now
+        let dt = isSlowMotionActive ? rawDt * 0.20 : rawDt
         elapsedTime += dt
         updateSimulation(dt: dt)
         writeInstanceDescriptors()
@@ -878,6 +883,23 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if simd_length(horizontalVelocity) < 0.015 && magnitude <= 0.08 {
             horizontalVelocity = .zero
         }
+
+        // 🛝 Tobogán Water Slide Physics (Automatic High-Speed Downward Launch!)
+        if playerPosition.x >= -2.8 && playerPosition.x <= -0.2 && playerPosition.z > -6.1 && playerPosition.z <= -2.0 {
+            horizontalVelocity.y = 11.5
+            verticalVelocity = -4.8
+        }
+
+        // 🏊‍♂️ 🌊 Easter Egg: Trampolín High-Dive Subterranean Underwater World Portal Trigger!
+        // Jump off the Trampolín board into the pool -> Plunge deep underwater straight into the Subterranean Realm!
+        let jumpedOffTrampoline = (playerPosition.x >= -0.5 && playerPosition.x <= 3.2 && playerPosition.z >= -2.2 && playerPosition.z <= -0.5 && playerPosition.y < -0.25)
+        let floatNearCorner = (floatPosition.x < -1.0 || floatPosition.z < -1.0)
+        if (jumpedOffTrampoline || (floatNearCorner && playerPosition.y < -0.30)) {
+            // Secret Teleport to Path-Traced Subterranean Underwater Realm!
+            playerPosition = SIMD3<Float>(0.0, -5.5, 0.0)
+            verticalVelocity = -0.5
+            audio.playLaserIgnition()
+        }
         if currentlyOnFloat && magnitude > 0.08 {
             floatVelocity -= desiredDirection * (dt * 0.58 * magnitude)
             let playerOffset = SIMD2<Float>(
@@ -908,12 +930,12 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
         }
 
-        verticalVelocity -= (willBeInPool && !willBeOnFloat ? 5.4 : 9.8) * dt
+        verticalVelocity -= (willBeInPool && !willBeOnFloat ? 3.2 : 9.8) * dt
         var landingSpeed: Float = 0
         proposed.y += verticalVelocity * dt
-        if currentlyInPool && !willBeInPool && proposed.y < 0 {
-            proposed.y = min(0, playerPosition.y + dt * 2.8)
-            verticalVelocity = 0
+        if currentlyInPool {
+            // Allow smooth diving down to pool floor (-0.66m underwater)
+            proposed.y = max(-0.66, proposed.y)
         } else if proposed.y <= nextGroundHeight {
             if !wasGrounded && verticalVelocity < -1.2 {
                 landingSpeed = -verticalVelocity
@@ -1097,10 +1119,39 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             // Aggressive tracking & speed
             let speed: Float = 2.4 + Float(index) * 0.45
             if distance > 0.65 {
-                npcPositions[index].x += direction.x * speed * dt
-                npcPositions[index].z += direction.y * speed * dt
-                npcPositions[index].x = max(-9.0, min(9.0, npcPositions[index].x))
-                npcPositions[index].z = max(-9.0, min(9.0, npcPositions[index].z))
+                var proposedX = npcPositions[index].x + direction.x * speed * dt
+                var proposedZ = npcPositions[index].z + direction.y * speed * dt
+
+                // Outer Patio Wall Colliders
+                proposedX = max(-9.0, min(9.0, proposedX))
+                proposedZ = max(-9.0, min(9.0, proposedZ))
+
+                // Solid Pool Coping Wall Colliders for NPCs
+                let isInsidePool = proposedX >= -5.0 && proposedX <= 5.0 && proposedZ >= -5.0 && proposedZ <= 5.0
+                let wasInsidePool = npcPositions[index].x >= -5.0 && npcPositions[index].x <= 5.0 && npcPositions[index].z >= -5.0 && npcPositions[index].z <= 5.0
+                if !wasInsidePool && isInsidePool && npcPositions[index].y < 0.2 {
+                    // Push NPC back outside pool rim
+                    proposedX = npcPositions[index].x
+                    proposedZ = npcPositions[index].z
+                }
+
+                // Player Body Solid Push-Back Collider
+                let toPlayer = SIMD2<Float>(proposedX - playerPosition.x, proposedZ - playerPosition.z)
+                let playerDist = simd_length(toPlayer)
+                if playerDist < 0.62 {
+                    let pushDir = playerDist > 0.001 ? toPlayer / playerDist : SIMD2<Float>(1, 0)
+                    proposedX = playerPosition.x + pushDir.x * 0.62
+                    proposedZ = playerPosition.z + pushDir.y * 0.62
+                }
+
+                // Apply Scenario Rock Collisions to NPCs (Same rules as player!)
+                var npcPos = SIMD3<Float>(proposedX, npcPositions[index].y, proposedZ)
+                resolveRockCollisions(position: &npcPos)
+                proposedX = npcPos.x
+                proposedZ = npcPos.z
+
+                npcPositions[index].x = proposedX
+                npcPositions[index].z = proposedZ
             }
             npcYaws[index] = atan2(direction.x, direction.y)
 
@@ -1241,6 +1292,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if position.x >= -2.8 && position.x <= -0.2 && position.z >= -9.0 && position.z < -8.3 {
             let progress = (-8.3 - position.z) / 0.7
             return (1.0 - progress) * 2.50
+        }
+        // 🏊‍♂️ Trampolín Plank (High-Dive Board over Pool Water!)
+        if position.x >= 0.2 && position.x <= 2.8 && position.z >= -1.9 && position.z <= -1.1 {
+            return 1.25
         }
         // Tobogán Water Slide Ramp (Slanted directly SOUTH into pool water from Z=-6.1 down to Z=-2.0!)
         if position.x >= -2.8 && position.x <= -0.2 && position.z > -6.1 && position.z <= -2.0 {
@@ -1763,33 +1818,41 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         builder.addBox(center: SIMD3<Float>(0, 2.5, 9.8), size: SIMD3<Float>(20, 5, 0.32), material: wall)
         builder.addBox(center: SIMD3<Float>(-9.8, 2.5, 0), size: SIMD3<Float>(0.32, 5, 20), material: wall)
         builder.addBox(center: SIMD3<Float>(9.8, 2.5, 0), size: SIMD3<Float>(0.32, 5, 20), material: wall)
-        let slideCyan = RTMaterial(color: SIMD3<Float>(0.05, 0.82, 0.95), roughness: 0.05, emission: SIMD3<Float>(0.10, 0.35, 0.45), reflectivity: 0.88, kind: 1.0)
+        let slideCyan = RTMaterial(color: SIMD3<Float>(0.02, 0.65, 0.82), roughness: 0.32, emission: SIMD3<Float>(0.02, 0.12, 0.20), reflectivity: 0.12)
         let stairPink = RTMaterial(color: SIMD3<Float>(0.95, 0.18, 0.52), roughness: 0.20, emission: SIMD3<Float>(0.20, 0.04, 0.10), reflectivity: 0.40)
         let platformDeck = RTMaterial(color: SIMD3<Float>(0.14, 0.18, 0.22), roughness: 0.40, reflectivity: 0.20)
 
-        // 3D Tobogán de Agua (Water Slide on North Deck slanting directly SOUTH into Pool Water!)
+        // 3D Tobogán de Agua (Smooth Curved Water Slide Trough)
         builder.addBox(center: SIMD3<Float>(-1.5, 2.50, -7.2), size: SIMD3<Float>(2.4, 0.20, 2.2), material: platformDeck)
         builder.addBox(center: SIMD3<Float>(-2.7, 3.10, -7.2), size: SIMD3<Float>(0.12, 1.0, 2.2), material: metal)
         builder.addBox(center: SIMD3<Float>(-0.3, 3.10, -7.2), size: SIMD3<Float>(0.12, 1.0, 2.2), material: metal)
-        builder.addBox(center: SIMD3<Float>(-1.5, 3.10, -8.3), size: SIMD3<Float>(2.4, 1.0, 0.12), material: metal)
 
-        // Tobogán Back Access Stairs (From North Deck Z=-8.8 up to Platform Z=-7.2)
-        for step in 0..<12 {
-            let stepProgress = Float(step) / 11.0
-            let stepY = stepProgress * 2.50
-            let stepZ = -8.8 + stepProgress * 1.60
-            builder.addBox(center: SIMD3<Float>(-1.5, stepY, stepZ), size: SIMD3<Float>(2.2, 0.18, 0.32), material: stairPink)
+        // Tobogán Back Access Ladder
+        for step in 0..<10 {
+            let stepY = Float(step) * 0.25
+            let stepZ = -8.6 + Float(step) * 0.15
+            builder.addBox(center: SIMD3<Float>(-1.5, stepY, stepZ), size: SIMD3<Float>(1.8, 0.08, 0.24), material: stairPink)
         }
 
-        // Tobogán Water Slide Ramp (Slanted directly SOUTH into the pool water from Z=-6.1 down to Z=-2.0!)
-        for step in 0..<16 {
-            let stepProgress = Float(step) / 15.0
-            let stepY = (1.0 - stepProgress) * 2.50
-            let stepZ = -6.1 + stepProgress * 4.10
-            builder.addBox(center: SIMD3<Float>(-1.5, stepY, stepZ), size: SIMD3<Float>(2.0, 0.16, 0.38), material: slideCyan)
-            builder.addBox(center: SIMD3<Float>(-2.5, stepY + 0.18, stepZ), size: SIMD3<Float>(0.10, 0.36, 0.38), material: metal)
-            builder.addBox(center: SIMD3<Float>(-0.5, stepY + 0.18, stepZ), size: SIMD3<Float>(0.10, 0.36, 0.38), material: metal)
+        // Smooth Curved Fiberglass Water Slide Chute (Continuous Ramp & Side Rails)
+        for step in 0..<28 {
+            let progress = Float(step) / 27.0
+            let stepY = (1.0 - progress) * 2.45 + 0.05
+            let stepZ = -6.1 + progress * 4.10
+            // Molded cyan slide trough floor
+            builder.addBox(center: SIMD3<Float>(-1.5, stepY, stepZ), size: SIMD3<Float>(2.1, 0.08, 0.22), material: slideCyan)
+            // Curved side safety rails
+            builder.addBox(center: SIMD3<Float>(-2.55, stepY + 0.24, stepZ), size: SIMD3<Float>(0.12, 0.45, 0.22), material: slideCyan)
+            builder.addBox(center: SIMD3<Float>(-0.45, stepY + 0.24, stepZ), size: SIMD3<Float>(0.12, 0.45, 0.22), material: slideCyan)
         }
+
+        // 🏊‍♂️ 3D Trampolín (High-Dive Board over Pool Water!)
+        let divingBoardMaterial = RTMaterial(color: SIMD3<Float>(0.96, 0.82, 0.08), roughness: 0.22, reflectivity: 0.15)
+        let divingStandMaterial = RTMaterial(color: SIMD3<Float>(0.35, 0.38, 0.42), roughness: 0.15, reflectivity: 0.60)
+        // Stand base
+        builder.addBox(center: SIMD3<Float>(2.6, 0.60, -1.5), size: SIMD3<Float>(0.32, 1.20, 0.45), material: divingStandMaterial)
+        // Springy diving board plank extending out over deep pool water!
+        builder.addBox(center: SIMD3<Float>(1.4, 1.25, -1.5), size: SIMD3<Float>(2.4, 0.08, 0.65), material: divingBoardMaterial)
 
         builder.addBox(center: SIMD3<Float>(-1.5, -0.72, -1.5), size: SIMD3<Float>(7.8, 0.12, 5.4), material: poolTile)
         builder.addBox(center: SIMD3<Float>(-1.5, -0.34, -4.14), size: SIMD3<Float>(7.8, 0.68, 0.12), material: poolTile)
