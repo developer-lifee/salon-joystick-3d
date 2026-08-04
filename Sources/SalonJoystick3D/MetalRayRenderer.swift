@@ -1293,23 +1293,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     }
 
     private func groundHeight(at position: SIMD3<Float>, insidePool: Bool) -> Float {
-        // Tobogán Platform Top (North side deck)
-        if position.x >= -2.8 && position.x <= -0.2 && position.z >= -8.3 && position.z <= -6.1 {
-            return 2.50
+        // 🏊‍♂️ Trampolín de Salto Alto (High-Dive Plank next to Tobogán!)
+        if position.x >= 0.8 && position.x <= 2.0 && position.z >= -6.8 && position.z <= -3.8 {
+            return 2.85
         }
-        // Tobogán Access Stairs (From Z=-9.0 up to Z=-8.3)
-        if position.x >= -2.8 && position.x <= -0.2 && position.z >= -9.0 && position.z < -8.3 {
-            let progress = (-8.3 - position.z) / 0.7
-            return (1.0 - progress) * 2.50
-        }
-        // 🏊‍♂️ Trampolín Plank (High-Dive Board over Pool Water!)
-        if position.x >= 0.2 && position.x <= 2.8 && position.z >= -1.9 && position.z <= -1.1 {
-            return 1.25
-        }
-        // Tobogán Water Slide Ramp (Slanted directly SOUTH into pool water from Z=-6.1 down to Z=-2.0!)
-        if position.x >= -2.8 && position.x <= -0.2 && position.z > -6.1 && position.z <= -2.0 {
-            let progress = (position.z - (-6.1)) / 4.1
-            return (1.0 - progress) * 2.50
+        // 🌀 Tobogán Platform Top
+        if position.x >= -5.0 && position.x <= -2.6 && position.z >= -9.3 && position.z <= -7.1 {
+            return 3.20
         }
         guard insidePool else { return 0 }
         let floatCenter = SIMD2<Float>(floatPosition.x, floatPosition.z)
@@ -1831,37 +1821,40 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let stairPink = RTMaterial(color: SIMD3<Float>(0.95, 0.18, 0.52), roughness: 0.20, emission: SIMD3<Float>(0.20, 0.04, 0.10), reflectivity: 0.40)
         let platformDeck = RTMaterial(color: SIMD3<Float>(0.14, 0.18, 0.22), roughness: 0.40, reflectivity: 0.20)
 
-        // 3D Tobogán de Agua (Smooth Curved Water Slide Trough)
-        builder.addBox(center: SIMD3<Float>(-1.5, 2.50, -7.2), size: SIMD3<Float>(2.4, 0.20, 2.2), material: platformDeck)
-        builder.addBox(center: SIMD3<Float>(-2.7, 3.10, -7.2), size: SIMD3<Float>(0.12, 1.0, 2.2), material: metal)
-        builder.addBox(center: SIMD3<Float>(-0.3, 3.10, -7.2), size: SIMD3<Float>(0.12, 1.0, 2.2), material: metal)
+        // 🌀 Tobogán en Espiral 3D Fuera de la Piscina (Outer Helical Spiral Water Slide)
+        builder.addBox(center: SIMD3<Float>(-3.8, 3.20, -8.2), size: SIMD3<Float>(2.4, 0.20, 2.2), material: platformDeck)
+        builder.addBox(center: SIMD3<Float>(-5.0, 3.80, -8.2), size: SIMD3<Float>(0.12, 1.0, 2.2), material: metal)
+        builder.addBox(center: SIMD3<Float>(-2.6, 3.80, -8.2), size: SIMD3<Float>(0.12, 1.0, 2.2), material: metal)
 
-        // Tobogán Back Access Ladder
-        for step in 0..<10 {
-            let stepY = Float(step) * 0.25
-            let stepZ = -8.6 + Float(step) * 0.15
-            builder.addBox(center: SIMD3<Float>(-1.5, stepY, stepZ), size: SIMD3<Float>(1.8, 0.08, 0.24), material: stairPink)
+        // Staircase up to Spiral Platform
+        for step in 0..<12 {
+            let stepY = Float(step) * 0.27
+            let stepZ = -9.4 + Float(step) * 0.10
+            builder.addBox(center: SIMD3<Float>(-3.8, stepY, stepZ), size: SIMD3<Float>(1.8, 0.08, 0.24), material: stairPink)
         }
 
-        // Smooth Curved Fiberglass Water Slide Chute (Continuous Ramp & Side Rails)
-        for step in 0..<28 {
-            let progress = Float(step) / 27.0
-            let stepY = (1.0 - progress) * 2.45 + 0.05
-            let stepZ = -6.1 + progress * 4.10
-            // Molded cyan slide trough floor
-            builder.addBox(center: SIMD3<Float>(-1.5, stepY, stepZ), size: SIMD3<Float>(2.1, 0.08, 0.22), material: slideCyan)
-            // Curved side safety rails
-            builder.addBox(center: SIMD3<Float>(-2.55, stepY + 0.24, stepZ), size: SIMD3<Float>(0.12, 0.45, 0.22), material: slideCyan)
-            builder.addBox(center: SIMD3<Float>(-0.45, stepY + 0.24, stepZ), size: SIMD3<Float>(0.12, 0.45, 0.22), material: slideCyan)
+        // Fun Helical Spiral Slide Segments curving around the deck outside the pool!
+        for step in 0..<36 {
+            let progress = Float(step) / 35.0
+            let angle = progress * .pi * 1.6 - .pi * 0.2
+            let radius: Float = 2.2
+            let stepX = -3.8 + cos(angle) * radius
+            let stepZ = -6.2 + sin(angle) * radius
+            let stepY = (1.0 - progress) * 3.15 + 0.05
+            // Molded cyan slide trough
+            builder.addBox(center: SIMD3<Float>(stepX, stepY, stepZ), size: SIMD3<Float>(1.6, 0.08, 0.28), material: slideCyan)
+            // Safety side rails
+            builder.addBox(center: SIMD3<Float>(stepX - 0.75, stepY + 0.22, stepZ), size: SIMD3<Float>(0.10, 0.40, 0.28), material: slideCyan)
+            builder.addBox(center: SIMD3<Float>(stepX + 0.75, stepY + 0.22, stepZ), size: SIMD3<Float>(0.10, 0.40, 0.28), material: slideCyan)
         }
 
-        // 🏊‍♂️ 3D Trampolín (High-Dive Board over Pool Water!)
+        // 🏊‍♂️ 3D Trampolín de Salto Alto (High-Dive Board on North Deck next to Tobogán!)
         let divingBoardMaterial = RTMaterial(color: SIMD3<Float>(0.96, 0.82, 0.08), roughness: 0.22, reflectivity: 0.15)
         let divingStandMaterial = RTMaterial(color: SIMD3<Float>(0.35, 0.38, 0.42), roughness: 0.15, reflectivity: 0.60)
-        // Stand base
-        builder.addBox(center: SIMD3<Float>(2.6, 0.60, -1.5), size: SIMD3<Float>(0.32, 1.20, 0.45), material: divingStandMaterial)
-        // Springy diving board plank extending out over deep pool water!
-        builder.addBox(center: SIMD3<Float>(1.4, 1.25, -1.5), size: SIMD3<Float>(2.4, 0.08, 0.65), material: divingBoardMaterial)
+        // High-dive support tower
+        builder.addBox(center: SIMD3<Float>(1.4, 1.40, -6.8), size: SIMD3<Float>(0.45, 2.80, 0.45), material: divingStandMaterial)
+        // Springy diving board plank extending out OVER the pool water!
+        builder.addBox(center: SIMD3<Float>(1.4, 2.85, -5.2), size: SIMD3<Float>(0.65, 0.08, 2.8), material: divingBoardMaterial)
 
         builder.addBox(center: SIMD3<Float>(-1.5, -0.72, -1.5), size: SIMD3<Float>(7.8, 0.12, 5.4), material: poolTile)
         builder.addBox(center: SIMD3<Float>(-1.5, -0.34, -4.14), size: SIMD3<Float>(7.8, 0.68, 0.12), material: poolTile)

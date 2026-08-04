@@ -3011,6 +3011,8 @@ struct TacticalRemoteControllerView: View {
             joystickX: Float(joystick?.dx ?? model.joystick.dx),
             joystickY: Float(joystick?.dy ?? model.joystick.dy),
             jumpPressed: jump,
+            role: LocalDeviceRole.remoteController.rawValue
+        )
         model.multiplayer.send(packet)
     }
 }
@@ -3142,9 +3144,6 @@ struct MainMenuView: View {
                     .frame(minHeight: proxy.size.height)
                 }
             }
-        }
-    }
-}            }
         }
     }
 }
