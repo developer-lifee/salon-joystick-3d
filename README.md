@@ -1,85 +1,136 @@
-# ⚡️ LASER TRACER 3D
-### *Metal Hardware Ray Tracing Combat & Teleportation Engine for iOS*
-
-![iOS 17+](https://img.shields.io/badge/iOS-17.0%2B-blue?style=for-the-badge&logo=apple)
-![Metal 3.0](https://img.shields.io/badge/Metal-3.0_Ray_Tracing-cyan?style=for-the-badge&logo=apple)
-![Architecture](https://img.shields.io/badge/Architecture-Pure_Swift_%2B_Metal_Shaders-brightgreen?style=for-the-badge)
-![Performance](https://img.shields.io/badge/Performance-60_FPS_Locked-orange?style=for-the-badge)
-
-> **LASER TRACER 3D** es un motor de combate táctico 3D y demostración técnica avanzada desarrollado **100% en código nativo Swift y Metal 3.0**, diseñado para aprovechar el hardware de trazado de rayos (Ray Tracing Cores) de los chips de la serie **Apple A17 Pro (iPhone 15 Pro / 15 Pro Max) y Apple Silicon M-series**.
-
----
-
-## 🎮 Mecánicas de Juego y Controles Tácticos
-
-### ⚡️ 1. Teletransporte Minato Flash Warp (Beacons de Luz)
-Inspirado en la técnica del *Hiraishin* del 4º Hokage (Minato Namikaze):
-- **Beacons de Luz:** Todas las luces activas del mapa (*Poste de Luz*, *Neón PISCINA*, *Neón SHEERIT*, *Tiras de Piscina*) funcionan como marcadores de teletransporte instantáneo.
-- **Rueda Radial Estilo Fortnite / GTA:** Presiona el botón **`⚡️ WARP`** para abrir la Rueda Radial de luces. Tocar cualquier luz activa te **teletransportará en 1 milisegundo** con un destello táctico.
-- **Auto-Eliminación de NPCs:** Si un bot te está atacando y te teletransportas al instante, el bot se confundirá y continuará disparando al frente. El láser reflejado en los espejos o paredes impactará al bot, haciendo que **se auto-eliminate**.
-
----
-
-### 🛡️ 2. Espejo Defensivo Neón PBR (`🛡️ ESPEJO`)
-- **Física de Ray Tracing Real:** El espejo no es solo una textura reflectante; es un plano 3D dinámico que redirige y rebota los rayos láser enemigos en tiempo real.
-- **Ángulo de Cobertura:** Únicamente refleja disparos si el jugador mira de frente al rayo incidente (`dot(playerFacing, incomingLaserDir) > 0.25`).
-- **Defensivo Puro:** No emite rayos propios; retracta el escudo automáticamente al estar inactivo.
-
----
-
-### ⏱️ 3. Modo Cámara Lenta Matrix Dead-Eye (`⏱️ SLOW-MO`)
-- Presiona **`⏱️ Slow-Mo`** para dilatar la velocidad del tiempo a **0.20x (20%)**.
-- Permite ver los rayos láser volando lentamente por el aire en 3D para calcular esquives de precisión, desplegar el espejo defensivo o apuntar a la cabeza de los bots.
-- Incluye viñeta radial amarilla táctica e iluminación dramática.
-
----
-
-### 🏊‍♂️ 4. Trampolín 3D y Reino Submarino Secreto (Easter Egg)
-- **Trampolín de Clavados:** Súbete al trampolín 3D de la baranda este (`Y = 1.25m`) y salta hacia el agua.
-- **Reino Subterráneo Submarino:** Al sumergirte en el agua de la piscina, el personaje atraviesa el fondo de la piscina y se transporta al **Reino Submarino Path-Traced**, con refracción de Ley de Snell y atmósfera de luz bioluminiscente.
-- **Respiración Infinita:** El personaje puede nadar libremente bajo el agua sin ahogarse ni perder puntos de vida.
-
----
-
-### 🛝 5. Tobogán de Agua (Pool Water Slide)
-- Canaleta curva de fibra de vidrio mate en el borde norte (`Z = -7.2`).
-- **Física de Impulso Acelerado:** Al entrar a la canaleta, el jugador recibe un impulso automático de **11.5 m/s** saliendo lanzado directamente hacia el agua.
-
----
-
-## 🛠️ Arquitectura Técnica y Motor Metal
-
 ```
-                        ┌─────────────────────────┐
-                        │   GameModel (SwiftUI)   │
-                        └────────────┬────────────┘
-                                     │
-                        ┌────────────▼────────────┐
-                        │  MetalRayRenderer.swift │
-                        └────────────┬────────────┘
-                                     │
-           ┌─────────────────────────┼─────────────────────────┐
-           │                         │                         │
-┌──────────▼──────────┐   ┌──────────▼──────────┐   ┌──────────▼──────────┐
-│ Acceleration Struct │   │   RayShaders.metal  │   │ ChiptuneAudioEngine │
-│ (MTLAcceleration)   │   │  (3-Bounce Path-Tr) │   │   (AVAudioEngine)   │
-└─────────────────────┘   └─────────────────────┘   └─────────────────────┘
+  _        _   ___ ___ ___   _____ ___    _   ___ ___ ___   _____ ___ 
+ | |      /_\ / __| __| _ \ |_   _| _ \  /_\ / __| __| _ \ |__ / |   \
+ | |___  / _ \\__ \ _||   /   | | |   / / _ \ (__| _||   /  |_ \ | |) |
+ |____| /_/ \_\___/___|_|_\   |_| |_|_\/_/ \_\___|___|_|_\ |___/ |___/ 
+                     ✧･ﾟ: *✧ HARDWARE RAY TRACING ENGINE ✧*:･ﾟ✧
 ```
 
-- **Path Tracing Físico de 3 Rebotes:** Renderizado continuo en GPU usando la API nativa `MTLAccelerationStructure` e `intersector<triangle_data, instancing>`.
-- **Generación Procedural en Tiempo de Ejecución:** Mallas, texturas PBR, juntas de baldosines y cáusticas de agua se calculan matemáticamente en la GPU.
-- **Rendimiento de Hardware:** 60 FPS estables consumiendo solo ~35% de GPU y ~5% de CPU.
-- **Multijugador P2P Local:** Soporta juego cooperativo y control remoto táctico mediante `MultipeerConnectivity` por Wi-Fi/Bluetooth.
+# ✨ ⚡️ LASER TRACER 3D (レーザー トレーサー 3D) ⚡️ ✨
+### *☆━━━━━━ Ultra-Geek Metal 3.0 Ray Tracing & Flash Warp Engine for iOS (uwu) ━━━━━━☆*
+
+[![iOS 17+](https://img.shields.io/badge/iOS-17.0%2B-ff69b4?style=for-the-badge&logo=apple&logoColor=white)](https://apple.com)
+[![Metal 3.0](https://img.shields.io/badge/Metal-3.0_Ray_Tracing-00ffff?style=for-the-badge&logo=apple&logoColor=white)](https://developer.apple.com/metal/)
+[![Swift 5.10](https://img.shields.io/badge/Swift-5.10-orange?style=for-the-badge&logo=swift&logoColor=white)](https://swift.org)
+[![Aesthetic](https://img.shields.io/badge/Aesthetic-Cyberpunk_Kawaii_UwU-purple?style=for-the-badge)](https://github.com)
+[![FPS](https://img.shields.io/badge/FPS-60_Locked_⚡️-brightgreen?style=for-the-badge)](https://apple.com)
+
+> ₍⸍⸏────────────────────────────────────────────────────────────⸏⸌₎
+> **LASER TRACER 3D** es un motor de combate táctico 3D y demostración técnica avanzada desarrollado **100% en código nativo Swift y Metal Shaders (MSL)**. Diseñado desde cero para exprimir los hardware **Ray Tracing Cores** de los chips **Apple A17 Pro (iPhone 15 Pro / Max)** y **Apple Silicon M-series** a 60 FPS estables sin sobrecalentar la batería (uwu) ♡.
+> └──────────────────────────────────────────────────────────────┘
 
 ---
 
-## 💻 Requisitos de Compilación y Ejecución
+## ╔══════════════════════════════════════════════════════════════════════════╗
+## ║ 🎮 MECÁNICAS TÁCTICAS & SKILLS (ゲームのメカニクス)                       ║
+## ╚══════════════════════════════════════════════════════════════════════════╝
 
-- **macOS:** Sonoma 14.0 o posterior con Xcode 15+
-- **Dispositivo Objetivo:** iPhone 15 Pro / 15 Pro Max (o cualquier dispositivo iOS 17+ con soporte Metal Ray Tracing)
+```
+   (  •̀ ω •́  )  ✧  MINATO HIRAISHIN FLASH WARP (飛雷神の術)  ✧
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Todas las luces activas del escenario (Poste, Neón Pool, │
+  │  Neón Sheerit, Strips) actúan como marcas de teletransporte. │
+  │                                                             │
+  │  ⚡️ Rueda Radial (Fortnite / GTA Style): Abre la rueda       │
+  │     de luz y toca cualquier beacon activo para destellar    │
+  │     instantáneamente a esa posición 3D en 1 ms!              │
+  │                                                             │
+  │  🤖 Bot Misfire & Auto-Eliminación: Si un bot te ataca     │
+  │     y destellas de golpe, el bot se confunde, dispara al   │
+  │     frente y se auto-elimina con su propio láser reflejado! │
+  └─────────────────────────────────────────────────────────────┘
+```
+
+### 🛡️ 1. Espejo Defensivo Cromo PBR (`🛡️ ESPEJO`) (鏡の盾)
+- **Reflejo Especular 98% (Reflectivity 0.98, Roughness 0.0):** No es una textura dibujada; es un plano 3D de cristal cromo ray-traced que reacciona físicamente a la luz y rebota los rayos láser enemigos en tiempo real.
+- **Ángulo Táctico:** Refleja ataques únicamente si miras de frente al vector incidente (`dot(playerFacing, incomingLaserDir) > 0.25`).
+
+---
+
+### ⏱️ 2. Cámara Lenta Matrix Dead-Eye (`⏱️ SLOW-MO`) (弾幕の時)
+- Presiona **`⏱️ Slow-Mo`** para dilatar la velocidad del tiempo a **0.20x (20% de velocidad)**.
+- Permite ver los haces fotónicos de los lásers volando en 3D para calcular esquives milimétricos, desplegar el espejo defensivo o disparar a los bots.
+- Viñeta radial amarilla estilizada y modulación de pitch de audio en tiempo real.
+
+---
+
+### 🏊‍♂️ 3. Trampolín de Salto Alto & Reino Submarino (海底の世界)
+- **Trampolín 3D (High-Dive Board):** Súbete a la plataforma del muelle norte (`Y = 2.85m`) y salta hacia el agua para impulsarte en un gran clavado sobre la piscina.
+- **Hundirse al Fondo (Deep Pool Floor Diving):** Al sumergirte en el agua por debajo de `-0.65m`, atraviesas fluidamente el lecho de la piscina e ingresas al **Reino Subterráneo Submarino (`Y = -5.5m`)**.
+- **Mundo Submarino Con Objetos:** Explora la cueva acuática habitada por **cristales bioluminiscentes cian/esmeralda**, **obeliscos de piedra antigua hundida** y un **cofre del tesoro de oro brillante**.
+- **🌀 Portal de Salida del Easter Egg:** Nada hacia el **Anillo Portal de Vórtice Azul (`X=0, Z=0`)** para teletransportarte de regreso a la superficie junto a la piscina!
+- **🥷 Sigilo e IA de NPCs:** Mientras estés oculto bajo el agua (`Y < -3.0m`), **los bots enemigos de la superficie pierden totalmente tu rastro** y se quedan patrullando el patio de forma independiente.
+
+---
+
+### 🛝 4. Tobogán en Espiral Exterior 3D (スパイラルスライド)
+- Canaleta helicoidal de fibra de vidrio cian situada **fuera de la piscina** para dejar 100% de espacio libre para nadar.
+- **Escalera de Peldaños 3D:** Accede a la plataforma superior subiendo por la escalera trasera.
+- **Deslizamiento Fluido:** Al entrar al canalón en espiral, la física te desliza suavemente en curva hasta la piscina.
+
+---
+
+## ╔══════════════════════════════════════════════════════════════════════════╗
+## ║ 🛠️ ARQUITECTURA DE SOFTWARE & MOTOR METAL (システム構造)                ║
+## ╚══════════════════════════════════════════════════════════════════════════╝
+
+```
+                   +---------------------------------------+
+                   |          UI & Game Control            |
+                   |   (ContentView.swift & GameModel)     |
+                   +-------------------+-------------------+
+                                       |
+                                       v
+                   +---------------------------------------+
+                   |       Metal Engine Controller         |
+                   |       (MetalRayRenderer.swift)        |
+                   +-------------------+-------------------+
+                                       |
+             +-------------------------+-------------------------+
+             |                         |                         |
+             v                         v                         v
+  +--------------------+    +--------------------+    +--------------------+
+  | GPU Ray Tracing BVH|    | MSL Shaders Kernels|    | Chiptune Audio Engine|
+  |(MTLAcceleration)   |    | (RayShaders.metal) |    | (AVAudioEngine PBR)|
+  +--------------------+    +--------------------+    +--------------------+
+```
+
+```mermaid
+graph TD
+    A[GameModel SwiftUI State] -->|Inputs & Warp Requests| B[MetalRayRenderer]
+    B -->|Build BVH Acceleration| C[MTLAccelerationStructure]
+    B -->|Dispatch Rays| D[RayShaders.metal 3-Bounce Path Tracing]
+    D -->|Reflections & Caustics| E[Metal Ray Traced FrameBuffer]
+    B -->|P2P Sync Packets| F[MultipeerConnectivity Local P2P]
+```
+
+### ⚡️ Especificaciones Técnicas Geek (テクニカルノート):
+- **Path Tracing Físico Continuo:** 3 rebotes fotónicos por píxel calculados directamente mediante la API `intersector<triangle_data, instancing>` en los RT Cores de la GPU.
+- **Shading Procedural Matemático:** Normal mapping de baldosines, deformación de cáusticas de agua y refracción por Ley de Snell calculadas 100% en código Metal (MSL) sin cargar texturas PNG pesadas.
+- **Eficiencia Energética:** 60 FPS estables consumiendo únicamente ~35% GPU y ~5% CPU en dispositivos A17 Pro.
+
+---
+
+## ╔══════════════════════════════════════════════════════════════════════════╗
+## ║ 💻 GUÍA DE COMPILACIÓN E INSTALACIÓN (ビルドと実行)                       ║
+## ╚══════════════════════════════════════════════════════════════════════════╝
 
 ```bash
-# Compilar e instalar en tu iPhone desde la terminal:
+# 1. Clonar el repositorio:
+git clone https://github.com/estebanavila/SalonJoystick3D.git
+cd SalonJoystick3D
+
+# 2. Generar proyecto Xcode nativo y compilar para iOS:
 ruby generate_project.rb
 xcodebuild -project SalonJoystick3D.xcodeproj -scheme SalonJoystick3D -sdk iphoneos build
+
+# 3. Firmar e instalar directamente en tu iPhone via devicectl:
+xcrun devicectl device install app --device <YOUR_DEVICE_ID> ./Build/Products/Debug-iphoneos/SalonJoystick3D.app
 ```
+
+---
+
+<p align="center">
+  <b>LASER TRACER 3D • POWERED BY APPLE METAL 3.0 & SWIFT 5.10</b><br>
+  <i>Crafted with ♡ by Esteban Avila for Ultra-High Performance Mobile Gaming</i>
+</p>

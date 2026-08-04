@@ -882,10 +882,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             desiredDirection = simd_normalize(desiredDirection)
         }
 
-        let currentlyInPool = isInsidePoolXZ(playerPosition)
-        let currentGroundHeight = groundHeight(at: playerPosition, insidePool: currentlyInPool)
+        let currentlyInPool = isInsidePoolXZ(playerPosition) && playerPosition.y > -3.0
+        let isSubterranean = playerPosition.y <= -3.0
+        let currentGroundHeight = isSubterranean ? -8.50 : groundHeight(at: playerPosition, insidePool: currentlyInPool)
         let currentlyOnFloat = currentlyInPool && isStandingOnFloat(playerPosition)
-        let movementSpeed: Float = currentlyInPool && !currentlyOnFloat ? 1.85 : 3.6
+        let movementSpeed: Float = currentlyInPool && !currentlyOnFloat ? 2.8 : (isSubterranean ? 3.8 : 3.6)
         let targetVelocity = desiredDirection * (magnitude > 0.08 ? movementSpeed * magnitude : 0)
         let response = 1 - exp(-dt * (magnitude > 0.08 ? 13 : 18))
         horizontalVelocity += (targetVelocity - horizontalVelocity) * response
@@ -893,17 +894,28 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             horizontalVelocity = .zero
         }
 
-        // 🛝 Tobogán Water Slide Physics (Automatic High-Speed Downward Launch!)
-        if playerPosition.x >= -2.8 && playerPosition.x <= -0.2 && playerPosition.z > -6.1 && playerPosition.z <= -2.0 {
-            horizontalVelocity.y = 11.5
-            verticalVelocity = -4.8
+        // 🌀 Tobogán Spiral Slide Physics (Only accelerates when stepping into the slide chute channel!)
+        let inSlideChute = playerPosition.z >= -7.8 && playerPosition.z <= -4.0 && playerPosition.x <= -1.8 && playerPosition.y >= 0.2
+        if inSlideChute {
+            horizontalVelocity = SIMD2<Float>(2.8, 3.8)
+            verticalVelocity = -2.2
+        }
+
+        // 🌀 Salida del Easter Egg (Underwater Portal Exit Ring at X=0, Z=0)
+        if isSubterranean {
+            let distToExit = simd_distance(SIMD2<Float>(playerPosition.x, playerPosition.z), SIMD2<Float>(0, 0))
+            if distToExit < 1.6 {
+                // Teleport back up to surface pool deck!
+                playerPosition = SIMD3<Float>(-1.5, 0.2, 2.5)
+                verticalVelocity = 3.5
+                audio.playWaterDisturbance(intensity: 1.0)
+            }
         }
 
         // 🏊‍♂️ 🌊 Easter Egg: Trampolín High-Dive Subterranean Underwater World Portal Trigger!
-        let jumpedOffTrampoline = (playerPosition.x >= -0.5 && playerPosition.x <= 3.2 && playerPosition.z >= -2.2 && playerPosition.z <= -0.5 && playerPosition.y < -0.25)
-        let floatNearCorner = (floatPosition.x < -1.0 || floatPosition.z < -1.0)
-        let isSwimmingInPool = isInsidePoolXZ(playerPosition) && playerPosition.y < -0.22
-        if (jumpedOffTrampoline || isSwimmingInPool || (floatNearCorner && playerPosition.y < -0.22)) && playerPosition.y > -3.5 {
+        let floatInCorner = (floatPosition.x < -4.0 && floatPosition.z < -2.8) || (floatPosition.x > 1.2 && floatPosition.z < -2.8)
+        let highDiveEntry = (playerPosition.x >= -0.5 && playerPosition.x <= 2.5 && playerPosition.z >= -4.2 && playerPosition.z <= 0.8 && verticalVelocity < -2.5 && playerPosition.y < -0.35)
+        if (highDiveEntry || (floatInCorner && playerPosition.y < -0.50)) && playerPosition.y > -3.0 {
             // Secret Teleport to Path-Traced Subterranean Underwater Realm!
             playerPosition = SIMD3<Float>(0.0, -5.5, 0.0)
             verticalVelocity = -0.5
@@ -927,24 +939,35 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         proposed.z = max(-9.05, min(9.05, proposed.z))
         resolveFloatCollision(position: &proposed)
         resolveRockCollisions(position: &proposed)
-        let willBeInPool = isInsidePoolXZ(proposed)
+        let willBeInPool = isInsidePoolXZ(proposed) && proposed.y > -3.0
         let nextGroundHeight = groundHeight(at: proposed, insidePool: willBeInPool)
         let willBeOnFloat = willBeInPool && nextGroundHeight > -0.1
         let wasGrounded = playerPosition.y <= currentGroundHeight + 0.015 && abs(verticalVelocity) < 0.1
 
+        let onTrampolineBoard = playerPosition.x >= 0.7 && playerPosition.x <= 2.1 && playerPosition.z >= -6.9 && playerPosition.z <= -3.7 && playerPosition.y >= 2.7
         if jumpQueued {
             jumpQueued = false
-            if playerPosition.y <= currentGroundHeight + 0.015 {
-                verticalVelocity = currentlyInPool ? 3.1 : 5.2
+            if onTrampolineBoard {
+                verticalVelocity = 4.8
+                horizontalVelocity = SIMD2<Float>(0.0, 5.5)
+            } else if playerPosition.y <= currentGroundHeight + 0.015 {
+                verticalVelocity = currentlyInPool ? 3.5 : 5.2
             }
         }
 
         verticalVelocity -= (willBeInPool && !willBeOnFloat ? 3.2 : 9.8) * dt
         var landingSpeed: Float = 0
         proposed.y += verticalVelocity * dt
-        if currentlyInPool {
-            // Allow smooth diving down to pool floor (-0.66m underwater)
-            proposed.y = max(-0.66, proposed.y)
+        if isSubterranean {
+            proposed.y = max(-8.50, proposed.y)
+        } else if currentlyInPool {
+            if proposed.y < -0.65 {
+                proposed.y = -5.5
+                verticalVelocity = -0.5
+                audio.playLaserIgnition()
+            } else {
+                proposed.y = min(0.35, proposed.y)
+            }
         } else if proposed.y <= nextGroundHeight {
             if !wasGrounded && verticalVelocity < -1.2 {
                 landingSpeed = -verticalVelocity
@@ -1115,6 +1138,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     botLaserCooldownTimers[index] = 2.0 + Float(index) * 1.2
                     botLaserActiveTimers[index] = 0
                 }
+                continue
+            }
+
+            let playerHiddenInEasterEgg = playerPosition.y < -3.0
+            if playerHiddenInEasterEgg {
+                // NPCs cannot see player hidden in underwater realm!
+                npcYaws[index] += sin(dt * Float(index + 1)) * 0.8 * dt
                 continue
             }
 
@@ -1293,13 +1323,17 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     }
 
     private func groundHeight(at position: SIMD3<Float>, insidePool: Bool) -> Float {
-        // 🏊‍♂️ Trampolín de Salto Alto (High-Dive Plank next to Tobogán!)
-        if position.x >= 0.8 && position.x <= 2.0 && position.z >= -6.8 && position.z <= -3.8 {
-            return 2.85
+        // 🏊‍♂️ Trampolín Plank (Only when elevated on platform/board!)
+        if position.x >= 0.8 && position.x <= 2.0 && position.z >= -6.8 && position.z <= -4.2 {
+            if position.y >= 1.8 {
+                return 2.85
+            }
         }
         // 🌀 Tobogán Platform Top
         if position.x >= -5.0 && position.x <= -2.6 && position.z >= -9.3 && position.z <= -7.1 {
-            return 3.20
+            if position.y >= 2.2 {
+                return 3.20
+            }
         }
         guard insidePool else { return 0 }
         let floatCenter = SIMD2<Float>(floatPosition.x, floatPosition.z)
@@ -1848,13 +1882,33 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             builder.addBox(center: SIMD3<Float>(stepX + 0.75, stepY + 0.22, stepZ), size: SIMD3<Float>(0.10, 0.40, 0.28), material: slideCyan)
         }
 
-        // 🏊‍♂️ 3D Trampolín de Salto Alto (High-Dive Board on North Deck next to Tobogán!)
-        let divingBoardMaterial = RTMaterial(color: SIMD3<Float>(0.96, 0.82, 0.08), roughness: 0.22, reflectivity: 0.15)
-        let divingStandMaterial = RTMaterial(color: SIMD3<Float>(0.35, 0.38, 0.42), roughness: 0.15, reflectivity: 0.60)
-        // High-dive support tower
-        builder.addBox(center: SIMD3<Float>(1.4, 1.40, -6.8), size: SIMD3<Float>(0.45, 2.80, 0.45), material: divingStandMaterial)
-        // Springy diving board plank extending out OVER the pool water!
-        builder.addBox(center: SIMD3<Float>(1.4, 2.85, -5.2), size: SIMD3<Float>(0.65, 0.08, 2.8), material: divingBoardMaterial)
+        // 🏊‍♂️ 3D Pool Ladder for Tobogán Platform Access
+        for step in 0..<12 {
+            let stepY = Float(step) * 0.26 + 0.10
+            builder.addBox(center: SIMD3<Float>(-3.8, stepY, -9.2), size: SIMD3<Float>(1.2, 0.08, 0.18), material: stairPink)
+        }
+
+        // 🌊 💎 Subterranean Underwater World Props (Secret Realm Props & Sunken Treasure!)
+        let bioCrystal = RTMaterial(color: SIMD3<Float>(0.10, 0.95, 0.85), roughness: 0.10, emission: SIMD3<Float>(0.20, 2.8, 3.8), reflectivity: 0.60)
+        let sunkenObelisk = RTMaterial(color: SIMD3<Float>(0.12, 0.18, 0.22), roughness: 0.65, reflectivity: 0.12)
+        let treasureGold = RTMaterial(color: SIMD3<Float>(0.98, 0.82, 0.12), roughness: 0.15, emission: SIMD3<Float>(0.45, 0.35, 0.05), reflectivity: 0.50)
+        let exitPortal = RTMaterial(color: SIMD3<Float>(0.05, 0.55, 0.98), roughness: 0.05, emission: SIMD3<Float>(0.30, 2.5, 6.0), reflectivity: 0.85, kind: 5)
+
+        // Sunken Ancient Obelisks & Pillars
+        builder.addBox(center: SIMD3<Float>(-4.2, -6.0, -3.8), size: SIMD3<Float>(0.85, 5.0, 0.85), material: sunkenObelisk)
+        builder.addBox(center: SIMD3<Float>(3.8, -6.0, 2.8), size: SIMD3<Float>(0.85, 5.0, 0.85), material: sunkenObelisk)
+        builder.addBox(center: SIMD3<Float>(-3.2, -6.5, 3.2), size: SIMD3<Float>(0.75, 4.0, 0.75), material: sunkenObelisk)
+
+        // Glowing Bioluminescent Crystals
+        builder.addSphere(center: SIMD3<Float>(-3.8, -8.1, -3.2), radii: SIMD3<Float>(repeating: 0.45), material: bioCrystal, segments: 8, rings: 5)
+        builder.addSphere(center: SIMD3<Float>(3.5, -8.1, 2.2), radii: SIMD3<Float>(repeating: 0.45), material: bioCrystal, segments: 8, rings: 5)
+        builder.addSphere(center: SIMD3<Float>(1.8, -8.1, -4.2), radii: SIMD3<Float>(repeating: 0.40), material: bioCrystal, segments: 8, rings: 5)
+
+        // Sunken Treasure Chest
+        builder.addBox(center: SIMD3<Float>(2.8, -8.2, -1.8), size: SIMD3<Float>(1.2, 0.75, 0.85), material: treasureGold)
+
+        // 🌀 Central Glowing Blue Teleport Exit Portal Ring (Salida del Easter Egg)
+        builder.addTorus(center: SIMD3<Float>(0, -8.35, 0), majorRadius: 1.45, minorRadius: 0.18, material: exitPortal, majorSegments: 16, minorSegments: 8)
 
         builder.addBox(center: SIMD3<Float>(-1.5, -0.72, -1.5), size: SIMD3<Float>(7.8, 0.12, 5.4), material: poolTile)
         builder.addBox(center: SIMD3<Float>(-1.5, -0.34, -4.14), size: SIMD3<Float>(7.8, 0.68, 0.12), material: poolTile)
