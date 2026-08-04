@@ -1,2 +1,0 @@
-Target dependency graph (1 target)
-Target 'SalonJoystick3D' in project 'SalonJoystick3D' (no dependencies)
