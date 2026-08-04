@@ -678,6 +678,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
     private var isSlowMotionActive = false
 
+    private var handledWarpRequestID = 0
+
     func setInput(
         joystick: CGVector,
         cameraMode: GameCameraMode,
@@ -685,7 +687,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         heldTool: GameHeldTool,
         lightStates: GameLightStates,
         jumpRequestID: Int,
-        isSlowMotionActive: Bool = false
+        isSlowMotionActive: Bool = false,
+        warpRequestID: Int = 0,
+        requestedWarpPosition: SIMD3<Float> = .zero
     ) {
         self.joystick = joystick
         self.cameraMode = cameraMode
@@ -696,6 +700,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if handledJumpRequestID != jumpRequestID {
             handledJumpRequestID = jumpRequestID
             jumpQueued = true
+        }
+        if handledWarpRequestID != warpRequestID {
+            handledWarpRequestID = warpRequestID
+            playerPosition = requestedWarpPosition
+            verticalVelocity = 0
         }
     }
 
@@ -891,10 +900,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
 
         // 🏊‍♂️ 🌊 Easter Egg: Trampolín High-Dive Subterranean Underwater World Portal Trigger!
-        // Jump off the Trampolín board into the pool -> Plunge deep underwater straight into the Subterranean Realm!
         let jumpedOffTrampoline = (playerPosition.x >= -0.5 && playerPosition.x <= 3.2 && playerPosition.z >= -2.2 && playerPosition.z <= -0.5 && playerPosition.y < -0.25)
         let floatNearCorner = (floatPosition.x < -1.0 || floatPosition.z < -1.0)
-        if (jumpedOffTrampoline || (floatNearCorner && playerPosition.y < -0.30)) {
+        let isSwimmingInPool = isInsidePoolXZ(playerPosition) && playerPosition.y < -0.22
+        if (jumpedOffTrampoline || isSwimmingInPool || (floatNearCorner && playerPosition.y < -0.22)) && playerPosition.y > -3.5 {
             // Secret Teleport to Path-Traced Subterranean Underwater Realm!
             playerPosition = SIMD3<Float>(0.0, -5.5, 0.0)
             verticalVelocity = -0.5
@@ -1717,7 +1726,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private static func makeMirrorShieldMesh() -> RTMeshBuilder {
         var builder = RTMeshBuilder()
         let mirrorFrame = RTMaterial(color: SIMD3<Float>(0.02, 0.72, 0.95), roughness: 0.08, emission: SIMD3<Float>(0.05, 0.40, 0.65), reflectivity: 0.88, kind: 1.0)
-        let mirrorGlass = RTMaterial(color: SIMD3<Float>(0.20, 0.85, 0.98), roughness: 0.01, emission: SIMD3<Float>(0.08, 0.45, 0.75), reflectivity: 0.97, kind: 1.0)
+        let mirrorGlass = RTMaterial(color: SIMD3<Float>(0.92, 0.95, 0.98), roughness: 0.0, emission: SIMD3<Float>(0, 0, 0), reflectivity: 0.98, kind: 1.0)
         builder.addBox(center: SIMD3<Float>(0, 1.05, 0), size: SIMD3<Float>(0.92, 1.12, 0.045), material: mirrorFrame)
         builder.addBox(center: SIMD3<Float>(0, 1.05, 0), size: SIMD3<Float>(0.84, 1.04, 0.035), material: mirrorGlass)
         return builder

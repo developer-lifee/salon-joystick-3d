@@ -584,6 +584,60 @@ struct ContentView: View {
             if model.gameState == .paused {
                 PauseMenuView(model: model)
             }
+
+            if model.showsLightRadialMenu {
+                ZStack {
+                    Color.black.opacity(0.72)
+                        .ignoresSafeArea()
+                        .onTapGesture { model.showsLightRadialMenu = false }
+
+                    VStack(spacing: 18) {
+                        VStack(spacing: 4) {
+                            Text("⚡️ MINATO FLASH WARP")
+                                .font(.title3.bold())
+                                .foregroundStyle(.yellow)
+                                .shadow(color: .yellow.opacity(0.8), radius: 8)
+                            Text("Toca un Beacon de Luz activo para teletransportarte")
+                                .font(.caption.bold())
+                                .foregroundStyle(.white.opacity(0.8))
+                        }
+
+                        ZStack {
+                            Circle()
+                                .stroke(Color.yellow.opacity(0.4), lineWidth: 2)
+                                .frame(width: 230, height: 230)
+
+                            ForEach(Array(GameLightFixture.allCases.enumerated()), id: \.element) { index, fixture in
+                                let angle: Double = Double(index) * (.pi / 2.0) - (.pi / 2.0)
+                                let isEnabled = model.lightStates.isEnabled(fixture)
+
+                                Button {
+                                    model.showsLightRadialMenu = false
+                                    if isEnabled {
+                                        model.warpToLightFixture(fixture)
+                                    }
+                                } label: {
+                                    VStack(spacing: 4) {
+                                        Image(systemName: isEnabled ? "bolt.shield.fill" : "lightbulb.slash")
+                                            .font(.system(size: 22, weight: .bold))
+                                        Text(fixture.label)
+                                            .font(.system(size: 10, weight: .bold))
+                                            .multilineTextAlignment(.center)
+                                    }
+                                    .foregroundStyle(isEnabled ? .black : .white.opacity(0.4))
+                                    .frame(width: 76, height: 76)
+                                    .background(
+                                        isEnabled ? AnyShapeStyle(Color.yellow) : AnyShapeStyle(Color.gray.opacity(0.35)),
+                                        in: Circle()
+                                    )
+                                    .shadow(color: isEnabled ? .yellow.opacity(0.7) : .clear, radius: 10)
+                                }
+                                .offset(x: cos(angle) * 92, y: sin(angle) * 92)
+                            }
+                        }
+                    }
+                }
+            }
             }
             }
             .background(Color.black)
@@ -758,8 +812,13 @@ final class GameModel: ObservableObject {
 
     func reportToolStatus(_ status: GameToolStatus) {
         DispatchQueue.main.async { [weak self] in
-            guard self?.toolStatus != status else { return }
-            self?.toolStatus = status
+            guard let self else { return }
+            if self.toolStatus != status {
+                self.toolStatus = status
+                if status.activeRemaining <= 0 && status.cooldownRemaining > 0 && self.heldTool != .flashlight {
+                    self.heldTool = .none
+                }
+            }
         }
     }
 }
@@ -2954,18 +3013,14 @@ struct TacticalRemoteControllerView: View {
             jumpPressed: jump,
             role: LocalDeviceRole.remoteController.rawValue
         )
-        model.multiplayer.send(packet)
-    }
-}
-
-struct MainMenuView: View {
+        model.multiplayer.struct MainMenuView: View {
     @ObservedObject var model: GameModel
     @Binding var showsCoffeeStore: Bool
 
     var body: some View {
         ZStack {
             LinearGradient(
-                colors: [.black.opacity(0.85), .black.opacity(0.65), .black.opacity(0.92)],
+                colors: [.black.opacity(0.92), .black.opacity(0.70), .black.opacity(0.95)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -2973,13 +3028,13 @@ struct MainMenuView: View {
 
             GeometryReader { proxy in
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 16) {
-                        Spacer(minLength: 20)
+                    VStack(spacing: 0) {
+                        Spacer(minLength: 32)
 
-                        VStack(spacing: 4) {
+                        VStack(spacing: 8) {
                             Text("LASER TRACER 3D")
-                                .font(.system(size: 36, weight: .black, design: .rounded))
-                                .minimumScaleFactor(0.6)
+                                .font(.system(size: 40, weight: .black, design: .rounded))
+                                .minimumScaleFactor(0.55)
                                 .lineLimit(1)
                                 .foregroundStyle(
                                     LinearGradient(
@@ -2988,52 +3043,54 @@ struct MainMenuView: View {
                                         endPoint: .trailing
                                     )
                                 )
-                                .shadow(color: .cyan.opacity(0.85), radius: 14)
+                                .shadow(color: .cyan.opacity(0.9), radius: 18)
 
-                            Text("RAY TRACING COMBAT & DEFENSIVE SHIELD")
+                            Text("METAL RAY TRACING COMBAT & DEFENSIVE SHIELD")
                                 .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                .minimumScaleFactor(0.6)
+                                .minimumScaleFactor(0.55)
                                 .lineLimit(1)
-                                .foregroundStyle(.white.opacity(0.85))
-                                .tracking(2)
+                                .foregroundStyle(.white.opacity(0.80))
+                                .tracking(2.5)
                         }
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, 24)
 
-                        VStack(spacing: 12) {
+                        Spacer(minLength: 40)
+
+                        VStack(spacing: 16) {
                             Button {
                                 model.startGame()
                             } label: {
-                                HStack(spacing: 12) {
+                                HStack(spacing: 14) {
                                     Image(systemName: "play.fill")
                                         .font(.title3.bold())
                                     Text("JUGAR EN SOLITARIO")
                                         .font(.headline.bold())
                                 }
                                 .foregroundStyle(.white)
-                                .frame(maxWidth: 320, minHeight: 52)
+                                .frame(maxWidth: 340, minHeight: 56)
                                 .background(
                                     LinearGradient(colors: [.blue, .cyan], startPoint: .leading, endPoint: .trailing),
-                                    in: RoundedRectangle(cornerRadius: 16)
+                                    in: RoundedRectangle(cornerRadius: 18)
                                 )
-                                .shadow(color: .cyan.opacity(0.6), radius: 10)
+                                .shadow(color: .cyan.opacity(0.65), radius: 12)
                             }
                             .buttonStyle(.plain)
 
                             Button {
                                 model.showsMultiplayerSheet = true
                             } label: {
-                                HStack(spacing: 12) {
+                                HStack(spacing: 14) {
                                     Image(systemName: "person.2.fill")
                                         .font(.title3.bold())
                                     Text("MULTIJUGADOR LOCAL")
                                         .font(.headline.bold())
                                 }
                                 .foregroundStyle(.white)
-                                .frame(maxWidth: 320, minHeight: 52)
-                                .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
+                                .frame(maxWidth: 340, minHeight: 56)
+                                .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 18))
                                 .overlay {
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .stroke(Color.white.opacity(0.3), lineWidth: 1.5)
+                                    RoundedRectangle(cornerRadius: 18)
+                                        .stroke(Color.white.opacity(0.35), lineWidth: 1.5)
                                 }
                             }
                             .buttonStyle(.plain)
@@ -3041,18 +3098,18 @@ struct MainMenuView: View {
                             Button {
                                 showsCoffeeStore = true
                             } label: {
-                                HStack(spacing: 12) {
+                                HStack(spacing: 14) {
                                     Text("☕️")
                                         .font(.title3)
                                     Text("INVITAR UN CAFÉ")
                                         .font(.headline.bold())
                                 }
                                 .foregroundStyle(.yellow)
-                                .frame(maxWidth: 320, minHeight: 52)
-                                .background(Color.yellow.opacity(0.15), in: RoundedRectangle(cornerRadius: 16))
+                                .frame(maxWidth: 340, minHeight: 56)
+                                .background(Color.yellow.opacity(0.15), in: RoundedRectangle(cornerRadius: 18))
                                 .overlay {
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .stroke(Color.yellow.opacity(0.6), lineWidth: 1.5)
+                                    RoundedRectangle(cornerRadius: 18)
+                                        .stroke(Color.yellow.opacity(0.65), lineWidth: 1.5)
                                 }
                             }
                             .buttonStyle(.plain)
@@ -3060,29 +3117,32 @@ struct MainMenuView: View {
                             Button {
                                 model.showsSettingsSheet = true
                             } label: {
-                                HStack(spacing: 10) {
+                                HStack(spacing: 12) {
                                     Image(systemName: "gearshape.fill")
                                         .font(.subheadline.bold())
                                     Text("AJUSTES DE GRÁFICOS Y CÁMARA")
                                         .font(.subheadline.bold())
                                 }
-                                .foregroundStyle(.white.opacity(0.8))
-                                .frame(maxWidth: 320, minHeight: 44)
-                                .background(Color.black.opacity(0.4), in: RoundedRectangle(cornerRadius: 14))
+                                .foregroundStyle(.white.opacity(0.85))
+                                .frame(maxWidth: 340, minHeight: 48)
+                                .background(Color.black.opacity(0.50), in: RoundedRectangle(cornerRadius: 16))
                             }
                             .buttonStyle(.plain)
                         }
 
-                        Spacer(minLength: 20)
+                        Spacer(minLength: 40)
 
                         Text("LASER TRACER 3D • METAL RAY TRACING ENGINE")
                             .font(.caption2.monospaced().bold())
-                            .foregroundStyle(.white.opacity(0.5))
-                            .padding(.bottom, 16)
+                            .foregroundStyle(.white.opacity(0.45))
+                            .padding(.bottom, 24)
                     }
                     .frame(minHeight: proxy.size.height)
                 }
             }
+        }
+    }
+}            }
         }
     }
 }

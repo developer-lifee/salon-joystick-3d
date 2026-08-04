@@ -114,7 +114,9 @@ struct MetalGameView: UIViewRepresentable {
             heldTool: model.heldTool,
             lightStates: model.lightStates,
             jumpRequestID: model.jumpRequestID,
-            isSlowMotionActive: model.isSlowMotionActive
+            isSlowMotionActive: model.isSlowMotionActive,
+            warpRequestID: model.warpRequestID,
+            requestedWarpPosition: model.requestedWarpPosition
         )
     }
 
