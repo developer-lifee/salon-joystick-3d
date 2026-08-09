@@ -28,6 +28,12 @@ struct RTLaserResult {
     float4 bot0End;
     float4 bot1Start;
     float4 bot1End;
+    float4 bot2Start;
+    float4 bot2End;
+    float4 bot3Start;
+    float4 bot3End;
+    float4 bot4Start;
+    float4 bot4End;
 };
 
 struct RTTriangleData {
@@ -726,24 +732,59 @@ kernel void raytracePatio(
     }
 
     if (uniforms.toolParameters.x > 1.5f && uniforms.toolParameters.x < 2.5f && laserResult.primaryEnd.w > 0.5f) {
-        float primaryBeam = laserBeamIntensity(
-            uniforms.cameraPosition.xyz,
-            primaryDirection,
-            firstSurfaceDistance,
-            laserResult.primaryStart.xyz,
-            laserResult.primaryEnd.xyz
-        );
-        float reflectedBeam = laserResult.reflectedEnd.w > 0.5f
-            ? laserBeamIntensity(
+        float maxDist = uniforms.toolParameters.y > 0.01f ? uniforms.toolParameters.y : 100.0f;
+        float3 pStart = laserResult.primaryStart.xyz;
+        float3 pEndTarget = laserResult.primaryEnd.xyz;
+        float pLen = distance(pStart, pEndTarget);
+
+        if (pLen > 0.001f) {
+            float3 pDir = (pEndTarget - pStart) / pLen;
+            float primaryCurrentLen = min(pLen, maxDist);
+            float3 pEndActual = pStart + pDir * primaryCurrentLen;
+
+            float primaryBeam = laserBeamIntensity(
                 uniforms.cameraPosition.xyz,
                 primaryDirection,
                 firstSurfaceDistance,
-                laserResult.primaryEnd.xyz,
-                laserResult.reflectedEnd.xyz
-            )
-            : 0.0f;
-        accumulated += float3(7.8f, 0.25f, 0.05f) *
-                       (primaryBeam * 0.85f + reflectedBeam * 0.65f);
+                pStart,
+                pEndActual
+            );
+
+            float reflectedBeam = 0.0f;
+            float3 photonFrontPos = pEndActual;
+
+            if (maxDist > pLen && laserResult.reflectedEnd.w > 0.5f) {
+                float remDist = maxDist - pLen;
+                float3 rStart = pEndTarget;
+                float3 rEndTarget = laserResult.reflectedEnd.xyz;
+                float rLen = distance(rStart, rEndTarget);
+
+                if (rLen > 0.001f) {
+                    float3 rDir = (rEndTarget - rStart) / rLen;
+                    float refCurrentLen = min(rLen, remDist);
+                    float3 rEndActual = rStart + rDir * refCurrentLen;
+
+                    reflectedBeam = laserBeamIntensity(
+                        uniforms.cameraPosition.xyz,
+                        primaryDirection,
+                        firstSurfaceDistance,
+                        rStart,
+                        rEndActual
+                    );
+                    photonFrontPos = rEndActual;
+                }
+            }
+
+            // 🔴 Slow-Motion Photon Pulse Head (Leading edge photon packet)
+            float3 hitPoint = uniforms.cameraPosition.xyz + primaryDirection * firstSurfaceDistance;
+            float distToPhoton = distance(hitPoint, photonFrontPos);
+            float photonPulse = 1.0f - smoothstep(0.04f, 0.28f, distToPhoton);
+            float photonGlow = 1.0f - smoothstep(0.01f, 0.65f, distToPhoton);
+
+            accumulated += float3(7.8f, 0.25f, 0.05f) * (primaryBeam * 0.85f + reflectedBeam * 0.65f)
+                         + float3(18.0f, 1.2f, 0.3f) * photonPulse
+                         + float3(4.5f, 0.4f, 0.1f) * photonGlow;
+        }
     }
 
     if (laserResult.bot0End.w > 0.5f) {
@@ -764,6 +805,39 @@ kernel void raytracePatio(
             firstSurfaceDistance,
             laserResult.bot1Start.xyz,
             laserResult.bot1End.xyz
+        );
+        accumulated += float3(9.5f, 0.08f, 0.02f) * (botBeam * 0.95f);
+    }
+
+    if (laserResult.bot2End.w > 0.5f) {
+        float botBeam = laserBeamIntensity(
+            uniforms.cameraPosition.xyz,
+            primaryDirection,
+            firstSurfaceDistance,
+            laserResult.bot2Start.xyz,
+            laserResult.bot2End.xyz
+        );
+        accumulated += float3(9.5f, 0.08f, 0.02f) * (botBeam * 0.95f);
+    }
+
+    if (laserResult.bot3End.w > 0.5f) {
+        float botBeam = laserBeamIntensity(
+            uniforms.cameraPosition.xyz,
+            primaryDirection,
+            firstSurfaceDistance,
+            laserResult.bot3Start.xyz,
+            laserResult.bot3End.xyz
+        );
+        accumulated += float3(9.5f, 0.08f, 0.02f) * (botBeam * 0.95f);
+    }
+
+    if (laserResult.bot4End.w > 0.5f) {
+        float botBeam = laserBeamIntensity(
+            uniforms.cameraPosition.xyz,
+            primaryDirection,
+            firstSurfaceDistance,
+            laserResult.bot4Start.xyz,
+            laserResult.bot4End.xyz
         );
         accumulated += float3(9.5f, 0.08f, 0.02f) * (botBeam * 0.95f);
     }

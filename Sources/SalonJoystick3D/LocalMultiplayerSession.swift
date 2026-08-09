@@ -56,6 +56,7 @@ enum LocalDeviceRole: String, Codable, CaseIterable, Identifiable {
 @MainActor
 final class LocalMultiplayerSession: NSObject, ObservableObject {
     @Published private(set) var isHosting = false
+    @Published private(set) var isSearching = false
     @Published private(set) var isConnected = false
     @Published private(set) var peers: [MCPeerID] = []
     @Published var mode: LocalMatchMode = .versus
@@ -78,7 +79,9 @@ final class LocalMultiplayerSession: NSObject, ObservableObject {
 
     func host() {
         stopDiscovery()
+        lastError = nil
         isHosting = true
+        isSearching = false
         advertiser = MCNearbyServiceAdvertiser(
             peer: localPeer,
             discoveryInfo: ["mode": mode.rawValue],
@@ -90,7 +93,9 @@ final class LocalMultiplayerSession: NSObject, ObservableObject {
 
     func join() {
         stopDiscovery()
+        lastError = nil
         isHosting = false
+        isSearching = true
         browser = MCNearbyServiceBrowser(peer: localPeer, serviceType: serviceType)
         browser?.delegate = self
         browser?.startBrowsingForPeers()
@@ -101,6 +106,8 @@ final class LocalMultiplayerSession: NSObject, ObservableObject {
         session.disconnect()
         peers = []
         isConnected = false
+        isHosting = false
+        isSearching = false
     }
 
     func send(_ packet: LocalMatchPacket) {

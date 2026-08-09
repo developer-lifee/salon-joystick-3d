@@ -234,6 +234,75 @@ struct ContentView: View {
             .padding(.top, 48)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
+            // 🧟 Call of Duty Zombies-Style Wave / Round HUD Banner
+            VStack(spacing: 4) {
+                if model.isWaveIntermission {
+                    VStack(spacing: 2) {
+                        Text("¡OLEADA COMPLETADA!")
+                            .font(.system(size: 16, weight: .black, design: .monospaced))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [.yellow, .orange],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .shadow(color: .orange.opacity(0.8), radius: 6)
+
+                        Text("DESCANSO: \(Int(ceil(model.waveIntermissionTime)))s")
+                            .font(.system(size: 13, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.white)
+
+                        Text("+25 HP REGENERADOS")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.green)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 12))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.yellow.opacity(0.6), lineWidth: 1.5)
+                    )
+                } else {
+                    HStack(spacing: 10) {
+                        HStack(spacing: 4) {
+                            Text("OLEADA")
+                                .font(.system(size: 13, weight: .black, design: .monospaced))
+                                .foregroundStyle(.red)
+
+                            Text("\(model.currentWave)")
+                                .font(.system(size: 26, weight: .black, design: .monospaced))
+                                .foregroundStyle(.red)
+                                .shadow(color: .red.opacity(0.9), radius: 8)
+                        }
+
+                        Divider()
+                            .frame(height: 20)
+                            .background(Color.white.opacity(0.4))
+
+                        HStack(spacing: 4) {
+                            Image(systemName: "ladybug.fill")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.red.opacity(0.8))
+
+                            Text("RESTANTES: \(model.botsRemainingInWave) / \(model.totalBotsInWave)")
+                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                .foregroundStyle(.white)
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(.black.opacity(0.65), in: Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.red.opacity(0.5), lineWidth: 1)
+                    )
+                }
+            }
+            .padding(.top, 46)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+
             VStack(alignment: .leading, spacing: 10) {
                 Text("Patio nocturno")
                     .font(.headline)
@@ -259,7 +328,7 @@ struct ContentView: View {
             .padding(.leading, 14)
             .padding(.bottom, 22)
 
-            VStack(alignment: .trailing, spacing: 12) {
+            VStack(alignment: .trailing, spacing: 10) {
                 if let nearbyLight = model.nearbyLight {
                     ContextualLightButton(
                         isOn: model.lightStates.isEnabled(nearbyLight),
@@ -301,78 +370,36 @@ struct ContentView: View {
                     }
                 }
 
-                HStack(spacing: 12) {
-                    Button {
-                        model.heldTool = (model.heldTool == .mirror ? .none : .mirror)
-                    } label: {
-                        VStack(spacing: 3) {
-                            Image(systemName: "shield.fill")
-                                .font(.system(size: 22, weight: .bold))
-                            Text("Espejo")
-                                .font(.system(size: 10, weight: .bold))
-                        }
-                        .foregroundStyle(model.heldTool == .mirror ? .white : .cyan)
-                        .frame(width: 58, height: 58)
-                        .background(
-                            model.heldTool == .mirror
-                                ? AnyShapeStyle(Color.cyan)
-                                : AnyShapeStyle(Color.black.opacity(0.72)),
-                            in: Circle()
-                        )
-                        .overlay {
-                            Circle()
-                                .stroke(Color.cyan.opacity(0.88), lineWidth: 2)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Espejo Defensivo")
+                if !model.toolStatus.label.isEmpty {
+                    Text(model.toolStatus.label)
+                        .font(.caption.monospacedDigit().bold())
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 6))
+                }
 
-                    Button {
-                        model.heldTool = (model.heldTool == .laser ? .none : .laser)
-                    } label: {
-                        VStack(spacing: 3) {
-                            Image(systemName: "bolt.fill")
-                                .font(.system(size: 22, weight: .bold))
-                            Text("Láser")
-                                .font(.system(size: 10, weight: .bold))
-                        }
-                        .foregroundStyle(model.heldTool == .laser ? .white : .red)
-                        .frame(width: 58, height: 58)
-                        .background(
-                            model.heldTool == .laser
-                                ? AnyShapeStyle(Color.red)
-                                : AnyShapeStyle(Color.black.opacity(0.72)),
-                            in: Circle()
-                        )
-                        .overlay {
-                            Circle()
-                                .stroke(Color.red.opacity(0.88), lineWidth: 2)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Láser")
-
+                // Bar 1: Action/Skill Capsules (Slow-Mo, Warp)
+                HStack(spacing: 8) {
                     Button {
                         model.toggleSlowMotion()
                     } label: {
-                        VStack(spacing: 3) {
+                        HStack(spacing: 4) {
                             Image(systemName: "hourglass")
-                                .font(.system(size: 22, weight: .bold))
+                                .font(.system(size: 13, weight: .bold))
                             Text("Slow-Mo")
-                                .font(.system(size: 10, weight: .bold))
+                                .font(.system(size: 11, weight: .bold))
                         }
                         .foregroundStyle(model.isSlowMotionActive ? .black : .yellow)
-                        .frame(width: 58, height: 58)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
                         .background(
                             model.isSlowMotionActive
                                 ? AnyShapeStyle(Color.yellow)
-                                : AnyShapeStyle(Color.black.opacity(0.72)),
-                            in: Circle()
+                                : AnyShapeStyle(Color.black.opacity(0.65)),
+                            in: Capsule()
                         )
-                        .overlay {
-                            Circle()
-                                .stroke(Color.yellow.opacity(0.88), lineWidth: 2)
-                        }
+                        .overlay(Capsule().stroke(Color.yellow.opacity(0.8), lineWidth: 1.5))
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Cámara Lenta Slow Motion")
@@ -380,80 +407,113 @@ struct ContentView: View {
                     Button {
                         model.showsLightRadialMenu.toggle()
                     } label: {
-                        VStack(spacing: 3) {
+                        HStack(spacing: 4) {
                             Image(systemName: "bolt.shield.fill")
-                                .font(.system(size: 22, weight: .bold))
+                                .font(.system(size: 13, weight: .bold))
                             Text("Warp")
-                                .font(.system(size: 10, weight: .bold))
+                                .font(.system(size: 11, weight: .bold))
                         }
                         .foregroundStyle(model.showsLightRadialMenu ? .black : .cyan)
-                        .frame(width: 58, height: 58)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
                         .background(
                             model.showsLightRadialMenu
                                 ? AnyShapeStyle(Color.cyan)
-                                : AnyShapeStyle(Color.black.opacity(0.72)),
-                            in: Circle()
+                                : AnyShapeStyle(Color.black.opacity(0.65)),
+                            in: Capsule()
                         )
-                        .overlay {
-                            Circle()
-                                .stroke(Color.cyan.opacity(0.88), lineWidth: 2)
-                        }
+                        .overlay(Capsule().stroke(Color.cyan.opacity(0.8), lineWidth: 1.5))
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Teletransporte Minato Warp")
+                }
+
+                // Bar 2: Equipment Dock + Jump Action Button
+                HStack(alignment: .center, spacing: 12) {
+                    HStack(spacing: 8) {
+                        Button {
+                            model.heldTool = (model.heldTool == .flashlight ? .none : .flashlight)
+                        } label: {
+                            VStack(spacing: 2) {
+                                Image(systemName: "flashlight.on.fill")
+                                    .font(.system(size: 17, weight: .bold))
+                                Text("Luz")
+                                    .font(.system(size: 9, weight: .bold))
+                            }
+                            .foregroundStyle(model.heldTool == .flashlight ? .black : .yellow)
+                            .frame(width: 48, height: 48)
+                            .background(
+                                model.heldTool == .flashlight
+                                    ? AnyShapeStyle(Color.yellow)
+                                    : AnyShapeStyle(Color.black.opacity(0.65)),
+                                in: Circle()
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Linterna")
+
+                        Button {
+                            model.heldTool = (model.heldTool == .laser ? .none : .laser)
+                        } label: {
+                            VStack(spacing: 2) {
+                                Image(systemName: "bolt.fill")
+                                    .font(.system(size: 17, weight: .bold))
+                                Text("Láser")
+                                    .font(.system(size: 9, weight: .bold))
+                            }
+                            .foregroundStyle(model.heldTool == .laser ? .white : .red)
+                            .frame(width: 48, height: 48)
+                            .background(
+                                model.heldTool == .laser
+                                    ? AnyShapeStyle(Color.red)
+                                    : AnyShapeStyle(Color.black.opacity(0.65)),
+                                in: Circle()
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Láser")
+
+                        Button {
+                            model.heldTool = (model.heldTool == .mirror ? .none : .mirror)
+                        } label: {
+                            VStack(spacing: 2) {
+                                Image(systemName: "shield.fill")
+                                    .font(.system(size: 17, weight: .bold))
+                                Text("Espejo")
+                                    .font(.system(size: 9, weight: .bold))
+                            }
+                            .foregroundStyle(model.heldTool == .mirror ? .white : .cyan)
+                            .frame(width: 48, height: 48)
+                            .background(
+                                model.heldTool == .mirror
+                                    ? AnyShapeStyle(Color.cyan)
+                                    : AnyShapeStyle(Color.black.opacity(0.65)),
+                                in: Circle()
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Espejo Defensivo")
+                    }
+                    .padding(6)
+                    .background(.black.opacity(0.55), in: Capsule())
+                    .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: 1))
 
                     Button {
-                        model.heldTool = (model.heldTool == .flashlight ? .none : .flashlight)
+                        model.requestJump()
                     } label: {
-                        VStack(spacing: 3) {
-                            Image(systemName: "flashlight.on.fill")
-                                .font(.system(size: 20, weight: .bold))
-                            Text("Luz")
-                                .font(.system(size: 10, weight: .bold))
-                        }
-                        .foregroundStyle(model.heldTool == .flashlight ? .black : .yellow)
-                        .frame(width: 52, height: 52)
-                        .background(
-                            model.heldTool == .flashlight
-                                ? AnyShapeStyle(Color.yellow)
-                                : AnyShapeStyle(Color.black.opacity(0.72)),
-                            in: Circle()
-                        )
-                        .overlay {
-                            Circle()
-                                .stroke(Color.yellow.opacity(0.88), lineWidth: 2)
-                        }
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 26, weight: .heavy))
+                            .foregroundStyle(.black)
+                            .frame(width: 62, height: 62)
+                            .background(.white.opacity(0.95), in: Circle())
+                            .overlay(Circle().stroke(Color.yellow, lineWidth: 3))
+                            .shadow(color: .black.opacity(0.4), radius: 4, x: 0, y: 2)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Linterna")
+                    .contentShape(Circle())
+                    .accessibilityLabel("Saltar")
+                    .accessibilityIdentifier("jumpButton")
                 }
-
-                if !model.toolStatus.label.isEmpty {
-                    Text(model.toolStatus.label)
-                        .font(.caption.monospacedDigit().bold())
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 5)
-                        .background(.black.opacity(0.62), in: RoundedRectangle(cornerRadius: 6))
-                }
-
-                Button {
-                    model.requestJump()
-                } label: {
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 30, weight: .bold))
-                        .foregroundStyle(.black)
-                        .frame(width: 76, height: 76)
-                        .background(.white.opacity(0.94), in: Circle())
-                        .overlay {
-                            Circle()
-                                .stroke(.yellow.opacity(0.85), lineWidth: 3)
-                        }
-                }
-                .buttonStyle(.plain)
-                .contentShape(Circle())
-                .accessibilityLabel("Saltar")
-                .accessibilityIdentifier("jumpButton")
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             .padding(.trailing, 28)
@@ -644,6 +704,9 @@ struct ContentView: View {
             .sheet(isPresented: $model.showsMultiplayerSheet) {
                 MultiplayerSettingsSheet(model: model)
             }
+            .sheet(isPresented: $model.gameCenter.showsMatchmakerSheet) {
+                GameCenterMatchmakerView(gameCenter: model.gameCenter, mode: model.multiplayer.mode)
+            }
             .sheet(isPresented: $model.showsSettingsSheet) {
                 GameOptionsSheet(model: model)
             }
@@ -691,7 +754,16 @@ enum GameState: String {
 final class GameModel: ObservableObject {
     let audio = ChiptuneAudioEngine()
     @Published var multiplayer = LocalMultiplayerSession()
-    @Published var gameState: GameState = .mainMenu
+    @Published var gameCenter = GameCenterManager()
+    @Published var gameState: GameState = .mainMenu {
+        didSet {
+            if gameState == .playing {
+                audio.setMusicEnabled(musicEnabled)
+            } else {
+                audio.setMusicEnabled(false)
+            }
+        }
+    }
     @Published var showsSettingsSheet = false
     @Published var showsMultiplayerSheet = false
 
@@ -719,10 +791,23 @@ final class GameModel: ObservableObject {
     @Published private(set) var toolStatus = GameToolStatus()
     @Published var playerScore = 0
     @Published var playerHealth: Float = 100.0
+    @Published var currentWave = 1
+    @Published var botsRemainingInWave = 5
+    @Published var totalBotsInWave = 5
+    @Published var isWaveIntermission = false
+    @Published var waveIntermissionTime: Float = 0
     @Published var isSlowMotionActive = false
     @Published var showsLightRadialMenu = false
     @Published private(set) var warpRequestID = 0
     @Published private(set) var requestedWarpPosition = SIMD3<Float>.zero
+
+    func updateWaveStatus(wave: Int, remaining: Int, total: Int, intermission: Bool, intermissionTime: Float) {
+        self.currentWave = wave
+        self.botsRemainingInWave = remaining
+        self.totalBotsInWave = total
+        self.isWaveIntermission = intermission
+        self.waveIntermissionTime = intermissionTime
+    }
 
     func toggleSlowMotion() {
         isSlowMotionActive.toggle()
@@ -741,6 +826,8 @@ final class GameModel: ObservableObject {
         audio.playLaserIgnition()
     }
 
+    @Published private(set) var resetRequestID = 0
+
     init() {
         audio.start()
     }
@@ -748,13 +835,25 @@ final class GameModel: ObservableObject {
     func startGame() {
         playerHealth = 100.0
         playerScore = 0
+        currentWave = 1
+        botsRemainingInWave = 5
+        totalBotsInWave = 5
+        isWaveIntermission = false
         heldTool = .none
+        resetRequestID += 1
         gameState = .playing
     }
 
     func returnToMainMenu() {
-        gameState = .mainMenu
+        playerHealth = 100.0
+        playerScore = 0
+        currentWave = 1
+        botsRemainingInWave = 5
+        totalBotsInWave = 5
+        isWaveIntermission = false
         heldTool = .none
+        resetRequestID += 1
+        gameState = .mainMenu
     }
 
     func togglePause() {
@@ -770,7 +869,11 @@ final class GameModel: ObservableObject {
     }
 
     func takeDamage(_ damage: Float) {
-        playerHealth = max(0, playerHealth - damage)
+        if damage < 0 {
+            playerHealth = min(100.0, playerHealth - damage)
+        } else {
+            playerHealth = max(0, playerHealth - damage)
+        }
         if playerHealth <= 0 {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
                 self?.playerHealth = 100.0
@@ -1011,9 +1114,9 @@ struct GameSceneView: UIViewRepresentable {
             let translation = gesture.translation(in: view)
             cameraYaw += Float(translation.x) * 0.0075
             if cameraMode == .firstPerson {
-                firstPersonPitch = max(-0.82, min(0.82, firstPersonPitch - Float(translation.y) * 0.0045))
+                firstPersonPitch = max(-1.35, min(1.35, firstPersonPitch - Float(translation.y) * 0.0045))
             } else {
-                cameraPitch = max(0.24, min(0.72, cameraPitch - Float(translation.y) * 0.0045))
+                cameraPitch = max(-1.10, min(1.25, cameraPitch - Float(translation.y) * 0.0045))
             }
             gesture.setTranslation(.zero, in: view)
         }
@@ -2075,6 +2178,7 @@ struct GameSceneView: UIViewRepresentable {
                 pow(end.y - origin.y, 2) +
                 pow(end.z - origin.z, 2)
             ))
+            let upVector = abs(direction.y) > 0.95 ? SCNVector3(1, 0, 0) : SCNVector3(0, 1, 0)
             laserBeamNode.position = SCNVector3(
                 (origin.x + end.x) * 0.5,
                 (origin.y + end.y) * 0.5,
@@ -2083,7 +2187,7 @@ struct GameSceneView: UIViewRepresentable {
             laserBeamNode.scale = SCNVector3(1, beamLength, 1)
             laserBeamNode.look(
                 at: end,
-                up: SCNVector3(0, 0, 1),
+                up: upVector,
                 localFront: SCNVector3(0, 1, 0)
             )
             laserDotNode.position = end
@@ -2727,13 +2831,11 @@ final class ChiptuneAudioEngine {
 
         var seed = UInt32(0x94D0_49BB) &+ UInt32(variant * 1049)
         var lowPass = 0.0
-        var bubblePhase = 0.0
         for frame in 0..<Int(frameCount) {
             seed = seed &* 1_664_525 &+ 1_013_904_223
             let noise = Double(seed & 0xFFFF) / 32_767.5 - 1.0
             lowPass = lowPass * 0.72 + noise * 0.28
             let time = Double(frame) / format.sampleRate
-            let progress = time / duration
             let attack = min(1.0, time / 0.007)
             let slapEnvelope = attack * exp(-time * (10.0 + Double(variant)))
             let trailEnvelope = attack * exp(-time * 5.5)
@@ -3234,13 +3336,43 @@ struct MultiplayerSettingsSheet: View {
                     Button {
                         model.multiplayer.host()
                     } label: {
-                        Label("Crear sala (Host 3D)", systemImage: "wifi")
+                        HStack {
+                            Label("Crear sala (Host 3D)", systemImage: "wifi")
+                            Spacer()
+                            if model.multiplayer.isHosting && !model.multiplayer.isConnected {
+                                ProgressView()
+                            }
+                        }
                     }
 
                     Button {
                         model.multiplayer.join()
                     } label: {
-                        Label("Unirse a sala cercana", systemImage: "person.2")
+                        HStack {
+                            Label("Unirse a sala cercana", systemImage: "person.2")
+                            Spacer()
+                            if model.multiplayer.isSearching && !model.multiplayer.isConnected {
+                                ProgressView()
+                            }
+                        }
+                    }
+
+                    if model.multiplayer.isHosting && !model.multiplayer.isConnected {
+                        HStack(spacing: 8) {
+                            Image(systemName: "antenna.radiowaves.left.and.right")
+                                .foregroundStyle(.blue)
+                            Text("Anunciando sala... Pon 'Unirse' en el otro dispositivo cerca de este.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } else if model.multiplayer.isSearching && !model.multiplayer.isConnected {
+                        HStack(spacing: 8) {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundStyle(.orange)
+                            Text("Buscando salas... Asegúrate de presionar 'Crear sala' en el dispositivo principal.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
                     if model.multiplayer.isConnected {
@@ -3254,9 +3386,72 @@ struct MultiplayerSettingsSheet: View {
                             model.multiplayer.stop()
                         }
                     }
+
+                    if let error = model.multiplayer.lastError {
+                        Text("Error: \(error)")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                }
+
+                Section("🌐 Partida por Internet (Apple Game Center)") {
+                    HStack {
+                        Image(systemName: model.gameCenter.isAuthenticated ? "checkmark.seal.fill" : "person.crop.circle.badge.exclamationmark")
+                            .foregroundStyle(model.gameCenter.isAuthenticated ? .green : .orange)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(model.gameCenter.isAuthenticated ? "Game Center Autenticado" : "Game Center Desconectado")
+                                .font(.subheadline.bold())
+                            Text(model.gameCenter.localPlayerAlias)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    if !model.gameCenter.isAuthenticated {
+                        Button {
+                            model.gameCenter.authenticateLocalPlayer()
+                        } label: {
+                            Label("Iniciar sesión en Game Center", systemImage: "person.crop.circle.badge.plus")
+                        }
+                    } else {
+                        Button {
+                            model.gameCenter.presentMatchmaker()
+                        } label: {
+                            HStack {
+                                Label("Invitar Amigos / Matchmaking", systemImage: "gamecontroller.fill")
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+
+                    if model.gameCenter.isInMatch {
+                        HStack {
+                            Image(systemName: "globe.americas.fill")
+                                .foregroundStyle(.green)
+                            Text("Partida remota activa (\(model.gameCenter.connectedPlayerNames.count + 1) jugadores)")
+                                .font(.caption.bold())
+                        }
+                        ForEach(model.gameCenter.connectedPlayerNames, id: \.self) { peer in
+                            Label(peer, systemImage: "person.fill")
+                                .font(.caption)
+                        }
+                        Button("Abandonar partida de Game Center", role: .destructive) {
+                            model.gameCenter.leaveMatch()
+                        }
+                    }
+
+                    if let error = model.gameCenter.lastError {
+                        Text("Error de Game Center: \(error)")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
                 }
             }
-            .navigationTitle("Multijugador Local")
+            .navigationTitle("Multijugador (Local & Internet)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

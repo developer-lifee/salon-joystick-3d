@@ -86,6 +86,17 @@ struct MetalGameView: UIViewRepresentable {
                     model?.takeDamage(damage)
                 }
             }
+            renderer.onWaveUpdate = { [weak model] wave, remaining, total, isIntermission, intermissionTime in
+                Task { @MainActor in
+                    model?.updateWaveStatus(
+                        wave: wave,
+                        remaining: remaining,
+                        total: total,
+                        intermission: isIntermission,
+                        intermissionTime: intermissionTime
+                    )
+                }
+            }
             view.delegate = renderer
         } catch {
             if let onFallbackRequested {
@@ -107,6 +118,7 @@ struct MetalGameView: UIViewRepresentable {
             ? context.coordinator.onFPSUpdate
             : nil
         context.coordinator.renderer?.isSplitScreenMode = model.multiplayer.isConnected && model.multiplayer.role == .full3DRender
+        let isPaused = model.gameState != .playing
         context.coordinator.renderer?.setInput(
             joystick: model.joystick,
             cameraMode: model.cameraMode,
@@ -116,7 +128,8 @@ struct MetalGameView: UIViewRepresentable {
             jumpRequestID: model.jumpRequestID,
             isSlowMotionActive: model.isSlowMotionActive,
             warpRequestID: model.warpRequestID,
-            requestedWarpPosition: model.requestedWarpPosition
+            requestedWarpPosition: model.requestedWarpPosition,
+            isPaused: isPaused
         )
     }
 

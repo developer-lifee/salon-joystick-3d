@@ -16,8 +16,17 @@
 	<string>1</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Se requiere acceso a la red local para descubrir y conectar dispositivos cercanos en partidas multijugador local.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_salon-laser._tcp</string>
+		<string>_salon-laser._udp</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
+	<key>UIRequiresFullScreen</key>
+	<true/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
