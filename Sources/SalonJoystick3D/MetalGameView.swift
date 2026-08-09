@@ -129,7 +129,8 @@ struct MetalGameView: UIViewRepresentable {
             isSlowMotionActive: model.isSlowMotionActive,
             warpRequestID: model.warpRequestID,
             requestedWarpPosition: model.requestedWarpPosition,
-            isPaused: isPaused
+            isPaused: isPaused,
+            resetRequestID: model.resetRequestID
         )
     }
 
