@@ -299,6 +299,35 @@ struct ContentView: View {
                             .stroke(Color.red.opacity(0.5), lineWidth: 1)
                     )
                 }
+
+                // Active 5 Mobile NPCs 100 HP Health Meters HUD
+                HStack(spacing: 6) {
+                    ForEach(0..<5, id: \.self) { idx in
+                        let hp = idx < model.npcHealths.count ? model.npcHealths[idx] : 100
+                        HStack(spacing: 3) {
+                            Text("BOT \(idx+1)")
+                                .font(.system(size: 9, weight: .black, design: .monospaced))
+                                .foregroundStyle(hp > 0 ? .white : .secondary)
+
+                            GeometryReader { p in
+                                ZStack(alignment: .leading) {
+                                    Rectangle()
+                                        .fill(.black.opacity(0.6))
+                                    Rectangle()
+                                        .fill(hp > 50 ? Color.green : (hp > 20 ? Color.yellow : Color.red))
+                                        .frame(width: p.size.width * CGFloat(max(0, hp) / 100.0))
+                                }
+                            }
+                            .frame(width: 28, height: 5)
+                            .cornerRadius(2.5)
+                        }
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 3)
+                        .background(.black.opacity(0.65), in: Capsule())
+                        .overlay(Capsule().stroke(hp > 0 ? Color.red.opacity(0.6) : Color.gray.opacity(0.3), lineWidth: 1))
+                    }
+                }
+                .padding(.top, 2)
             }
             .padding(.top, 46)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -425,7 +454,32 @@ struct ContentView: View {
                         .overlay(Capsule().stroke(Color.cyan.opacity(0.8), lineWidth: 1.5))
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Teletransporte Minato Warp")
+                    .accessibilityLabel("Menú Radial de Teletransporte")
+
+                    if model.isNearCoverRock || model.isCoverActive {
+                        Button {
+                            model.toggleCover()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: model.isCoverActive ? "shield.fill" : "shield")
+                                    .font(.system(size: 13, weight: .bold))
+                                Text(model.isCoverActive ? "En Cobertura" : "Pegarse a Piedra")
+                                    .font(.system(size: 11, weight: .bold))
+                            }
+                            .foregroundStyle(model.isCoverActive ? .black : .green)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                model.isCoverActive
+                                    ? AnyShapeStyle(Color.green)
+                                    : AnyShapeStyle(Color.black.opacity(0.65)),
+                                in: Capsule()
+                            )
+                            .overlay(Capsule().stroke(Color.green.opacity(0.8), lineWidth: 1.5))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Pegarse a Cobertura en Piedras")
+                    }
                 }
 
                 // Bar 2: Equipment Dock + Jump Action Button
@@ -473,26 +527,7 @@ struct ContentView: View {
                         .buttonStyle(.plain)
                         .accessibilityLabel("Láser")
 
-                        Button {
-                            model.heldTool = (model.heldTool == .mirror ? .none : .mirror)
-                        } label: {
-                            VStack(spacing: 2) {
-                                Image(systemName: "shield.fill")
-                                    .font(.system(size: 17, weight: .bold))
-                                Text("Espejo")
-                                    .font(.system(size: 9, weight: .bold))
-                            }
-                            .foregroundStyle(model.heldTool == .mirror ? .white : .cyan)
-                            .frame(width: 48, height: 48)
-                            .background(
-                                model.heldTool == .mirror
-                                    ? AnyShapeStyle(Color.cyan)
-                                    : AnyShapeStyle(Color.black.opacity(0.65)),
-                                in: Circle()
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Espejo Defensivo")
+                        MirrorShieldJoystickButton(model: model)
                     }
                     .padding(6)
                     .background(.black.opacity(0.55), in: Capsule())
@@ -787,6 +822,7 @@ final class GameModel: ObservableObject {
     }
     @Published private(set) var framesPerSecond: Double = 0
     @Published var joystick = CGVector(dx: 0, dy: 0)
+    @Published var shieldAngleOffset = CGVector(dx: 0, dy: 0)
     @Published private(set) var jumpRequestID = 0
     @Published private(set) var toolStatus = GameToolStatus()
     @Published var playerScore = 0
@@ -797,7 +833,14 @@ final class GameModel: ObservableObject {
     @Published var isWaveIntermission = false
     @Published var waveIntermissionTime: Float = 0
     @Published var isSlowMotionActive = false
+    @Published var isCoverActive = false
+    @Published private(set) var isNearCoverRock = false
+    @Published var npcHealths: [Float] = [100, 100, 100, 100, 100]
     @Published var showsLightRadialMenu = false
+
+    func updateNPCHealths(_ healths: [Float]) {
+        self.npcHealths = healths
+    }
     @Published private(set) var warpRequestID = 0
     @Published private(set) var requestedWarpPosition = SIMD3<Float>.zero
 
@@ -812,6 +855,18 @@ final class GameModel: ObservableObject {
     func toggleSlowMotion() {
         isSlowMotionActive.toggle()
         audio.playLaserIgnition()
+    }
+
+    func toggleCover() {
+        isCoverActive.toggle()
+        audio.playLaserIgnition()
+    }
+
+    func updateCoverStatus(isNear: Bool) {
+        self.isNearCoverRock = isNear
+        if !isNear && isCoverActive {
+            isCoverActive = false
+        }
     }
 
     func warpToLightFixture(_ fixture: GameLightFixture) {
@@ -3506,5 +3561,46 @@ struct GameOptionsSheet: View {
                 }
             }
         }
+    }
+}
+
+struct MirrorShieldJoystickButton: View {
+    @ObservedObject var model: GameModel
+    @State private var dragOffset: CGSize = .zero
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(model.heldTool == .mirror ? Color.cyan : Color.black.opacity(0.65))
+                .frame(width: 48, height: 48)
+
+            VStack(spacing: 1) {
+                Image(systemName: "shield.fill")
+                    .font(.system(size: 16, weight: .bold))
+                Text("Espejo")
+                    .font(.system(size: 8, weight: .bold))
+            }
+            .foregroundStyle(model.heldTool == .mirror ? .black : .cyan)
+            .offset(dragOffset)
+        }
+        .overlay(Circle().stroke(Color.cyan.opacity(0.8), lineWidth: 1.5))
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    if model.heldTool != .mirror {
+                        model.heldTool = .mirror
+                    }
+                    let maxRadius: CGFloat = 20.0
+                    let dx = max(-maxRadius, min(maxRadius, value.translation.width))
+                    let dy = max(-maxRadius, min(maxRadius, value.translation.height))
+                    dragOffset = CGSize(width: dx, height: dy)
+                    model.shieldAngleOffset = CGVector(dx: dx / maxRadius, dy: dy / maxRadius)
+                }
+                .onEnded { _ in
+                    dragOffset = .zero
+                    model.shieldAngleOffset = .zero
+                }
+        )
+        .accessibilityLabel("Espejo Defensivo Joystick de Ángulo")
     }
 }

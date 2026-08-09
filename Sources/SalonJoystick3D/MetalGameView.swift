@@ -76,6 +76,16 @@ struct MetalGameView: UIViewRepresentable {
             renderer.onNearbyLightUpdate = { [weak model] fixture in
                 model?.reportNearbyLight(fixture)
             }
+            renderer.onCoverStatusUpdate = { [weak model] isNear in
+                Task { @MainActor in
+                    model?.updateCoverStatus(isNear: isNear)
+                }
+            }
+            renderer.onNPCHealthsUpdate = { [weak model] healths in
+                Task { @MainActor in
+                    model?.updateNPCHealths(healths)
+                }
+            }
             renderer.onScoreUpdate = { [weak model] points in
                 Task { @MainActor in
                     model?.addScore(points)
@@ -130,7 +140,9 @@ struct MetalGameView: UIViewRepresentable {
             warpRequestID: model.warpRequestID,
             requestedWarpPosition: model.requestedWarpPosition,
             isPaused: isPaused,
-            resetRequestID: model.resetRequestID
+            resetRequestID: model.resetRequestID,
+            isCoverActive: model.isCoverActive,
+            shieldAngleOffset: model.shieldAngleOffset
         )
     }
 
