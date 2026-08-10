@@ -541,7 +541,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     ]
     private var npcYaws = [Float.pi * 0.25, Float.pi * 1.7, Float.pi * 0.75, Float.pi * 1.25, Float.pi * 0.0]
     private var npcRespawnTimers = [Float](repeating: 0, count: 5)
-    private var npcHealths = [Float](repeating: 100.0, count: 5)
+    private let npcMaxHealths: [Float] = [80.0, 120.0, 180.0, 250.0, 350.0]
+    private var npcHealths: [Float] = [80.0, 120.0, 180.0, 250.0, 350.0]
     var onNPCHealthsUpdate: (([Float]) -> Void)?
     private var botLaserActiveTimers = [Float](repeating: 0, count: 5)
     private var botLaserCooldownTimers = [Float](repeating: 5.0, count: 5)
@@ -734,6 +735,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
     private var handledWarpRequestID = 0
     private var handledResetRequestID = 0
+    private var handledRespawnRequestID = 0
 
     func resetSimulation() {
         playerPosition = SIMD3<Float>(3.8, 0, 3.8)
@@ -750,14 +752,14 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         totalBotsInWave = 5
         isWaveIntermission = false
         intermissionTimeRemaining = 0
-        npcHealths = [Float](repeating: 100.0, count: 5)
+        npcHealths = npcMaxHealths
 
         for i in npcPositions.indices {
             let spawnIndex = i % npcSpawnPositions.count
             npcPositions[i] = npcSpawnPositions[spawnIndex]
             npcYaws[i] = Float.pi * (0.25 + Float(i) * 0.5)
             npcRespawnTimers[i] = 0
-            npcHealths[i] = 100.0
+            npcHealths[i] = npcMaxHealths[i]
             botLaserActiveTimers[i] = 0
             botLaserCooldownTimers[i] = 5.0
             botTeleportReactionTimers[i] = 0
@@ -778,7 +780,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         isPaused: Bool = false,
         resetRequestID: Int = 0,
         isCoverActive: Bool = false,
-        shieldAngleOffset: CGVector = .zero
+        shieldAngleOffset: CGVector = .zero,
+        respawnRequestID: Int = 0
     ) {
         self.joystick = joystick
         self.cameraMode = cameraMode
@@ -802,6 +805,14 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if handledResetRequestID != resetRequestID {
             handledResetRequestID = resetRequestID
             resetSimulation()
+        }
+        if handledRespawnRequestID != respawnRequestID {
+            handledRespawnRequestID = respawnRequestID
+            playerPosition = SIMD3<Float>(-1.5, 0.45, 1.8)
+            horizontalVelocity = .zero
+            verticalVelocity = 0
+            isSlidingOnToboggan = false
+            orbitPitch = 0.36
         }
     }
 
@@ -1034,29 +1045,36 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let closestSlidePoint = slideStart + slideVec * tProj
         let distToSlide = simd_distance(playerPosition, closestSlidePoint)
 
-        let isOnTopPlatform = playerPosition.y >= 4.8 && playerPosition.x >= -5.5 && playerPosition.x <= -2.1 && playerPosition.z >= -17.2 && playerPosition.z <= -13.5
-        let isValidSlideAccess = isSlidingOnToboggan || (isOnTopPlatform && distToSlide < 1.4)
+        let isOnTopPlatform = playerPosition.y >= 4.5 && playerPosition.x >= -5.5 && playerPosition.x <= -2.1 && playerPosition.z >= -17.2 && playerPosition.z <= -13.5
+        let isValidSlideAccess = isSlidingOnToboggan || (isOnTopPlatform && distToSlide < 1.8)
 
         if isValidSlideAccess {
             isSlidingOnToboggan = true
             let slideDir = simd_normalize(slideVec)
+            let slideLen = sqrt(slideLenSq)
 
-            horizontalVelocity = SIMD2<Float>(slideDir.x, slideDir.z) * 7.2
-            verticalVelocity = slideDir.y * 7.2
+            // Direct lock & smooth progression along straight slide vector
+            let nextTProj = min(1.0, tProj + (8.5 * dt / slideLen))
+            let nextSlidePoint = slideStart + slideVec * nextTProj
+
+            playerPosition = nextSlidePoint
+            horizontalVelocity = SIMD2<Float>(slideDir.x, slideDir.z) * 8.5
+            verticalVelocity = slideDir.y * 8.5
 
             // Continuous water spray & splash disturbance along slide chute!
             pendingWaterImpulse = SIMD4<Float>(playerPosition.x, playerPosition.z, -0.45, 1)
-
-            let nearSlidePlungeZone = playerPosition.x >= -3.6 && playerPosition.x <= -1.2 && playerPosition.z >= -5.2 && playerPosition.z <= -2.5 && playerPosition.y <= 1.2
-            if (tProj >= 0.82 || playerPosition.y <= 0.40) || nearSlidePlungeZone {
-                // 🌀 High-speed plunge launch directly into subterranean underwater realm!
-                playerPosition = SIMD3<Float>(-2.5, -5.5, -2.5)
-                verticalVelocity = -0.5
-                isSlidingOnToboggan = false
-                audio.playLaserIgnition()
-            }
         } else {
             isSlidingOnToboggan = false
+        }
+
+        // 🌀 Subterranean Easter Egg Portal Plunge Trigger (EXCLUSIVELY for Toboggan Slide)
+        let nearSlidePlungeZone = playerPosition.x >= -4.5 && playerPosition.x <= -0.5 && playerPosition.z >= -7.8 && playerPosition.z <= -1.0
+        if isSlidingOnToboggan && (tProj >= 0.65 || playerPosition.y <= 2.2) && nearSlidePlungeZone {
+            // 🌀 High-speed plunge launch directly into subterranean underwater realm!
+            playerPosition = SIMD3<Float>(-2.5, -5.5, -2.5)
+            verticalVelocity = -0.5
+            isSlidingOnToboggan = false
+            audio.playLaserIgnition()
         }
 
         // 🛡️ 🪨 Tactical Rock Cover System (Pegarse a Cobertura)
@@ -1086,7 +1104,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
 
         // 🌀 Salida del Easter Egg (Underwater Portal Exit Ring at X=0, Z=0)
-        if isSubterranean {
+        if playerPosition.y <= -3.0 {
             let distToExit = simd_distance(SIMD2<Float>(playerPosition.x, playerPosition.z), SIMD2<Float>(0, 0))
             if distToExit < 1.8 {
                 // Teleport back up smoothly onto the patio pool deck safely out of water!
@@ -1125,10 +1143,15 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
         }
 
+        let isSubterraneanSubmerged = playerPosition.y <= -3.0 || proposed.y <= -3.0
         let onTrampolineBoard = playerPosition.x >= 0.7 && playerPosition.x <= 2.1 && playerPosition.z >= -6.9 && playerPosition.z <= -3.7 && playerPosition.y >= 2.7
+
         if jumpQueued {
             jumpQueued = false
-            if onTrampolineBoard {
+            if isSubterraneanSubmerged {
+                verticalVelocity = 3.2
+                audio.playUnderwaterGlug(intensity: 0.85)
+            } else if onTrampolineBoard {
                 verticalVelocity = 4.8
                 horizontalVelocity = SIMD2<Float>(0.0, 5.5)
             } else if wasGrounded {
@@ -1136,7 +1159,14 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
         }
 
-        if willBeInPool && !willBeOnFloat {
+        if isSubterraneanSubmerged {
+            // Smooth zero-gravity underwater swimming & viscous fluid drag
+            horizontalVelocity *= exp(-dt * 2.8)
+            verticalVelocity = max(-0.55, verticalVelocity - dt * 1.5)
+            if Float.random(in: 0...1) < dt * 0.95 {
+                audio.playUnderwaterGlug(intensity: 0.45)
+            }
+        } else if willBeInPool && !willBeOnFloat {
             // Smooth pool fluid physics without surface bobbing glitches
             let depthInWater = max(0, -proposed.y)
             let targetY: Float = -0.35
@@ -1154,8 +1184,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         var landingSpeed: Float = 0
         proposed.y += verticalVelocity * dt
-        if isSubterranean {
+        if proposed.y <= -3.0 || playerPosition.y <= -3.0 {
             proposed.y = max(-8.50, proposed.y)
+        } else if isSlidingOnToboggan {
+            // Position locked during slide descent to prevent ground clamping
+            proposed = playerPosition
         } else if currentlyInPool && !willBeOnFloat {
             proposed.y = max(-0.66, min(1.5, proposed.y))
         } else if proposed.y <= nextGroundHeight {
@@ -1393,7 +1426,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 npcPositions[index].y = -10
                 if npcRespawnTimers[index] == 0 {
                     npcPositions[index] = npcSpawnPositions[index]
-                    npcHealths[index] = 100.0
+                    npcHealths[index] = npcMaxHealths[index]
                     botAimTargets[index] = npcSpawnPositions[index] + SIMD3<Float>(0, 1.1, 0)
                     botLaserCooldownTimers[index] = 2.0 + Float(index) * 1.2
                     botLaserActiveTimers[index] = 0
@@ -1586,18 +1619,17 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private func checkCombatHits() {
         guard heldTool == .laser, laserActiveRemaining > 0 else { return }
 
-        let origin = playerPosition + SIMD3<Float>(0, 1.18, 0) + lastCameraRight * 0.30
-        let aimPoint = lastCameraPosition + lastCameraForward * 18
-        let direction = simd_normalize(aimPoint - origin)
+        let origin = lastCameraPosition
+        let direction = lastCameraForward
         var closestIndex: Int?
-        var closestDistance: Float = 30
+        var closestDistance: Float = 35
 
         for index in npcPositions.indices where npcRespawnTimers[index] <= 0 {
             let center = npcPositions[index] + SIMD3<Float>(0, 0.85, 0)
             let alongRay = simd_dot(center - origin, direction)
             guard alongRay > 0, alongRay < closestDistance else { continue }
             let closestPoint = origin + direction * alongRay
-            guard simd_distance(center, closestPoint) < 0.48 else { continue }
+            guard simd_distance(center, closestPoint) < 0.68 else { continue }
             closestIndex = index
             closestDistance = alongRay
         }
@@ -1685,25 +1717,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 return 2.85
             }
         }
-        // 🌀 Tobogán Vertical Ladder, Platform Top & Spiral Slide Trough
-        let spiralCenter = SIMD2<Float>(-2.4, -4.8)
-        let playerRadial = SIMD2<Float>(position.x, position.z) - spiralCenter
-        let distToCenter = simd_length(playerRadial)
-
-        if position.x >= -4.5 && position.x <= -1.2 && position.z >= -9.8 && position.z <= -2.5 {
-            if position.z <= -8.0 {
-                // Vertical Ladder climb zone
-                return min(3.20, max(0, position.y))
-            } else if abs(distToCenter - 2.4) < 1.05 && position.y >= 0.10 && position.y <= 3.35 {
-                // Spiral slide height following helical chute curve into pool
-                let currentAngle = atan2(playerRadial.y, playerRadial.x)
-                let startAngle: Float = -.pi * 0.75
-                var angleOffset = currentAngle - startAngle
-                while angleOffset < 0 { angleOffset += .pi * 2 }
-                let progress = max(0, min(1, angleOffset / (.pi * 1.55)))
-                return (1.0 - progress) * 3.15 + 0.05
-            } else if position.y >= 1.5 {
-                return 3.20
+        // 🌀 Tobogán Vertical Ladder & Platform Top
+        if position.x >= -5.5 && position.x <= -2.1 && position.z >= -17.2 && position.z <= -13.5 {
+            if position.y >= 3.5 {
+                return 5.55
             }
         }
         guard insidePool else { return 0 }
@@ -1887,6 +1904,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         smoothedCameraTarget += (rawTarget - smoothedCameraTarget) * follow
 
         let viewForward = SIMD3<Float>(-sin(cameraYaw), 0, -cos(cameraYaw))
+        var rawRight = SIMD3<Float>(cos(cameraYaw), 0, -sin(cameraYaw))
+        if simd_length_squared(rawRight) < 0.0001 { rawRight = SIMD3<Float>(1, 0, 0) }
+        rawRight = simd_normalize(rawRight)
+
         let cameraPosition: SIMD3<Float>
         let cameraForward: SIMD3<Float>
         let fieldOfView: Float
@@ -1901,17 +1922,23 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             cameraPosition = smoothedCameraTarget + viewForward * 0.38
             fieldOfView = 72
         } else {
-            let distance: Float = 5.6
+            // Over-The-Shoulder Modern TPS Camera (Pushes player body off to left side, clearing crosshair view!)
+            let distance: Float = 5.2
             let horizontalDistance = cos(orbitPitch) * distance
-            var desired = SIMD3<Float>(
+            let basePos = SIMD3<Float>(
                 smoothedCameraTarget.x + sin(cameraYaw) * horizontalDistance,
                 max(0.38, smoothedCameraTarget.y + sin(orbitPitch) * distance),
                 smoothedCameraTarget.z + cos(cameraYaw) * horizontalDistance
             )
-            desired.x = max(-17.2, min(17.2, desired.x))
-            desired.z = max(-17.2, min(17.2, desired.z))
-            cameraPosition = desired
-            cameraForward = simd_normalize(smoothedCameraTarget - cameraPosition)
+            // Shift camera right (+0.48m) and slightly up (+0.12m) over right shoulder
+            let otsPos = basePos + rawRight * 0.48 + SIMD3<Float>(0, 0.12, 0)
+            let aimTarget = smoothedCameraTarget + viewForward * 16.0
+            
+            var clampedPos = otsPos
+            clampedPos.x = max(-17.2, min(17.2, clampedPos.x))
+            clampedPos.z = max(-17.2, min(17.2, clampedPos.z))
+            cameraPosition = clampedPos
+            cameraForward = simd_normalize(aimTarget - cameraPosition)
             fieldOfView = 58
         }
 
@@ -1922,14 +1949,14 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let aspect = Float(texture.width) / max(1, Float(texture.height))
         let imagePlaneHeight = tan(fieldOfView * .pi / 360)
         let toolOrigin: SIMD3<Float>
-        let toolDirection: SIMD3<Float>
+        var toolDirection: SIMD3<Float>
         if cameraMode == .firstPerson {
             toolOrigin = cameraPosition + right * 0.18 - up * 0.16 + cameraForward * 0.10
-            let aimPoint = cameraPosition + cameraForward * 18
-            toolDirection = simd_normalize(aimPoint - toolOrigin)
-        } else {
-            toolOrigin = playerPosition + SIMD3<Float>(0, 1.25, 0) + right * 0.32 + cameraForward * 0.25
             toolDirection = cameraForward
+        } else {
+            let aimPoint = cameraPosition + cameraForward * 18.0
+            toolOrigin = playerPosition + SIMD3<Float>(0, 1.22, 0) + right * 0.35 + viewForward * 0.30
+            toolDirection = simd_normalize(aimPoint - toolOrigin)
         }
 
         let renderTool: GameHeldTool
@@ -1939,19 +1966,29 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         default: renderTool = heldTool
         }
 
+        if cameraPosition.y <= -3.0 && heldTool == .laser {
+            let waterNormal = SIMD3<Float>(0, 1, 0)
+            let eta: Float = 1.0 / 1.33 // Snell's Law underwater refraction index!
+            let cosI = max(-1.0, min(1.0, -simd_dot(waterNormal, toolDirection)))
+            let sinT2 = eta * eta * (1.0 - cosI * cosI)
+            if sinT2 < 1.0 {
+                let cosT = sqrt(1.0 - sinT2)
+                toolDirection = simd_normalize(eta * toolDirection + (eta * cosI - cosT) * waterNormal)
+            }
+        }
+
+        let isSubterraneanIlluminated = cameraPosition.y <= -3.0
+        let activeLightPos = isSubterraneanIlluminated ? SIMD4<Float>(0.0, -5.2, 0.0, 1) : SIMD4<Float>(-7.55, 2.72, 6.65, 1)
+        let activeLightColor = isSubterraneanIlluminated ? SIMD4<Float>(0.10, 0.95, 0.98, 48.0) : SIMD4<Float>(1.0, 0.66, 0.24, lightStates.effectiveIntensity(.post) * 46)
+
         var uniforms = RTUniforms(
             viewport: SIMD4<Float>(Float(texture.width), Float(texture.height), elapsedTime, rayBouncesEnabled ? 1 : 0),
             cameraPosition: SIMD4<Float>(cameraPosition, 1),
             cameraRight: SIMD4<Float>(right * aspect * imagePlaneHeight, 0),
             cameraUp: SIMD4<Float>(up * imagePlaneHeight, 0),
             cameraForward: SIMD4<Float>(cameraForward, 0),
-            lightPosition: SIMD4<Float>(-7.55, 2.72, 6.65, 1),
-            lightColor: SIMD4<Float>(
-                1.0,
-                0.66,
-                0.24,
-                lightStates.effectiveIntensity(.post) * 46
-            ),
+            lightPosition: activeLightPos,
+            lightColor: activeLightColor,
             waterSimulation: SIMD4<Float>(dt, elapsedTime, cameraMode == .firstPerson ? 1 : 0, 0),
             waterImpulse: pendingWaterImpulse,
             toolOrigin: SIMD4<Float>(toolOrigin, 1),
@@ -1987,9 +2024,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             shieldPos = SIMD3<Float>(0, -100, 0)
         }
 
+        let playerRenderPos = (cameraMode == .firstPerson) ? SIMD3<Float>(0, -100, 0) : pPos
+
         let descriptors = [
             Self.makeInstanceDescriptor(translation: .zero, yaw: 0, pitch: 0, mask: 0x01, accelerationStructureIndex: 0),
-            Self.makeInstanceDescriptor(translation: pPos, yaw: playerYaw, pitch: pPitch, mask: 0x02, accelerationStructureIndex: 1),
+            Self.makeInstanceDescriptor(translation: playerRenderPos, yaw: playerYaw, pitch: pPitch, mask: 0x02, accelerationStructureIndex: 1),
             Self.makeInstanceDescriptor(translation: .zero, yaw: 0, pitch: 0, mask: 0x04, accelerationStructureIndex: 2),
             Self.makeInstanceDescriptor(translation: floatPosition, yaw: floatYaw, pitch: 0, mask: 0x01, accelerationStructureIndex: 3),
             Self.makeInstanceDescriptor(translation: npcPositions[0], yaw: npcYaws[0], pitch: 0, mask: 0x01, accelerationStructureIndex: 4),
@@ -2279,7 +2318,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         builder.addBox(center: SIMD3<Float>(3.8, -6.0, 2.8), size: SIMD3<Float>(0.85, 5.0, 0.85), material: sunkenObelisk)
         builder.addBox(center: SIMD3<Float>(-3.2, -6.5, 3.2), size: SIMD3<Float>(0.75, 4.0, 0.75), material: sunkenObelisk)
 
-        // Glowing Bioluminescent Crystals
+        // Glowing Bioluminescent Crystals & Subterranean Illuminating Lamps
+        let subLampEmitter = RTMaterial(color: SIMD3<Float>(0.10, 0.90, 0.98), roughness: 0.05, emission: SIMD3<Float>(0.85, 3.8, 5.5), reflectivity: 0.75)
+        builder.addSphere(center: SIMD3<Float>(-8.0, -5.5, -8.0), radii: SIMD3<Float>(repeating: 0.65), material: subLampEmitter, segments: 10, rings: 6)
+        builder.addSphere(center: SIMD3<Float>(8.0, -5.5, -8.0), radii: SIMD3<Float>(repeating: 0.65), material: subLampEmitter, segments: 10, rings: 6)
+        builder.addSphere(center: SIMD3<Float>(-8.0, -5.5, 8.0), radii: SIMD3<Float>(repeating: 0.65), material: subLampEmitter, segments: 10, rings: 6)
+        builder.addSphere(center: SIMD3<Float>(8.0, -5.5, 8.0), radii: SIMD3<Float>(repeating: 0.65), material: subLampEmitter, segments: 10, rings: 6)
+
         builder.addSphere(center: SIMD3<Float>(-3.8, -8.1, -3.2), radii: SIMD3<Float>(repeating: 0.45), material: bioCrystal, segments: 8, rings: 5)
         builder.addSphere(center: SIMD3<Float>(3.5, -8.1, 2.2), radii: SIMD3<Float>(repeating: 0.45), material: bioCrystal, segments: 8, rings: 5)
         builder.addSphere(center: SIMD3<Float>(1.8, -8.1, -4.2), radii: SIMD3<Float>(repeating: 0.40), material: bioCrystal, segments: 8, rings: 5)

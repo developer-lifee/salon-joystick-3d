@@ -842,5 +842,22 @@ kernel void raytracePatio(
         accumulated += float3(9.5f, 0.08f, 0.02f) * (botBeam * 0.95f);
     }
 
+    // 🌊 Subterranean Underwater Volumetric Fog & Caustics Shading
+    if (uniforms.cameraPosition.y <= -3.0f) {
+        float fogDensity = 1.0f - exp(-firstSurfaceDistance * 0.14f);
+        float3 underwaterFogColor = float3(0.015f, 0.45f, 0.72f);
+
+        float hitX = uniforms.cameraPosition.x + primaryDirection.x * firstSurfaceDistance;
+        float hitZ = uniforms.cameraPosition.z + primaryDirection.z * firstSurfaceDistance;
+
+        float c1 = sin(hitX * 1.8f + uniforms.waterSimulation.x * 3.5f) * cos(hitZ * 1.8f + uniforms.waterSimulation.x * 2.8f);
+        float c2 = cos(hitX * 3.2f - uniforms.waterSimulation.x * 2.4f) * sin(hitZ * 3.2f + uniforms.waterSimulation.x * 3.2f);
+        float caustics = saturate((c1 + c2) * 0.45f + 0.5f);
+
+        float3 causticsGlow = float3(0.08f, 0.55f, 0.75f) * caustics * 0.45f;
+        accumulated += causticsGlow;
+        accumulated = mix(accumulated, underwaterFogColor * 2.2f, clamp(fogDensity, 0.0f, 0.72f));
+    }
+
     output.write(half4(half3(toneMap(clamp(accumulated, 0.0f, 96.0f))), half(1.0f)), tid);
 }

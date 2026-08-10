@@ -3,6 +3,21 @@ import GameKit
 import SwiftUI
 
 @MainActor
+extension UIApplication {
+    static var topViewController: UIViewController? {
+        let scenes = shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let window = scenes.first(where: { $0.activationState == .foregroundActive })?.windows.first(where: { $0.isKeyWindow })
+            ?? scenes.first?.windows.first(where: { $0.isKeyWindow })
+            ?? scenes.first?.windows.first
+        var top = window?.rootViewController
+        while let presented = top?.presentedViewController {
+            top = presented
+        }
+        return top
+    }
+}
+
+@MainActor
 final class GameCenterManager: NSObject, ObservableObject {
     @Published private(set) var isAuthenticated = false
     @Published private(set) var localPlayerAlias = "No autenticado"
@@ -17,7 +32,27 @@ final class GameCenterManager: NSObject, ObservableObject {
 
     override init() {
         super.init()
+        configureAccessPoint()
         authenticateLocalPlayer()
+    }
+
+    func configureAccessPoint() {
+        GKAccessPoint.shared.location = .topLeading
+        GKAccessPoint.shared.showHighlights = true
+        GKAccessPoint.shared.isActive = true
+    }
+
+    func triggerGameCenterLogin() {
+        configureAccessPoint()
+        let localPlayer = GKLocalPlayer.local
+        if localPlayer.isAuthenticated {
+            self.isAuthenticated = true
+            self.localPlayerAlias = localPlayer.alias
+            GKAccessPoint.shared.trigger(state: .localPlayerProfile, handler: {})
+        } else {
+            authenticateLocalPlayer()
+            GKAccessPoint.shared.trigger(state: .dashboard, handler: {})
+        }
     }
 
     func authenticateLocalPlayer() {
@@ -26,21 +61,22 @@ final class GameCenterManager: NSObject, ObservableObject {
             self.isAuthenticated = true
             self.localPlayerAlias = localPlayer.alias
             self.lastError = nil
+            GKAccessPoint.shared.isActive = true
             return
         }
         localPlayer.authenticateHandler = { [weak self] vc, error in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 if let vc {
-                    // Present Apple's native Game Center Sign-In banner/dialog
-                    if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                       let rootVC = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
-                        rootVC.present(vc, animated: true)
+                    // Present Apple's native Game Center Sign-In banner/dialog on top-most view controller
+                    if let topVC = UIApplication.topViewController {
+                        topVC.present(vc, animated: true)
                     }
                 } else if localPlayer.isAuthenticated {
                     self.isAuthenticated = true
                     self.localPlayerAlias = localPlayer.alias
                     self.lastError = nil
+                    GKAccessPoint.shared.isActive = true
                 } else {
                     self.isAuthenticated = false
                     if let error {
@@ -53,16 +89,30 @@ final class GameCenterManager: NSObject, ObservableObject {
         }
     }
 
+    private var activeCoordinator: GameCenterMatchmakerCoordinator?
+
     func presentMatchmaker() {
         let localPlayer = GKLocalPlayer.local
-        if localPlayer.isAuthenticated {
-            self.isAuthenticated = true
-            self.localPlayerAlias = localPlayer.alias
-            self.showsMatchmakerSheet = true
-        } else {
+        guard localPlayer.isAuthenticated else {
             self.isAuthenticated = false
             self.lastError = "Debes iniciar sesión en Game Center (Ajustes de iOS -> Game Center)."
-            authenticateLocalPlayer()
+            triggerGameCenterLogin()
+            return
+        }
+
+        let request = GKMatchRequest()
+        request.minPlayers = 2
+        request.maxPlayers = 4
+        request.defaultNumberOfPlayers = 2
+        request.inviteMessage = "¡Únete a mi partida en Salón Joystick 3D!"
+
+        guard let vc = GKMatchmakerViewController(matchRequest: request) else { return }
+        let coordinator = GameCenterMatchmakerCoordinator(gameCenter: self)
+        vc.matchmakerDelegate = coordinator
+        self.activeCoordinator = coordinator
+
+        if let topVC = UIApplication.topViewController {
+            topVC.present(vc, animated: true)
         }
     }
 
@@ -115,57 +165,30 @@ extension GameCenterManager: GKMatchDelegate {
     }
 }
 
-struct GameCenterMatchmakerView: UIViewControllerRepresentable {
-    @ObservedObject var gameCenter: GameCenterManager
-    var mode: LocalMatchMode
+final class GameCenterMatchmakerCoordinator: NSObject, GKMatchmakerViewControllerDelegate {
+    unowned let gameCenter: GameCenterManager
 
-    func makeUIViewController(context: Context) -> GKMatchmakerViewController {
-        let request = GKMatchRequest()
-        request.minPlayers = 2
-        request.maxPlayers = 4
-        request.defaultNumberOfPlayers = 2
-
-        guard GKLocalPlayer.local.isAuthenticated,
-              let vc = GKMatchmakerViewController(matchRequest: request) else {
-            return GKMatchmakerViewController()
-        }
-        vc.matchmakerDelegate = context.coordinator
-        return vc
+    init(gameCenter: GameCenterManager) {
+        self.gameCenter = gameCenter
     }
 
-    func updateUIViewController(_ uiViewController: GKMatchmakerViewController, context: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
+    func matchmakerViewControllerWasCancelled(_ viewController: GKMatchmakerViewController) {
+        viewController.dismiss(animated: true)
     }
 
-    final class Coordinator: NSObject, GKMatchmakerViewControllerDelegate {
-        var parent: GameCenterMatchmakerView
-
-        init(_ parent: GameCenterMatchmakerView) {
-            self.parent = parent
+    func matchmakerViewController(_ viewController: GKMatchmakerViewController, didFailWithError error: Error) {
+        viewController.dismiss(animated: true)
+        Task { @MainActor in
+            self.gameCenter.lastError = error.localizedDescription
         }
+    }
 
-        func matchmakerViewControllerWasCancelled(_ viewController: GKMatchmakerViewController) {
-            viewController.dismiss(animated: true)
-            Task { @MainActor in
-                self.parent.gameCenter.showsMatchmakerSheet = false
-            }
-        }
-
-        func matchmakerViewController(_ viewController: GKMatchmakerViewController, didFailWithError error: Error) {
-            viewController.dismiss(animated: true)
-            Task { @MainActor in
-                self.parent.gameCenter.showsMatchmakerSheet = false
-                self.parent.gameCenter.lastError = error.localizedDescription
-            }
-        }
-
-        func matchmakerViewController(_ viewController: GKMatchmakerViewController, didFind match: GKMatch) {
-            viewController.dismiss(animated: true)
-            Task { @MainActor in
-                self.parent.gameCenter.startMatch(match)
-            }
+    func matchmakerViewController(_ viewController: GKMatchmakerViewController, didFind match: GKMatch) {
+        viewController.dismiss(animated: true)
+        Task { @MainActor in
+            self.gameCenter.startMatch(match)
         }
     }
 }
+
+

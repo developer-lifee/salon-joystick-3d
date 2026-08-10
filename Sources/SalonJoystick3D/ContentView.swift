@@ -300,13 +300,18 @@ struct ContentView: View {
                     )
                 }
 
-                // Active 5 Mobile NPCs 100 HP Health Meters HUD
-                HStack(spacing: 6) {
+                // Active 5 Mobile NPCs Health Meters HUD with Class Tiers
+                HStack(spacing: 5) {
+                    let botNames = ["SCOUT", "SOLDIER", "GUARD", "HEAVY", "TITAN"]
                     ForEach(0..<5, id: \.self) { idx in
-                        let hp = idx < model.npcHealths.count ? model.npcHealths[idx] : 100
+                        let maxHp = idx < model.npcMaxHealths.count ? model.npcMaxHealths[idx] : 100.0
+                        let hp = idx < model.npcHealths.count ? model.npcHealths[idx] : maxHp
+                        let fraction = max(0, min(1.0, hp / maxHp))
+                        let borderCol: Color = hp <= 0 ? Color.gray.opacity(0.3) : (idx == 4 ? Color.purple : Color.red.opacity(0.6))
+
                         HStack(spacing: 3) {
-                            Text("BOT \(idx+1)")
-                                .font(.system(size: 9, weight: .black, design: .monospaced))
+                            Text(botNames[idx])
+                                .font(.system(size: 8, weight: .black, design: .monospaced))
                                 .foregroundStyle(hp > 0 ? .white : .secondary)
 
                             GeometryReader { p in
@@ -314,17 +319,17 @@ struct ContentView: View {
                                     Rectangle()
                                         .fill(.black.opacity(0.6))
                                     Rectangle()
-                                        .fill(hp > 50 ? Color.green : (hp > 20 ? Color.yellow : Color.red))
-                                        .frame(width: p.size.width * CGFloat(max(0, hp) / 100.0))
+                                        .fill(fraction > 0.5 ? Color.green : (fraction > 0.25 ? Color.yellow : Color.red))
+                                        .frame(width: p.size.width * CGFloat(fraction))
                                 }
                             }
-                            .frame(width: 28, height: 5)
+                            .frame(width: 24, height: 5)
                             .cornerRadius(2.5)
                         }
-                        .padding(.horizontal, 5)
+                        .padding(.horizontal, 4)
                         .padding(.vertical, 3)
                         .background(.black.opacity(0.65), in: Capsule())
-                        .overlay(Capsule().stroke(hp > 0 ? Color.red.opacity(0.6) : Color.gray.opacity(0.3), lineWidth: 1))
+                        .overlay(Capsule().stroke(borderCol, lineWidth: 1))
                     }
                 }
                 .padding(.top, 2)
@@ -739,14 +744,18 @@ struct ContentView: View {
             .sheet(isPresented: $model.showsMultiplayerSheet) {
                 MultiplayerSettingsSheet(model: model)
             }
-            .sheet(isPresented: $model.gameCenter.showsMatchmakerSheet) {
-                GameCenterMatchmakerView(gameCenter: model.gameCenter, mode: model.multiplayer.mode)
-            }
             .sheet(isPresented: $model.showsSettingsSheet) {
                 GameOptionsSheet(model: model)
             }
             .sheet(isPresented: $showsCoffeeStore) {
                 CoffeeTipView()
+            }
+            if model.isDefeated {
+                DefeatOverlayView(onRespawn: {
+                    model.respawnPlayer()
+                })
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                .zIndex(100)
             }
         }
     }
@@ -835,7 +844,10 @@ final class GameModel: ObservableObject {
     @Published var isSlowMotionActive = false
     @Published var isCoverActive = false
     @Published private(set) var isNearCoverRock = false
-    @Published var npcHealths: [Float] = [100, 100, 100, 100, 100]
+    @Published var isDefeated = false
+    @Published var npcMaxHealths: [Float] = [80, 120, 180, 250, 350]
+    @Published var npcHealths: [Float] = [80, 120, 180, 250, 350]
+    @Published private(set) var respawnRequestID = 0
     @Published var showsLightRadialMenu = false
 
     func updateNPCHealths(_ healths: [Float]) {
@@ -929,11 +941,25 @@ final class GameModel: ObservableObject {
         } else {
             playerHealth = max(0, playerHealth - damage)
         }
-        if playerHealth <= 0 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
-                self?.playerHealth = 100.0
+        if playerHealth <= 0 && !isDefeated {
+            isDefeated = true
+            audio.playRobloxOofDefeatSound()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+                self?.respawnPlayer()
             }
         }
+    }
+
+    func respawnPlayer() {
+        playerHealth = 100.0
+        isDefeated = false
+        heldTool = .none
+        currentWave = 1
+        botsRemainingInWave = 5
+        totalBotsInWave = 5
+        isWaveIntermission = false
+        resetRequestID &+= 1
+        respawnRequestID &+= 1
     }
 
     func requestJump() {
@@ -2745,9 +2771,58 @@ final class ChiptuneAudioEngine {
             let index = self.nextSplash % self.splashBuffers.count
             self.nextSplash += 1
             self.splashNode.volume = 0.42 + max(0, min(1, intensity)) * 0.38
+            self.splashNode.rate = 1.0
             self.splashNode.scheduleBuffer(self.splashBuffers[index])
             if !self.splashNode.isPlaying {
                 self.splashNode.play()
+            }
+        }
+    }
+
+    func playUnderwaterGlug(intensity: Float) {
+        audioQueue.async { [weak self] in
+            guard let self else { return }
+            guard self.started, self.waterEnabled, !self.splashBuffers.isEmpty else { return }
+            let index = self.nextSplash % self.splashBuffers.count
+            self.nextSplash += 1
+            self.splashNode.volume = 0.35 + max(0, min(1, intensity)) * 0.40
+            self.splashNode.rate = 0.62 // Submerged low-frequency bubble resonance!
+            self.splashNode.scheduleBuffer(self.splashBuffers[index])
+            if !self.splashNode.isPlaying {
+                self.splashNode.play()
+            }
+        }
+    }
+
+    func playRobloxOofDefeatSound() {
+        audioQueue.async { [weak self] in
+            guard let self, self.started, self.effectsEnabled else { return }
+            let sampleRate: Double = 44100.0
+            let duration: Double = 0.28
+            let sampleCount = Int(sampleRate * duration)
+
+            guard let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1),
+                  let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(sampleCount)) else { return }
+            buffer.frameLength = AVAudioFrameCount(sampleCount)
+
+            if let channels = buffer.floatChannelData {
+                let data = channels[0]
+                for i in 0..<sampleCount {
+                    let t = Double(i) / sampleRate
+                    let progress = t / duration
+                    // Iconic Roblox OOF pitch drop frequency slide (240 Hz -> 85 Hz)
+                    let freq = 240.0 * exp(-progress * 1.6)
+                    let phase = 2.0 * Double.pi * freq * t
+                    let envelope = sin(progress * Double.pi) * exp(-progress * 1.8)
+                    let wave = (sin(phase) + 0.35 * sin(phase * 2.0) + 0.15 * sin(phase * 3.0)) * envelope
+                    data[i] = Float(wave * 0.90)
+                }
+            }
+
+            self.effectsNode.volume = 1.0
+            self.effectsNode.scheduleBuffer(buffer)
+            if !self.effectsNode.isPlaying {
+                self.effectsNode.play()
             }
         }
     }
@@ -3604,3 +3679,83 @@ struct MirrorShieldJoystickButton: View {
         .accessibilityLabel("Espejo Defensivo Joystick de Ángulo")
     }
 }
+
+struct DefeatOverlayView: View {
+    var onRespawn: () -> Void
+
+    @State private var animateIn = false
+
+    var body: some View {
+        ZStack {
+            // Ambient subtle translucent vignette (100% translucent, showing 3D scene beneath)
+            Color.black.opacity(0.35)
+                .ignoresSafeArea()
+
+            RadialGradient(
+                colors: [Color.red.opacity(0.32), Color.black.opacity(0.55)],
+                center: .center,
+                startRadius: 50,
+                endRadius: 650
+            )
+            .ignoresSafeArea()
+
+            VStack(spacing: 28) {
+                Spacer()
+
+                // 👻 Snapchat-Style Translucent Text Overlay Banner
+                ZStack {
+                    // Snapchat semi-transparent black horizontal banner strip
+                    Rectangle()
+                        .fill(Color.black.opacity(0.58))
+                        .frame(height: 110)
+
+                    VStack(spacing: 4) {
+                        Text("MORIDO :v")
+                            .font(.system(size: 38, weight: .bold, design: .default))
+                            .tracking(2)
+                            .foregroundStyle(.white)
+                            .shadow(color: .black.opacity(0.8), radius: 3, x: 0, y: 1)
+                            .scaleEffect(animateIn ? 1.0 : 0.85)
+
+                        Text("OLEADA RESTABLECIDA A OLEADA 1")
+                            .font(.system(size: 12, weight: .semibold, design: .default))
+                            .tracking(1.5)
+                            .foregroundStyle(.white.opacity(0.85))
+                    }
+                    .padding(.horizontal, 20)
+                }
+
+                // Snapchat-style Translucent Action Button
+                Button(action: onRespawn) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.counterclockwise.circle.fill")
+                            .font(.body)
+                        Text("REINTENTAR (OLEADA 1)")
+                            .font(.system(size: 14, weight: .bold, design: .default))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
+                    .background(Color.black.opacity(0.60), in: Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.white.opacity(0.60), lineWidth: 1.0)
+                    )
+                    .shadow(color: .black.opacity(0.4), radius: 8)
+                }
+                .scaleEffect(animateIn ? 1.0 : 0.9)
+
+                Spacer()
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea()
+        .onAppear {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                animateIn = true
+            }
+        }
+    }
+}
+
+

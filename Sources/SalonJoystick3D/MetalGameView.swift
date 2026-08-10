@@ -142,7 +142,8 @@ struct MetalGameView: UIViewRepresentable {
             isPaused: isPaused,
             resetRequestID: model.resetRequestID,
             isCoverActive: model.isCoverActive,
-            shieldAngleOffset: model.shieldAngleOffset
+            shieldAngleOffset: model.shieldAngleOffset,
+            respawnRequestID: model.respawnRequestID
         )
     }
 
