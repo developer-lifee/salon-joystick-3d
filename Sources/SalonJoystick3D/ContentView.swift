@@ -3328,55 +3328,138 @@ struct PauseMenuView: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.78)
+            // Ultra-subtle liquid glass tint (crystal clear background so 3D scene stays visible!)
+            Color.black.opacity(0.30)
                 .ignoresSafeArea()
 
-            VStack(spacing: 20) {
-                Text("PAUSA")
-                    .font(.system(size: 32, weight: .black, design: .rounded))
-                    .foregroundStyle(.white)
+            VStack(spacing: 22) {
+                //  iOS 18 Liquid Glass Title Header
+                HStack(spacing: 10) {
+                    Image(systemName: "pause.circle.fill")
+                        .font(.system(size: 26, weight: .bold))
+                        .foregroundStyle(
+                            LinearGradient(colors: [.white, .cyan], startPoint: .top, endPoint: .bottom)
+                        )
+
+                    Text("PAUSA")
+                        .font(.system(size: 32, weight: .black, design: .rounded))
+                        .tracking(3)
+                        .foregroundStyle(
+                            LinearGradient(colors: [.white, .cyan], startPoint: .leading, endPoint: .trailing)
+                        )
+                        .shadow(color: .cyan.opacity(0.8), radius: 12)
+                }
 
                 VStack(spacing: 14) {
+                    // Continuar - Primary Liquid Glass Focus Button
                     Button {
                         model.gameState = .playing
                     } label: {
-                        Text("Continuar")
-                            .font(.headline.bold())
-                            .foregroundStyle(.black)
-                            .frame(width: 240, height: 48)
-                            .background(Color.white, in: RoundedRectangle(cornerRadius: 14))
+                        HStack(spacing: 10) {
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 16, weight: .bold))
+                            Text("CONTINUAR")
+                                .font(.system(size: 14, weight: .black, design: .rounded))
+                                .tracking(1.5)
+                        }
+                        .foregroundStyle(.white)
+                        .frame(width: 250, height: 50)
+                        .background(
+                            ZStack {
+                                Capsule()
+                                    .fill(
+                                        LinearGradient(colors: [.blue.opacity(0.85), .cyan.opacity(0.85)], startPoint: .leading, endPoint: .trailing)
+                                    )
+                                Capsule()
+                                    .stroke(Color.white.opacity(0.90), lineWidth: 1.5)
+                            }
+                        )
+                        .shadow(color: .cyan.opacity(0.60), radius: 12)
                     }
                     .buttonStyle(.plain)
 
+                    // Reiniciar Partida - Crystalline Liquid Glass Pill Button
                     Button {
                         model.startGame()
                     } label: {
-                        Text("Reiniciar Partida")
-                            .font(.headline.bold())
-                            .foregroundStyle(.white)
-                            .frame(width: 240, height: 48)
-                            .background(Color.white.opacity(0.18), in: RoundedRectangle(cornerRadius: 14))
+                        HStack(spacing: 10) {
+                            Image(systemName: "arrow.counterclockwise")
+                                .font(.system(size: 16, weight: .bold))
+                            Text("REINICIAR PARTIDA")
+                                .font(.system(size: 14, weight: .black, design: .rounded))
+                                .tracking(1.5)
+                        }
+                        .foregroundStyle(.white)
+                        .frame(width: 250, height: 50)
+                        .background(
+                            ZStack {
+                                Capsule()
+                                    .fill(Color.white.opacity(0.20))
+                                    .background(Color.black.opacity(0.35), in: Capsule())
+
+                                Capsule()
+                                    .stroke(
+                                        LinearGradient(colors: [.white.opacity(0.90), .white.opacity(0.25)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                                        lineWidth: 1.2
+                                    )
+                            }
+                        )
+                        .shadow(color: .black.opacity(0.25), radius: 10)
                     }
                     .buttonStyle(.plain)
 
+                    // Menú Principal - Coral Liquid Glass Pill Button
                     Button {
                         model.returnToMainMenu()
                     } label: {
-                        Text("Menú Principal")
-                            .font(.headline.bold())
-                            .foregroundStyle(.red)
-                            .frame(width: 240, height: 48)
-                            .background(Color.red.opacity(0.18), in: RoundedRectangle(cornerRadius: 14))
+                        HStack(spacing: 10) {
+                            Image(systemName: "house.fill")
+                                .font(.system(size: 16, weight: .bold))
+                            Text("MENÚ PRINCIPAL")
+                                .font(.system(size: 14, weight: .black, design: .rounded))
+                                .tracking(1.5)
+                        }
+                        .foregroundStyle(Color(red: 1.0, green: 0.40, blue: 0.40))
+                        .frame(width: 250, height: 50)
+                        .background(
+                            ZStack {
+                                Capsule()
+                                    .fill(Color.red.opacity(0.18))
+                                    .background(Color.black.opacity(0.35), in: Capsule())
+
+                                Capsule()
+                                    .stroke(
+                                        LinearGradient(colors: [Color.red.opacity(0.90), Color.orange.opacity(0.50)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                                        lineWidth: 1.2
+                                    )
+                            }
+                        )
+                        .shadow(color: .red.opacity(0.35), radius: 10)
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(32)
-            .background(Color.black.opacity(0.85), in: RoundedRectangle(cornerRadius: 24))
-            .overlay {
-                RoundedRectangle(cornerRadius: 24)
-                    .stroke(Color.white.opacity(0.2), lineWidth: 1.5)
-            }
+            .padding(.horizontal, 36)
+            .padding(.vertical, 30)
+            .background(
+                ZStack {
+                    RoundedRectangle(cornerRadius: 28)
+                        .fill(Color.white.opacity(0.18))
+                        .background(Color.black.opacity(0.38), in: RoundedRectangle(cornerRadius: 28))
+
+                    RoundedRectangle(cornerRadius: 28)
+                        .stroke(
+                            LinearGradient(
+                                colors: [.white.opacity(0.92), .cyan.opacity(0.60), .white.opacity(0.30)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.5
+                        )
+                }
+            )
+            .shadow(color: Color.black.opacity(0.40), radius: 20, x: 0, y: 8)
+            .shadow(color: Color.cyan.opacity(0.25), radius: 12, x: 0, y: 0)
         }
     }
 }
