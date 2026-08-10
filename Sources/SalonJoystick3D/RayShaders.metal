@@ -842,26 +842,48 @@ kernel void raytracePatio(
         accumulated += float3(9.5f, 0.08f, 0.02f) * (botBeam * 0.95f);
     }
 
-    // 🌊 🍄 Super Mario Bros / Mario 64 Style Organic Aquatic World Shimmer & Soft God Rays
+    // 🌊 🍄 Super Mario Bros / Mario 64 Style Organic Aquatic World (Surface Sky Ceiling, God Rays & Deep Abyss)
     if (uniforms.cameraPosition.y <= -3.0f) {
-        float distanceFog = 1.0f - exp(-firstSurfaceDistance * 0.035f);
-        float3 marioWaterColor = float3(0.02f, 0.22f, 0.35f);
+        float3 cameraPos = uniforms.cameraPosition.xyz;
+        float hitX = cameraPos.x + primaryDirection.x * firstSurfaceDistance;
+        float hitY = cameraPos.y + primaryDirection.y * firstSurfaceDistance;
+        float hitZ = cameraPos.z + primaryDirection.z * firstSurfaceDistance;
+        float simT = uniforms.waterSimulation.x * 2.5f;
 
-        float hitX = uniforms.cameraPosition.x + primaryDirection.x * firstSurfaceDistance;
-        float hitZ = uniforms.cameraPosition.z + primaryDirection.z * firstSurfaceDistance;
-        float simT = uniforms.waterSimulation.x * 2.2f;
+        // 1. Shimmering Surface Water Sky Ceiling (Looking up toward top pool boundary)
+        if (primaryDirection.y > 0.05f) {
+            float distToSurface = max(0.1f, (-2.5f - cameraPos.y) / max(0.01f, primaryDirection.y));
+            if (distToSurface < firstSurfaceDistance) {
+                float2 surfXZ = cameraPos.xz + primaryDirection.xz * distToSurface;
+                float wSurf = sin(surfXZ.x * 0.85f + simT) * cos(surfXZ.y * 0.85f + simT * 1.2f);
+                float3 surfaceLight = mix(float3(0.15f, 0.72f, 0.95f), float3(0.85f, 0.98f, 1.0f), saturate(wSurf * 0.5f + 0.5f));
+                accumulated += surfaceLight * 0.65f * exp(-distToSurface * 0.04f);
+            }
+        }
 
-        // Smooth continuous organic wave shimmer (Mario 64 water surface refraction!)
-        float w1 = sin(hitX * 0.45f + hitZ * 0.35f + simT);
-        float w2 = sin(hitX * 0.75f - hitZ * 0.65f - simT * 1.4f);
+        // 2. Solar God Rays & Smooth Wave Refraction
+        float w1 = sin(hitX * 0.35f + hitZ * 0.28f + simT);
+        float w2 = sin(hitX * 0.65f - hitZ * 0.55f - simT * 1.3f);
         float waveShimmer = saturate((w1 + w2) * 0.25f + 0.50f);
+        float godRays = saturate(pow(waveShimmer, 3.5f) * 0.85f) * saturate((hitY + 7.5f) / 4.5f);
 
-        // Soft aquatic sunbeam caustics (God Rays)
-        float sunRays = saturate(pow(waveShimmer, 3.0f) * 0.40f);
-        float3 waterGlow = float3(0.05f, 0.42f, 0.58f) * (0.20f + sunRays * 0.35f);
+        // 3. Vertical Depth Color Gradient (Bright Turquoise Surface -> Deep Indigo Abyss Floor)
+        float depthFactor = saturate((hitY + 8.0f) / 5.5f); // 0 = Deep floor, 1 = Surface
+        float3 shallowTurquoise = float3(0.04f, 0.45f, 0.68f);
+        float3 deepIndigoAbyss = float3(0.008f, 0.045f, 0.14f);
+        float3 marioWaterColor = mix(deepIndigoAbyss, shallowTurquoise, depthFactor);
 
-        accumulated += waterGlow;
-        accumulated = mix(accumulated, marioWaterColor, clamp(distanceFog, 0.0f, 0.35f));
+        // 4. Floating Underwater Bubbles Around Player
+        float3 b1Pos = float3(cameraPos.x + sin(simT * 1.2f) * 0.85f, cameraPos.y + fmod(simT * 1.5f, 3.2f) - 1.2f, cameraPos.z + cos(simT * 1.2f) * 0.85f);
+        float distB1 = distance(cameraPos + primaryDirection * min(firstSurfaceDistance, 2.5f), b1Pos);
+        float bubbleGlow = smoothstep(0.12f, 0.02f, distB1) * 0.65f;
+        accumulated += float3(0.6f, 0.95f, 1.0f) * bubbleGlow;
+
+        float3 waterSunGlow = float3(0.12f, 0.65f, 0.88f) * (0.15f + godRays * 0.65f);
+        accumulated += waterSunGlow;
+
+        float distanceFog = 1.0f - exp(-firstSurfaceDistance * 0.032f);
+        accumulated = mix(accumulated, marioWaterColor, clamp(distanceFog, 0.0f, 0.48f));
     }
 
     output.write(half4(half3(toneMap(clamp(accumulated, 0.0f, 96.0f))), half(1.0f)), tid);

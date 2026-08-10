@@ -424,29 +424,52 @@ private struct RTMeshBuilder {
         let visor = RTMaterial(color: SIMD3<Float>(0.05, 0.85, 0.98), roughness: 0.02, emission: SIMD3<Float>(0.1, 0.45, 0.75), reflectivity: 0.94, kind: 1.0)
         let coreEmissive = RTMaterial(color: SIMD3<Float>(1.0, 0.2, 0.4), roughness: 0.10, emission: SIMD3<Float>(3.5, 0.8, 1.2), reflectivity: 0.50, kind: 5.0)
         let dark = RTMaterial(color: SIMD3<Float>(repeating: 0.012), roughness: 0.92)
+        let scubaTankMat = RTMaterial(color: SIMD3<Float>(0.92, 0.85, 0.12), roughness: 0.15, reflectivity: 0.75)
+        let flipperMat = RTMaterial(color: SIMD3<Float>(0.95, 0.45, 0.05), roughness: 0.25, reflectivity: 0.40)
 
         // Torso & Armor Chest Plate
         addSphere(center: origin + SIMD3<Float>(0, 0.86, 0), radii: SIMD3<Float>(0.34, 0.50, 0.27), material: suit)
         addBox(center: origin + SIMD3<Float>(0, 0.92, 0.16), size: SIMD3<Float>(0.44, 0.42, 0.12), material: armor)
         addSphere(center: origin + SIMD3<Float>(0, 0.95, 0.23), radii: SIMD3<Float>(repeating: 0.08), material: coreEmissive)
 
-        // Retopologized Helmet & Curved Visor
+        // 🤿 Scuba Oxygen Tank on Back & Regulator Valve
+        addBox(center: origin + SIMD3<Float>(0, 0.92, -0.22), size: SIMD3<Float>(0.28, 0.55, 0.18), material: scubaTankMat)
+        addSphere(center: origin + SIMD3<Float>(0, 1.22, -0.22), radii: SIMD3<Float>(repeating: 0.09), material: armor)
+
+        // Helmet & Curved Visor
         addSphere(center: origin + SIMD3<Float>(0, 1.55, 0), radii: SIMD3<Float>(repeating: 0.32), material: suit)
         addBox(center: origin + SIMD3<Float>(0, 1.58, 0.22), size: SIMD3<Float>(0.38, 0.18, 0.14), material: visor)
 
-        // Shoulder Pads & Joint Guards
-        addBox(center: origin + SIMD3<Float>(-0.44, 1.12, 0), size: SIMD3<Float>(0.18, 0.16, 0.22), material: armor)
-        addBox(center: origin + SIMD3<Float>( 0.44, 1.12, 0), size: SIMD3<Float>(0.18, 0.16, 0.22), material: armor)
-        addBox(center: origin + SIMD3<Float>(-0.16, 0.28, 0.12), size: SIMD3<Float>(0.16, 0.14, 0.08), material: armor)
-        addBox(center: origin + SIMD3<Float>( 0.16, 0.28, 0.12), size: SIMD3<Float>(0.16, 0.14, 0.08), material: armor)
+        // 🦾 Articulated Upper Arms, Elbow Joints & Forearms
+        // Left & Right Shoulder Joints
+        addSphere(center: origin + SIMD3<Float>(-0.42, 1.15, 0), radii: SIMD3<Float>(repeating: 0.11), material: armor)
+        addSphere(center: origin + SIMD3<Float>( 0.42, 1.15, 0), radii: SIMD3<Float>(repeating: 0.11), material: armor)
+        // Upper Arms
+        addBox(center: origin + SIMD3<Float>(-0.42, 0.96, 0), size: SIMD3<Float>(0.14, 0.28, 0.15), material: suit)
+        addBox(center: origin + SIMD3<Float>( 0.42, 0.96, 0), size: SIMD3<Float>(0.14, 0.28, 0.15), material: suit)
+        // 🦾 ELBOW JOINTS (Articulaciones de Codo Visibles)
+        addSphere(center: origin + SIMD3<Float>(-0.42, 0.80, 0.02), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+        addSphere(center: origin + SIMD3<Float>( 0.42, 0.80, 0.02), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+        // Forearms (Bent forward slightly at elbow joint!)
+        addBox(center: origin + SIMD3<Float>(-0.42, 0.65, 0.08), size: SIMD3<Float>(0.13, 0.26, 0.16), material: suit)
+        addBox(center: origin + SIMD3<Float>( 0.42, 0.65, 0.08), size: SIMD3<Float>(0.13, 0.26, 0.16), material: suit)
 
-        // Limbs & Tactical Boots
-        addBox(center: origin + SIMD3<Float>(-0.16, 0.28, 0), size: SIMD3<Float>(0.14, 0.56, 0.17), material: suit)
-        addBox(center: origin + SIMD3<Float>( 0.16, 0.28, 0), size: SIMD3<Float>(0.14, 0.56, 0.17), material: suit)
-        addBox(center: origin + SIMD3<Float>(-0.42, 0.88, 0), size: SIMD3<Float>(0.14, 0.55, 0.16), material: suit)
-        addBox(center: origin + SIMD3<Float>( 0.42, 0.88, 0), size: SIMD3<Float>(0.14, 0.55, 0.16), material: suit)
-        addBox(center: origin + SIMD3<Float>(-0.16, 0.04, 0.06), size: SIMD3<Float>(0.16, 0.10, 0.26), material: armor)
-        addBox(center: origin + SIMD3<Float>( 0.16, 0.04, 0.06), size: SIMD3<Float>(0.16, 0.10, 0.26), material: armor)
+        // 🦵 Articulated Thighs, Knee Joints, Calves & Scuba Flippers
+        // Hip Joints
+        addSphere(center: origin + SIMD3<Float>(-0.16, 0.52, 0), radii: SIMD3<Float>(repeating: 0.10), material: armor)
+        addSphere(center: origin + SIMD3<Float>( 0.16, 0.52, 0), radii: SIMD3<Float>(repeating: 0.10), material: armor)
+        // Thighs
+        addBox(center: origin + SIMD3<Float>(-0.16, 0.38, 0), size: SIMD3<Float>(0.15, 0.26, 0.16), material: suit)
+        addBox(center: origin + SIMD3<Float>( 0.16, 0.38, 0), size: SIMD3<Float>(0.15, 0.26, 0.16), material: suit)
+        // 🦵 KNEE JOINTS (Articulaciones de Rodilla Visibles)
+        addSphere(center: origin + SIMD3<Float>(-0.16, 0.23, 0.02), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+        addSphere(center: origin + SIMD3<Float>( 0.16, 0.23, 0.02), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+        // Calves
+        addBox(center: origin + SIMD3<Float>(-0.16, 0.10, 0.03), size: SIMD3<Float>(0.14, 0.24, 0.15), material: suit)
+        addBox(center: origin + SIMD3<Float>( 0.16, 0.10, 0.03), size: SIMD3<Float>(0.14, 0.24, 0.15), material: suit)
+        // 🤿 Scuba Diving Flippers / Boots
+        addBox(center: origin + SIMD3<Float>(-0.16, 0.02, 0.16), size: SIMD3<Float>(0.17, 0.05, 0.36), material: flipperMat)
+        addBox(center: origin + SIMD3<Float>( 0.16, 0.02, 0.16), size: SIMD3<Float>(0.17, 0.05, 0.36), material: flipperMat)
 
         if eyes {
             addSphere(center: origin + SIMD3<Float>(-0.11, 1.60, 0.29), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
@@ -455,7 +478,7 @@ private struct RTMeshBuilder {
         if holdsTool {
             let tool = RTMaterial(color: SIMD3<Float>(0.055, 0.060, 0.065), roughness: 0.34, reflectivity: 0.10)
             addBox(
-                center: origin + SIMD3<Float>(0.47, 0.72, 0.22),
+                center: origin + SIMD3<Float>(0.47, 0.65, 0.28),
                 size: SIMD3<Float>(0.14, 0.16, 0.42),
                 material: tool
             )
@@ -2054,8 +2077,22 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     }
 
     private func writeInstanceDescriptors() {
+        let isSubterraneanSubmerged = playerPosition.y <= -3.0
         let isMirrorActive = (heldTool == .mirror && mirrorActiveRemaining > 0)
-        let pPitch: Float = isSlidingOnToboggan ? 0.65 : 0
+        let pPitch: Float
+        if isSubterraneanSubmerged {
+            // 🏊 Super Mario Diving Pitch: Horizontal swimming orientation (-70 deg pitch!)
+            pPitch = -1.22
+        } else if isCoverActive {
+            // 🛡️ GTA Crouch Cover Pitch: Forward crouch tilt (+25 deg pitch!)
+            pPitch = 0.44
+        } else if isSlidingOnToboggan {
+            // 🛷 Toboggan Sitting Pitch: Backwards sit tilt (-35 deg pitch!)
+            pPitch = -0.62
+        } else {
+            pPitch = 0
+        }
+
         let pPos: SIMD3<Float> = isSlidingOnToboggan ? playerPosition + SIMD3<Float>(0, -0.15, 0) : playerPosition
         let effYaw = playerYaw + shieldYawOffset
         let effPitch = pPitch + shieldPitchOffset
