@@ -1098,10 +1098,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             let pCenter = SIMD2<Float>(playerPosition.x, playerPosition.z)
             var awayDir = pCenter - rCenter
             if simd_length_squared(awayDir) > 0.0001 { awayDir = simd_normalize(awayDir) } else { awayDir = SIMD2<Float>(0, 1) }
-            let coverPos = rCenter + awayDir * (rock.radii.x + 0.35)
+            let coverPos = rCenter + awayDir * (rock.radii.x + 0.38)
             playerPosition.x = coverPos.x
             playerPosition.z = coverPos.y
-            playerPosition.y = max(currentGroundHeight, rock.center.y + rock.radii.y - 0.45)
+            // 🛡️ Crouch Cover: Agacharse pegado al suelo detrás de la piedra (Y = groundHeight + 0.15m)
+            playerPosition.y = currentGroundHeight + 0.15
             horizontalVelocity *= exp(-dt * 6.0)
         }
 
@@ -1530,7 +1531,26 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 let playerTarget = playerPosition + SIMD3<Float>(0, 1.10, 0)
                 let bTotalDist = max(0.001, simd_distance(botHandOrigin, playerTarget))
                 let bDir = simd_normalize(playerTarget - botHandOrigin)
-                let bEndActual = botHandOrigin + bDir * bTotalDist
+
+                // 🪨 Check Rock Cover Oclusion (El láser de bot NO atraviesa las piedras)
+                var closestHitDist: Float = bTotalDist
+                var hitRock = false
+                for rock in rtRiverRocks {
+                    let center = rock.center
+                    let radius = max(rock.radii.x, rock.radii.z)
+                    let toCenter = center - botHandOrigin
+                    let proj = simd_dot(toCenter, bDir)
+                    if proj > 0.1 && proj < closestHitDist {
+                        let closestPointOnRay = botHandOrigin + bDir * proj
+                        let distToRock = simd_distance(center, closestPointOnRay)
+                        if distToRock < (radius + 0.35) {
+                            closestHitDist = proj - 0.2
+                            hitRock = true
+                        }
+                    }
+                }
+
+                let bEndActual = botHandOrigin + bDir * closestHitDist
                 let bProgress: Float = 1.0
                 let startVec = SIMD4<Float>(botHandOrigin, 1.0)
                 var endVec: SIMD4<Float> = .zero
@@ -1585,8 +1605,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     endVec = SIMD4<Float>(reflectedHitEnd, 1.0)
                 } else {
                     endVec = SIMD4<Float>(bEndActual, 1.0)
-                    // Damage only applies when photon front reaches player AND bot is actually aligned
-                    if bProgress >= 1.0 {
+                    // Damage only applies when photon front reaches player AND bot is actually aligned AND NO ROCK OBSTRUCTS
+                    if bProgress >= 1.0 && !hitRock {
                         let aimRay = simd_normalize(botAimTargets[index] - botHandOrigin)
                         let playerRay = simd_normalize(playerTarget - botHandOrigin)
                         let aimAlignment = simd_dot(aimRay, playerRay)
@@ -1895,8 +1915,12 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private func writeUniforms(texture: MTLTexture, dt: Float) {
         let currentlyInPool = isInsidePoolXZ(playerPosition) && playerPosition.y > -3.0
         let targetOffsetY: Float
-        if currentlyInPool && cameraMode == .thirdPerson {
+        if isCoverActive {
+            targetOffsetY = (cameraMode == .firstPerson ? 0.70 : 0.60)
+        } else if currentlyInPool && cameraMode == .thirdPerson {
             targetOffsetY = max(1.35, 1.10 - playerPosition.y * 0.5)
+        } else if playerPosition.y <= -3.0 {
+            targetOffsetY = (cameraMode == .firstPerson ? 1.25 : 0.85)
         } else {
             targetOffsetY = (cameraMode == .firstPerson ? 1.56 : 1.10)
         }
