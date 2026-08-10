@@ -727,6 +727,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     }
 
     private var isSlowMotionActive = false
+    private var isWaterDisturbanceQueued = false
+    private var lakituPosition: SIMD3<Float> = SIMD3<Float>(0, 2.5, 5)
     private var isGamePaused = false
     private var isCoverActive = false
     private var shieldYawOffset: Float = 0
@@ -1922,28 +1924,39 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             cameraPosition = smoothedCameraTarget + viewForward * 0.38
             fieldOfView = 72
         } else {
-            // Over-The-Shoulder Modern TPS Camera (Pushes player body off to left side, clearing crosshair view!)
-            let distance: Float = 5.2
-            let horizontalDistance = cos(orbitPitch) * distance
+            // ☁️ 🐢 Super Mario 64 Lakitu Cloud Camera (Elevated trailing over right shoulder with organic cloud lag!)
             let isSubterraneanTarget = playerPosition.y <= -3.0
-            let minY: Float = isSubterraneanTarget ? -8.2 : 0.38
-            let maxY: Float = isSubterraneanTarget ? -3.1 : 35.0
-            let calcY = min(maxY, max(minY, smoothedCameraTarget.y + sin(orbitPitch) * distance))
-            let basePos = SIMD3<Float>(
-                smoothedCameraTarget.x + sin(cameraYaw) * horizontalDistance,
-                calcY,
-                smoothedCameraTarget.z + cos(cameraYaw) * horizontalDistance
-            )
-            // Shift camera right (+0.48m) and slightly up (+0.12m) over right shoulder
-            let otsPos = basePos + rawRight * 0.48 + SIMD3<Float>(0, 0.12, 0)
-            let aimTarget = smoothedCameraTarget + viewForward * 16.0
-            
-            var clampedPos = otsPos
-            clampedPos.x = max(-17.2, min(17.2, clampedPos.x))
-            clampedPos.z = max(-17.2, min(17.2, clampedPos.z))
-            cameraPosition = clampedPos
+            let distance: Float = 4.6
+            let shoulderOffset: Float = 0.45
+            let heightOffset: Float = isSubterraneanTarget ? 1.15 : 1.75
+
+            let horizontalDist = cos(orbitPitch) * distance
+            let lakituTargetY = isSubterraneanTarget ?
+                max(-7.8, min(-3.1, smoothedCameraTarget.y + heightOffset + sin(orbitPitch) * distance)) :
+                max(0.42, smoothedCameraTarget.y + heightOffset + sin(orbitPitch) * distance)
+
+            let idealLakituPos = SIMD3<Float>(
+                smoothedCameraTarget.x + sin(cameraYaw) * horizontalDist,
+                lakituTargetY,
+                smoothedCameraTarget.z + cos(cameraYaw) * horizontalDist
+            ) + rawRight * shoulderOffset
+
+            // Organic Lakitu Cloud Spring-Damped Trailing ("Lakitu Lag")
+            let lagFactor = exp(-dt * 6.5)
+            if simd_distance_squared(lakituPosition, idealLakituPos) > 400.0 {
+                lakituPosition = idealLakituPos
+            } else {
+                lakituPosition = mix(idealLakituPos, lakituPosition, t: lagFactor)
+            }
+
+            var clampedLakituPos = lakituPosition
+            clampedLakituPos.x = max(-17.2, min(17.2, clampedLakituPos.x))
+            clampedLakituPos.z = max(-17.2, min(17.2, clampedLakituPos.z))
+
+            let aimTarget = smoothedCameraTarget + viewForward * 16.0 + SIMD3<Float>(0, 0.45, 0)
+            cameraPosition = clampedLakituPos
             cameraForward = simd_normalize(aimTarget - cameraPosition)
-            fieldOfView = 58
+            fieldOfView = 62
         }
 
         var right = simd_cross(cameraForward, SIMD3<Float>(0, 1, 0))

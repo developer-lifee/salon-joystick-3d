@@ -155,7 +155,15 @@ struct ContentView: View {
             ZStack(alignment: .bottomLeading) {
                 MetalGameView(model: model)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .ignoresSafeArea()
+                    .ignoresSafeArea(.all)
+                    .overlay {
+                        if model.isDefeated {
+                            DefeatOverlayView(onRespawn: {
+                                model.respawnPlayer()
+                            })
+                            .transition(.opacity)
+                        }
+                    }
 
                 if model.gameState == .mainMenu {
                     MainMenuView(model: model, showsCoffeeStore: $showsCoffeeStore)
@@ -749,13 +757,6 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showsCoffeeStore) {
                 CoffeeTipView()
-            }
-            if model.isDefeated {
-                DefeatOverlayView(onRespawn: {
-                    model.respawnPlayer()
-                })
-                .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                .zIndex(100)
             }
         }
     }
