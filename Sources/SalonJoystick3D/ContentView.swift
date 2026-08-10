@@ -2644,6 +2644,7 @@ final class ChiptuneAudioEngine {
     private var splashBuffers: [AVAudioPCMBuffer] = []
     private var landingBuffers: [AVAudioPCMBuffer] = []
     private var laserIgnitionBuffer: AVAudioPCMBuffer?
+    private var robloxOofBuffer: AVAudioPCMBuffer?
     private var nextSplash = 0
     private var nextLanding = 0
     private var nodesAttached = false
@@ -2701,6 +2702,7 @@ final class ChiptuneAudioEngine {
                 ].compactMap { $0 }
                 landingBuffers = [makeLandingBuffer(variant: 0), makeLandingBuffer(variant: 1)].compactMap { $0 }
                 laserIgnitionBuffer = makeLaserIgnitionBuffer()
+                robloxOofBuffer = makeRobloxOofBuffer()
             }
 
             let session = AVAudioSession.sharedInstance()
@@ -2797,32 +2799,12 @@ final class ChiptuneAudioEngine {
     func playRobloxOofDefeatSound() {
         audioQueue.async { [weak self] in
             guard let self, self.started, self.effectsEnabled else { return }
-            let sampleRate: Double = 44100.0
-            let duration: Double = 0.28
-            let sampleCount = Int(sampleRate * duration)
-
-            guard let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1),
-                  let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(sampleCount)) else { return }
-            buffer.frameLength = AVAudioFrameCount(sampleCount)
-
-            if let channels = buffer.floatChannelData {
-                let data = channels[0]
-                for i in 0..<sampleCount {
-                    let t = Double(i) / sampleRate
-                    let progress = t / duration
-                    // Iconic Roblox OOF pitch drop frequency slide (240 Hz -> 85 Hz)
-                    let freq = 240.0 * exp(-progress * 1.6)
-                    let phase = 2.0 * Double.pi * freq * t
-                    let envelope = sin(progress * Double.pi) * exp(-progress * 1.8)
-                    let wave = (sin(phase) + 0.35 * sin(phase * 2.0) + 0.15 * sin(phase * 3.0)) * envelope
-                    data[i] = Float(wave * 0.90)
+            if let robloxOofBuffer = self.robloxOofBuffer {
+                self.effectsNode.volume = 1.0
+                self.effectsNode.scheduleBuffer(robloxOofBuffer)
+                if !self.effectsNode.isPlaying {
+                    self.effectsNode.play()
                 }
-            }
-
-            self.effectsNode.volume = 1.0
-            self.effectsNode.scheduleBuffer(buffer)
-            if !self.effectsNode.isPlaying {
-                self.effectsNode.play()
             }
         }
     }
@@ -2856,7 +2838,7 @@ final class ChiptuneAudioEngine {
     }
 
     private func makeLaserIgnitionBuffer() -> AVAudioPCMBuffer? {
-        let duration = 0.45
+        let duration = 0.42
         let frameCount = AVAudioFrameCount(format.sampleRate * duration)
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
               let channels = buffer.floatChannelData else {
@@ -2867,17 +2849,34 @@ final class ChiptuneAudioEngine {
         for frame in 0..<Int(frameCount) {
             let time = Double(frame) / format.sampleRate
             let progress = time / duration
-            let frequency = 950.0 - progress * 710.0 + sin(time * 120.0) * 45.0
-            let phase = 2.0 * Double.pi * frequency * time
-            let attack = min(1.0, time / 0.008)
-            let decay = exp(-time * 5.2)
-            let buzz = (sin(phase) + sin(phase * 2.0) * 0.35 + sin(phase * 3.0) * 0.18) * attack * decay * 0.28
-            let sample = Float(buzz)
-
-            channels[0][frame] = sample
-            channels[1][frame] = sample
+            let pitchEnv = 1.0 + exp(-progress * 9.0) * 1.8
+            let baseFreq = (420.0 + sin(time * 65.0) * 45.0) * pitchEnv
+            let phase = 2.0 * Double.pi * baseFreq * time
+            let envelope = sin(progress * Double.pi) * exp(-progress * 2.2)
+            let synth = sin(phase) * 0.55 + (sin(phase * 2.0) * 0.28)
+            channels[0][frame] = Float(synth * envelope * 0.70)
         }
+        return buffer
+    }
 
+    private func makeRobloxOofBuffer() -> AVAudioPCMBuffer? {
+        let duration = 0.28
+        let frameCount = AVAudioFrameCount(format.sampleRate * duration)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
+              let channels = buffer.floatChannelData else {
+            return nil
+        }
+        buffer.frameLength = frameCount
+
+        for frame in 0..<Int(frameCount) {
+            let t = Double(frame) / format.sampleRate
+            let progress = t / duration
+            let freq = 240.0 * exp(-progress * 1.6)
+            let phase = 2.0 * Double.pi * freq * t
+            let envelope = sin(progress * Double.pi) * exp(-progress * 1.8)
+            let wave = (sin(phase) + 0.35 * sin(phase * 2.0) + 0.15 * sin(phase * 3.0)) * envelope
+            channels[0][frame] = Float(wave * 0.85)
+        }
         return buffer
     }
 
@@ -3687,63 +3686,70 @@ struct DefeatOverlayView: View {
 
     var body: some View {
         ZStack {
-            // Ambient subtle translucent vignette (100% translucent, showing 3D scene beneath)
-            Color.black.opacity(0.35)
+            // Dark translucent overlay over the 3D scene
+            Color.black.opacity(0.65)
                 .ignoresSafeArea()
-
-            RadialGradient(
-                colors: [Color.red.opacity(0.32), Color.black.opacity(0.55)],
-                center: .center,
-                startRadius: 50,
-                endRadius: 650
-            )
-            .ignoresSafeArea()
 
             VStack(spacing: 28) {
                 Spacer()
 
-                // 👻 Snapchat-Style Translucent Text Overlay Banner
+                // Centered GTA V / Snapchat Translucent Banner
                 ZStack {
-                    // Snapchat semi-transparent black horizontal banner strip
                     Rectangle()
-                        .fill(Color.black.opacity(0.58))
-                        .frame(height: 110)
+                        .fill(Color.black.opacity(0.85))
+                        .overlay(
+                            VStack {
+                                Rectangle()
+                                    .fill(LinearGradient(colors: [.red, .orange, .red], startPoint: .leading, endPoint: .trailing))
+                                    .frame(height: 2.5)
+                                Spacer()
+                                Rectangle()
+                                    .fill(LinearGradient(colors: [.red, .orange, .red], startPoint: .leading, endPoint: .trailing))
+                                    .frame(height: 2.5)
+                            }
+                        )
+                        .frame(height: 125)
 
-                    VStack(spacing: 4) {
+                    VStack(spacing: 6) {
                         Text("MORIDO :v")
-                            .font(.system(size: 38, weight: .bold, design: .default))
-                            .tracking(2)
-                            .foregroundStyle(.white)
-                            .shadow(color: .black.opacity(0.8), radius: 3, x: 0, y: 1)
-                            .scaleEffect(animateIn ? 1.0 : 0.85)
+                            .font(.system(size: 44, weight: .black, design: .rounded))
+                            .tracking(3)
+                            .foregroundStyle(
+                                LinearGradient(colors: [.white, Color(red: 1.0, green: 0.28, blue: 0.28), .orange], startPoint: .top, endPoint: .bottom)
+                            )
+                            .shadow(color: .red, radius: 14)
+                            .shadow(color: .black, radius: 4, x: 2, y: 2)
+                            .scaleEffect(animateIn ? 1.0 : 0.7)
 
                         Text("OLEADA RESTABLECIDA A OLEADA 1")
-                            .font(.system(size: 12, weight: .semibold, design: .default))
-                            .tracking(1.5)
-                            .foregroundStyle(.white.opacity(0.85))
+                            .font(.system(size: 13, weight: .bold, design: .monospaced))
+                            .tracking(2)
+                            .foregroundStyle(.white.opacity(0.92))
+                            .shadow(color: .black, radius: 3)
                     }
-                    .padding(.horizontal, 20)
                 }
 
-                // Snapchat-style Translucent Action Button
                 Button(action: onRespawn) {
                     HStack(spacing: 8) {
                         Image(systemName: "arrow.counterclockwise.circle.fill")
-                            .font(.body)
+                            .font(.title3)
                         Text("REINTENTAR (OLEADA 1)")
-                            .font(.system(size: 14, weight: .bold, design: .default))
+                            .font(.system(size: 15, weight: .black, design: .rounded))
                     }
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
-                    .background(Color.black.opacity(0.60), in: Capsule())
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 14)
+                    .background(Color.black.opacity(0.80), in: Capsule())
                     .overlay(
                         Capsule()
-                            .stroke(Color.white.opacity(0.60), lineWidth: 1.0)
+                            .stroke(
+                                LinearGradient(colors: [.white.opacity(0.8), .orange.opacity(0.8)], startPoint: .top, endPoint: .bottom),
+                                lineWidth: 1.5
+                            )
                     )
-                    .shadow(color: .black.opacity(0.4), radius: 8)
+                    .shadow(color: .red.opacity(0.5), radius: 12)
                 }
-                .scaleEffect(animateIn ? 1.0 : 0.9)
+                .scaleEffect(animateIn ? 1.0 : 0.85)
 
                 Spacer()
             }
@@ -3751,7 +3757,7 @@ struct DefeatOverlayView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea()
         .onAppear {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.70)) {
                 animateIn = true
             }
         }
