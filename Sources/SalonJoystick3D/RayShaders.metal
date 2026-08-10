@@ -842,21 +842,26 @@ kernel void raytracePatio(
         accumulated += float3(9.5f, 0.08f, 0.02f) * (botBeam * 0.95f);
     }
 
-    // 🌊 Subterranean Underwater Volumetric Fog & Caustics Shading (Crystal Clear)
+    // 🌊 🍄 Super Mario Bros / Mario 64 Style Organic Aquatic World Shimmer & Soft God Rays
     if (uniforms.cameraPosition.y <= -3.0f) {
-        float fogDensity = 1.0f - exp(-firstSurfaceDistance * 0.05f);
-        float3 underwaterFogColor = float3(0.01f, 0.18f, 0.28f);
+        float distanceFog = 1.0f - exp(-firstSurfaceDistance * 0.035f);
+        float3 marioWaterColor = float3(0.02f, 0.22f, 0.35f);
 
         float hitX = uniforms.cameraPosition.x + primaryDirection.x * firstSurfaceDistance;
         float hitZ = uniforms.cameraPosition.z + primaryDirection.z * firstSurfaceDistance;
+        float simT = uniforms.waterSimulation.x * 2.2f;
 
-        float c1 = sin(hitX * 1.8f + uniforms.waterSimulation.x * 3.5f) * cos(hitZ * 1.8f + uniforms.waterSimulation.x * 2.8f);
-        float c2 = cos(hitX * 3.2f - uniforms.waterSimulation.x * 2.4f) * sin(hitZ * 3.2f + uniforms.waterSimulation.x * 3.2f);
-        float caustics = saturate((c1 + c2) * 0.45f + 0.5f);
+        // Smooth continuous organic wave shimmer (Mario 64 water surface refraction!)
+        float w1 = sin(hitX * 0.45f + hitZ * 0.35f + simT);
+        float w2 = sin(hitX * 0.75f - hitZ * 0.65f - simT * 1.4f);
+        float waveShimmer = saturate((w1 + w2) * 0.25f + 0.50f);
 
-        float3 causticsGlow = float3(0.04f, 0.35f, 0.48f) * caustics * 0.35f;
-        accumulated += causticsGlow;
-        accumulated = mix(accumulated, underwaterFogColor * 1.1f, clamp(fogDensity, 0.0f, 0.28f));
+        // Soft aquatic sunbeam caustics (God Rays)
+        float sunRays = saturate(pow(waveShimmer, 3.0f) * 0.40f);
+        float3 waterGlow = float3(0.05f, 0.42f, 0.58f) * (0.20f + sunRays * 0.35f);
+
+        accumulated += waterGlow;
+        accumulated = mix(accumulated, marioWaterColor, clamp(distanceFog, 0.0f, 0.35f));
     }
 
     output.write(half4(half3(toneMap(clamp(accumulated, 0.0f, 96.0f))), half(1.0f)), tid);

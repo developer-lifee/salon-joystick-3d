@@ -3759,71 +3759,76 @@ struct DefeatOverlayView: View {
 
     var body: some View {
         ZStack {
-            // Dark translucent overlay over the 3D scene
-            Color.black.opacity(0.65)
+            // Ultra-subtle liquid glass tint (crystal clear background so 3D scene shines through!)
+            Color.black.opacity(0.28)
                 .ignoresSafeArea(.all)
 
             VStack {
                 Spacer()
 
-                // Centered GTA V / Snapchat Translucent Banner
+                // 💎 Liquid Glass Translucent Banner (Crystalline, Frosted Glass Aesthetic)
                 ZStack {
-                    Rectangle()
-                        .fill(Color.black.opacity(0.85))
+                    // Glassmorphic translucent layer
+                    RoundedRectangle(cornerRadius: 0)
+                        .fill(Color.white.opacity(0.14))
+                        .background(Color.black.opacity(0.32))
                         .overlay(
                             VStack {
                                 Rectangle()
-                                    .fill(LinearGradient(colors: [.red, .orange, .red], startPoint: .leading, endPoint: .trailing))
-                                    .frame(height: 2.5)
+                                    .fill(LinearGradient(colors: [.white.opacity(0.9), .cyan.opacity(0.8), .red.opacity(0.9)], startPoint: .leading, endPoint: .trailing))
+                                    .frame(height: 1.5)
                                 Spacer()
                                 Rectangle()
-                                    .fill(LinearGradient(colors: [.red, .orange, .red], startPoint: .leading, endPoint: .trailing))
-                                    .frame(height: 2.5)
+                                    .fill(LinearGradient(colors: [.red.opacity(0.9), .orange.opacity(0.8), .white.opacity(0.9)], startPoint: .leading, endPoint: .trailing))
+                                    .frame(height: 1.5)
                             }
                         )
-                        .frame(height: 125)
+                        .shadow(color: .white.opacity(0.15), radius: 10)
+                        .frame(height: 120)
 
                     VStack(spacing: 6) {
                         Text("MORIDO :v")
-                            .font(.system(size: 44, weight: .black, design: .rounded))
-                            .tracking(3)
+                            .font(.system(size: 46, weight: .black, design: .rounded))
+                            .tracking(4)
                             .foregroundStyle(
-                                LinearGradient(colors: [.white, Color(red: 1.0, green: 0.28, blue: 0.28), .orange], startPoint: .top, endPoint: .bottom)
+                                LinearGradient(colors: [.white, Color(red: 1.0, green: 0.35, blue: 0.35), .orange], startPoint: .top, endPoint: .bottom)
                             )
-                            .shadow(color: .red, radius: 14)
-                            .shadow(color: .black, radius: 4, x: 2, y: 2)
-                            .scaleEffect(animateIn ? 1.0 : 0.7)
+                            .shadow(color: .red.opacity(0.9), radius: 16)
+                            .shadow(color: .black.opacity(0.8), radius: 4, x: 2, y: 2)
+                            .scaleEffect(animateIn ? 1.0 : 0.75)
 
                         Text("OLEADA RESTABLECIDA A OLEADA 1")
                             .font(.system(size: 13, weight: .bold, design: .monospaced))
-                            .tracking(2)
-                            .foregroundStyle(.white.opacity(0.92))
-                            .shadow(color: .black, radius: 3)
+                            .tracking(2.5)
+                            .foregroundStyle(.white.opacity(0.95))
+                            .shadow(color: .black.opacity(0.6), radius: 3)
                     }
                 }
                 .frame(maxWidth: .infinity)
 
-                Spacer().frame(height: 24)
+                Spacer().frame(height: 28)
 
+                // Liquid Glass Action Capsule Button
                 Button(action: onRespawn) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 10) {
                         Image(systemName: "arrow.counterclockwise.circle.fill")
-                            .font(.title3)
+                            .font(.title2)
                         Text("REINTENTAR (OLEADA 1)")
                             .font(.system(size: 15, weight: .black, design: .rounded))
                     }
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 28)
+                    .padding(.horizontal, 30)
                     .padding(.vertical, 14)
-                    .background(Color.black.opacity(0.80), in: Capsule())
+                    .background(Color.black.opacity(0.45), in: Capsule())
+                    .background(Color.white.opacity(0.18), in: Capsule())
                     .overlay(
                         Capsule()
                             .stroke(
-                                LinearGradient(colors: [.white.opacity(0.8), .orange.opacity(0.8)], startPoint: .top, endPoint: .bottom),
+                                LinearGradient(colors: [.white.opacity(0.9), .cyan.opacity(0.6), .white.opacity(0.4)], startPoint: .topLeading, endPoint: .bottomTrailing),
                                 lineWidth: 1.5
                             )
                     )
-                    .shadow(color: .red.opacity(0.5), radius: 12)
+                    .shadow(color: .white.opacity(0.3), radius: 12)
                 }
                 .scaleEffect(animateIn ? 1.0 : 0.85)
 
