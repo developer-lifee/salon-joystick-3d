@@ -3321,136 +3321,7 @@ struct TacticalRemoteControllerView: View {
     }
 }
 
-struct MainMenuView: View {
-    @ObservedObject var model: GameModel
-    @Binding var showsCoffeeStore: Bool
 
-    var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [.black.opacity(0.92), .black.opacity(0.70), .black.opacity(0.95)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-
-            GeometryReader { proxy in
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 0) {
-                        Spacer(minLength: 32)
-
-                        VStack(spacing: 8) {
-                            Text("LASER TRACER 3D")
-                                .font(.system(size: 40, weight: .black, design: .rounded))
-                                .minimumScaleFactor(0.55)
-                                .lineLimit(1)
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [.cyan, .blue, .purple],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .shadow(color: .cyan.opacity(0.9), radius: 18)
-
-                            Text("METAL RAY TRACING COMBAT & DEFENSIVE SHIELD")
-                                .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                .minimumScaleFactor(0.55)
-                                .lineLimit(1)
-                                .foregroundStyle(.white.opacity(0.80))
-                                .tracking(2.5)
-                        }
-                        .padding(.horizontal, 24)
-
-                        Spacer(minLength: 40)
-
-                        VStack(spacing: 16) {
-                            Button {
-                                model.startGame()
-                            } label: {
-                                HStack(spacing: 14) {
-                                    Image(systemName: "play.fill")
-                                        .font(.title3.bold())
-                                    Text("JUGAR EN SOLITARIO")
-                                        .font(.headline.bold())
-                                }
-                                .foregroundStyle(.white)
-                                .frame(maxWidth: 340, minHeight: 56)
-                                .background(
-                                    LinearGradient(colors: [.blue, .cyan], startPoint: .leading, endPoint: .trailing),
-                                    in: RoundedRectangle(cornerRadius: 18)
-                                )
-                                .shadow(color: .cyan.opacity(0.65), radius: 12)
-                            }
-                            .buttonStyle(.plain)
-
-                            Button {
-                                model.showsMultiplayerSheet = true
-                            } label: {
-                                HStack(spacing: 14) {
-                                    Image(systemName: "person.2.fill")
-                                        .font(.title3.bold())
-                                    Text("MULTIJUGADOR LOCAL")
-                                        .font(.headline.bold())
-                                }
-                                .foregroundStyle(.white)
-                                .frame(maxWidth: 340, minHeight: 56)
-                                .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 18))
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 18)
-                                        .stroke(Color.white.opacity(0.35), lineWidth: 1.5)
-                                }
-                            }
-                            .buttonStyle(.plain)
-
-                            Button {
-                                showsCoffeeStore = true
-                            } label: {
-                                HStack(spacing: 14) {
-                                    Text("☕️")
-                                        .font(.title3)
-                                    Text("INVITAR UN CAFÉ")
-                                        .font(.headline.bold())
-                                }
-                                .foregroundStyle(.yellow)
-                                .frame(maxWidth: 340, minHeight: 56)
-                                .background(Color.yellow.opacity(0.15), in: RoundedRectangle(cornerRadius: 18))
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 18)
-                                        .stroke(Color.yellow.opacity(0.65), lineWidth: 1.5)
-                                }
-                            }
-                            .buttonStyle(.plain)
-
-                            Button {
-                                model.showsSettingsSheet = true
-                            } label: {
-                                HStack(spacing: 12) {
-                                    Image(systemName: "gearshape.fill")
-                                        .font(.subheadline.bold())
-                                    Text("AJUSTES DE GRÁFICOS Y CÁMARA")
-                                        .font(.subheadline.bold())
-                                }
-                                .foregroundStyle(.white.opacity(0.85))
-                                .frame(maxWidth: 340, minHeight: 48)
-                                .background(Color.black.opacity(0.50), in: RoundedRectangle(cornerRadius: 16))
-                            }
-                            .buttonStyle(.plain)
-                        }
-
-                        Spacer(minLength: 40)
-
-                        Text("LASER TRACER 3D • METAL RAY TRACING ENGINE")
-                            .font(.caption2.monospaced().bold())
-                            .foregroundStyle(.white.opacity(0.45))
-                            .padding(.bottom, 24)
-                    }
-                    .frame(minHeight: proxy.size.height)
-                }
-            }
-        }
-    }
-}
 
 struct PauseMenuView: View {
     @ObservedObject var model: GameModel
@@ -3752,6 +3623,184 @@ struct MirrorShieldJoystickButton: View {
     }
 }
 
+struct MainMenuView: View {
+    @ObservedObject var model: GameModel
+    @Binding var showsCoffeeStore: Bool
+
+    var body: some View {
+        ZStack {
+            // Ultra-subtle liquid glass background (3D raytraced patio shining through!)
+            Color.black.opacity(0.40)
+                .ignoresSafeArea()
+
+            GeometryReader { proxy in
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        Spacer(minLength: 32)
+
+                        //  iOS 18 Liquid Glass Title Card
+                        VStack(spacing: 8) {
+                            Text("LASER TRACER 3D")
+                                .font(.system(size: 42, weight: .black, design: .rounded))
+                                .minimumScaleFactor(0.55)
+                                .lineLimit(1)
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [.white, .cyan, .purple],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .shadow(color: .cyan.opacity(0.9), radius: 18)
+
+                            Text("METAL RAY TRACING COMBAT & DEFENSIVE SHIELD")
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .minimumScaleFactor(0.55)
+                                .lineLimit(1)
+                                .foregroundStyle(.white.opacity(0.90))
+                                .tracking(2.5)
+                        }
+                        .padding(.horizontal, 28)
+                        .padding(.vertical, 20)
+                        .background(
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 26)
+                                    .fill(Color.white.opacity(0.18))
+                                    .background(Color.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 26))
+
+                                RoundedRectangle(cornerRadius: 26)
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [.white.opacity(0.90), .cyan.opacity(0.60), .white.opacity(0.30)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 1.5
+                                    )
+                            }
+                        )
+                        .shadow(color: .cyan.opacity(0.30), radius: 16)
+                        .padding(.horizontal, 24)
+
+                        Spacer(minLength: 40)
+
+                        //  iOS 18 Control Center Liquid Glass Action Tiles
+                        VStack(spacing: 16) {
+                            Button {
+                                model.startGame()
+                            } label: {
+                                HStack(spacing: 14) {
+                                    Image(systemName: "play.fill")
+                                        .font(.title3.bold())
+                                    Text("JUGAR EN SOLITARIO")
+                                        .font(.headline.bold())
+                                }
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: 340, minHeight: 58)
+                                .background(
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: 22)
+                                            .fill(
+                                                LinearGradient(colors: [.blue.opacity(0.85), .cyan.opacity(0.85)], startPoint: .leading, endPoint: .trailing)
+                                            )
+                                        RoundedRectangle(cornerRadius: 22)
+                                            .stroke(Color.white.opacity(0.85), lineWidth: 1.5)
+                                    }
+                                )
+                                .shadow(color: .cyan.opacity(0.65), radius: 14)
+                            }
+                            .buttonStyle(.plain)
+
+                            Button {
+                                model.showsMultiplayerSheet = true
+                            } label: {
+                                HStack(spacing: 14) {
+                                    Image(systemName: "person.2.fill")
+                                        .font(.title3.bold())
+                                    Text("MULTIJUGADOR LOCAL")
+                                        .font(.headline.bold())
+                                }
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: 340, minHeight: 58)
+                                .background(
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: 22)
+                                            .fill(Color.white.opacity(0.18))
+                                            .background(Color.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 22))
+
+                                        RoundedRectangle(cornerRadius: 22)
+                                            .stroke(
+                                                LinearGradient(colors: [.white.opacity(0.90), .white.opacity(0.25)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                                                lineWidth: 1.2
+                                            )
+                                    }
+                                )
+                                .shadow(color: .black.opacity(0.3), radius: 10)
+                            }
+                            .buttonStyle(.plain)
+
+                            Button {
+                                showsCoffeeStore = true
+                            } label: {
+                                HStack(spacing: 14) {
+                                    Text("☕️")
+                                        .font(.title3)
+                                    Text("INVITAR UN CAFÉ")
+                                        .font(.headline.bold())
+                                }
+                                .foregroundStyle(.yellow)
+                                .frame(maxWidth: 340, minHeight: 58)
+                                .background(
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: 22)
+                                            .fill(Color.yellow.opacity(0.18))
+                                            .background(Color.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 22))
+
+                                        RoundedRectangle(cornerRadius: 22)
+                                            .stroke(
+                                                LinearGradient(colors: [.yellow.opacity(0.90), .orange.opacity(0.50)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                                                lineWidth: 1.2
+                                            )
+                                    }
+                                )
+                                .shadow(color: .yellow.opacity(0.40), radius: 10)
+                            }
+                            .buttonStyle(.plain)
+
+                            Button {
+                                model.showsSettingsSheet = true
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "gearshape.fill")
+                                        .font(.subheadline.bold())
+                                    Text("OPCIONES Y AJUSTES")
+                                        .font(.subheadline.bold())
+                                }
+                                .foregroundStyle(.white.opacity(0.90))
+                                .frame(maxWidth: 280, minHeight: 46)
+                                .background(
+                                    ZStack {
+                                        Capsule()
+                                            .fill(Color.white.opacity(0.15))
+                                            .background(Color.black.opacity(0.30), in: Capsule())
+
+                                        Capsule()
+                                            .stroke(Color.white.opacity(0.60), lineWidth: 1.0)
+                                    }
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        Spacer(minLength: 32)
+                    }
+                    .frame(minWidth: proxy.size.width, minHeight: proxy.size.height)
+                }
+            }
+        }
+    }
+}
+
 struct DefeatOverlayView: View {
     var onRespawn: () -> Void
 
@@ -3759,78 +3808,104 @@ struct DefeatOverlayView: View {
 
     var body: some View {
         ZStack {
-            // Ultra-subtle liquid glass tint (crystal clear background so 3D scene shines through!)
-            Color.black.opacity(0.28)
+            // Ultra-subtle liquid glass tint (100% crystal clear background so 3D scene shines through!)
+            Color.black.opacity(0.22)
                 .ignoresSafeArea(.all)
 
             VStack {
                 Spacer()
 
-                // 💎 Liquid Glass Translucent Banner (Crystalline, Frosted Glass Aesthetic)
-                ZStack {
-                    // Glassmorphic translucent layer
-                    RoundedRectangle(cornerRadius: 0)
-                        .fill(Color.white.opacity(0.14))
-                        .background(Color.black.opacity(0.32))
-                        .overlay(
-                            VStack {
-                                Rectangle()
-                                    .fill(LinearGradient(colors: [.white.opacity(0.9), .cyan.opacity(0.8), .red.opacity(0.9)], startPoint: .leading, endPoint: .trailing))
-                                    .frame(height: 1.5)
-                                Spacer()
-                                Rectangle()
-                                    .fill(LinearGradient(colors: [.red.opacity(0.9), .orange.opacity(0.8), .white.opacity(0.9)], startPoint: .leading, endPoint: .trailing))
-                                    .frame(height: 1.5)
-                            }
-                        )
-                        .shadow(color: .white.opacity(0.15), radius: 10)
-                        .frame(height: 120)
-
-                    VStack(spacing: 6) {
-                        Text("MORIDO :v")
-                            .font(.system(size: 46, weight: .black, design: .rounded))
-                            .tracking(4)
+                //  iOS 18 Focus Pill Liquid Glass Floating Banner Card
+                VStack(spacing: 8) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "moon.fill")
+                            .font(.system(size: 20, weight: .bold))
                             .foregroundStyle(
-                                LinearGradient(colors: [.white, Color(red: 1.0, green: 0.35, blue: 0.35), .orange], startPoint: .top, endPoint: .bottom)
+                                LinearGradient(colors: [.white, .cyan, .orange], startPoint: .topLeading, endPoint: .bottomTrailing)
                             )
-                            .shadow(color: .red.opacity(0.9), radius: 16)
-                            .shadow(color: .black.opacity(0.8), radius: 4, x: 2, y: 2)
-                            .scaleEffect(animateIn ? 1.0 : 0.75)
 
-                        Text("OLEADA RESTABLECIDA A OLEADA 1")
-                            .font(.system(size: 13, weight: .bold, design: .monospaced))
-                            .tracking(2.5)
-                            .foregroundStyle(.white.opacity(0.95))
-                            .shadow(color: .black.opacity(0.6), radius: 3)
+                        Text("MORIDO :v")
+                            .font(.system(size: 38, weight: .black, design: .rounded))
+                            .tracking(3)
+                            .foregroundStyle(
+                                LinearGradient(colors: [.white, Color(red: 1.0, green: 0.38, blue: 0.38), .orange], startPoint: .top, endPoint: .bottom)
+                            )
+                            .shadow(color: .red.opacity(0.8), radius: 12)
                     }
+
+                    Text("OLEADA RESTABLECIDA A OLEADA 1")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .tracking(2.0)
+                        .foregroundStyle(.white.opacity(0.92))
+                        .shadow(color: .black.opacity(0.7), radius: 3)
                 }
-                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 36)
+                .padding(.vertical, 18)
+                .background(
+                    ZStack {
+                        // Frosted liquid glass backdrop fill
+                        Capsule()
+                            .fill(Color.white.opacity(0.18))
+                            .background(Color.black.opacity(0.35), in: Capsule())
 
-                Spacer().frame(height: 28)
-
-                // Liquid Glass Action Capsule Button
-                Button(action: onRespawn) {
-                    HStack(spacing: 10) {
-                        Image(systemName: "arrow.counterclockwise.circle.fill")
-                            .font(.title2)
-                        Text("REINTENTAR (OLEADA 1)")
-                            .font(.system(size: 15, weight: .black, design: .rounded))
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 30)
-                    .padding(.vertical, 14)
-                    .background(Color.black.opacity(0.45), in: Capsule())
-                    .background(Color.white.opacity(0.18), in: Capsule())
-                    .overlay(
+                        // Inner Specular Glint & Highlights
                         Capsule()
                             .stroke(
-                                LinearGradient(colors: [.white.opacity(0.9), .cyan.opacity(0.6), .white.opacity(0.4)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.92),
+                                        Color.white.opacity(0.20),
+                                        Color.cyan.opacity(0.80),
+                                        Color.white.opacity(0.60)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
                                 lineWidth: 1.5
                             )
+                    }
+                )
+                .shadow(color: Color.black.opacity(0.35), radius: 16, x: 0, y: 6)
+                .shadow(color: Color.white.opacity(0.20), radius: 10, x: 0, y: 0)
+                .scaleEffect(animateIn ? 1.0 : 0.82)
+
+                Spacer().frame(height: 24)
+
+                //  iOS 18 Focus Pill Liquid Glass Action Button (Identical to Lock Screen Focus Pill in Image 3!)
+                Button(action: onRespawn) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.counterclockwise.circle.fill")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(.white)
+
+                        Text("REINTENTAR (OLEADA 1)")
+                            .font(.system(size: 13, weight: .black, design: .rounded))
+                            .tracking(1.5)
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
+                    .background(
+                        ZStack {
+                            Capsule()
+                                .fill(Color.white.opacity(0.22))
+                                .background(Color.black.opacity(0.40), in: Capsule())
+
+                            Capsule()
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [.white.opacity(0.95), .white.opacity(0.30), .orange.opacity(0.70)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1.2
+                                )
+                        }
                     )
-                    .shadow(color: .white.opacity(0.3), radius: 12)
+                    .shadow(color: .white.opacity(0.25), radius: 10, x: 0, y: 0)
+                    .shadow(color: .black.opacity(0.30), radius: 10, x: 0, y: 4)
                 }
-                .scaleEffect(animateIn ? 1.0 : 0.85)
+                .scaleEffect(animateIn ? 1.0 : 0.88)
 
                 Spacer()
             }
@@ -3845,5 +3920,3 @@ struct DefeatOverlayView: View {
         }
     }
 }
-
-
