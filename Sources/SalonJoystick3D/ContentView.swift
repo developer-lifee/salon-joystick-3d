@@ -360,9 +360,9 @@ struct ContentView: View {
                 .frame(width: 190)
                 .accessibilityLabel("Modo de cámara")
 
-                JoystickView { vector in
+                JoystickView(onChanged: { vector in
                     model.joystick = vector
-                }
+                }, isLiquidGlass: model.isLiquidGlassUIEnabled)
                 .frame(width: 168, height: 168)
             }
             .padding(14)
@@ -821,6 +821,7 @@ final class GameModel: ObservableObject {
     @Published private(set) var nearbyLight: GameLightFixture?
     @Published var showsFPS = false
     @Published var invertsCameraY = false
+    @AppStorage("isLiquidGlassUIEnabled") var isLiquidGlassUIEnabled: Bool = true
     @Published var musicEnabled = true {
         didSet { audio.setMusicEnabled(musicEnabled) }
     }
@@ -3119,6 +3120,7 @@ final class ChiptuneAudioEngine {
 
 struct JoystickView: View {
     var onChanged: (CGVector) -> Void
+    var isLiquidGlass: Bool = true
     @State private var knob = CGSize.zero
 
     var body: some View {
@@ -3128,14 +3130,37 @@ struct JoystickView: View {
             let knobRadius = size * 0.27
 
             ZStack {
-                Circle()
-                    .fill(.black.opacity(0.42))
-                Circle()
-                    .stroke(.white.opacity(0.3), lineWidth: 2)
-                Circle()
-                    .fill(.white.opacity(0.92))
-                    .frame(width: knobRadius * 2, height: knobRadius * 2)
-                    .offset(knob)
+                if isLiquidGlass {
+                    //  Apple Liquid Glass Translucent Outer Ring
+                    Circle()
+                        .fill(Color.white.opacity(0.18))
+                        .background(Color.black.opacity(0.35), in: Circle())
+                    Circle()
+                        .stroke(
+                            LinearGradient(
+                                colors: [.white.opacity(0.92), .cyan.opacity(0.60), .white.opacity(0.30)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.5
+                        )
+                    // Liquid Glass Knob
+                    Circle()
+                        .fill(Color.white.opacity(0.92))
+                        .overlay(Circle().stroke(Color.white, lineWidth: 1))
+                        .shadow(color: .white.opacity(0.50), radius: 8)
+                        .frame(width: knobRadius * 2, height: knobRadius * 2)
+                        .offset(knob)
+                } else {
+                    Circle()
+                        .fill(.black.opacity(0.42))
+                    Circle()
+                        .stroke(.white.opacity(0.3), lineWidth: 2)
+                    Circle()
+                        .fill(.white.opacity(0.92))
+                        .frame(width: knobRadius * 2, height: knobRadius * 2)
+                        .offset(knob)
+                }
             }
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -3636,6 +3661,10 @@ struct GameOptionsSheet: View {
 
                     Toggle("Invertir eje Y", isOn: $model.invertsCameraY)
                     Toggle("Mostrar contador de FPS", isOn: $model.showsFPS)
+                }
+
+                Section("Personalización Visual de la Interfaz") {
+                    Toggle("Tema Vidrio Líquido (Apple Liquid Glass)", isOn: $model.isLiquidGlassUIEnabled)
                 }
 
                 Section("Rendimiento Gráfico") {
