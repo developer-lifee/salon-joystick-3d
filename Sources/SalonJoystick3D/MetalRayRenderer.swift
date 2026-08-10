@@ -1563,7 +1563,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                                 reflectedHitEnd = closestPoint
                                 let damage: Float = 50.0
                                 npcHealths[targetIdx] = max(0, npcHealths[targetIdx] - damage)
-                                audio.playLanding(intensity: 0.85)
+                                audio.playLaserReflectionSound()
                                 onNPCHealthsUpdate?(npcHealths)
 
                                 if npcHealths[targetIdx] <= 0 {
@@ -1592,7 +1592,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                             botImpactAudioCooldowns[index] -= rawDt
                             if botImpactAudioCooldowns[index] <= 0 {
                                 botImpactAudioCooldowns[index] = 0.45
-                                audio.playLanding(intensity: 0.55)
+                                audio.playLaserPlayerHitSound()
                             }
                             accumulateDamage(12.0 * rawDt)
                         }
@@ -1637,7 +1637,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if let closestIndex {
             let damage: Float = 35.0
             npcHealths[closestIndex] = max(0, npcHealths[closestIndex] - damage)
-            audio.playLanding(intensity: 0.65)
+            audio.playLaserPlayerHitSound()
             onNPCHealthsUpdate?(npcHealths)
 
             if npcHealths[closestIndex] <= 0 {
@@ -1925,9 +1925,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             // Over-The-Shoulder Modern TPS Camera (Pushes player body off to left side, clearing crosshair view!)
             let distance: Float = 5.2
             let horizontalDistance = cos(orbitPitch) * distance
+            let isSubterraneanTarget = playerPosition.y <= -3.0
+            let minY: Float = isSubterraneanTarget ? -8.2 : 0.38
+            let maxY: Float = isSubterraneanTarget ? -3.1 : 35.0
+            let calcY = min(maxY, max(minY, smoothedCameraTarget.y + sin(orbitPitch) * distance))
             let basePos = SIMD3<Float>(
                 smoothedCameraTarget.x + sin(cameraYaw) * horizontalDistance,
-                max(0.38, smoothedCameraTarget.y + sin(orbitPitch) * distance),
+                calcY,
                 smoothedCameraTarget.z + cos(cameraYaw) * horizontalDistance
             )
             // Shift camera right (+0.48m) and slightly up (+0.12m) over right shoulder
@@ -1951,7 +1955,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let toolOrigin: SIMD3<Float>
         var toolDirection: SIMD3<Float>
         if cameraMode == .firstPerson {
-            toolOrigin = cameraPosition + right * 0.18 - up * 0.16 + cameraForward * 0.10
+            let forwardOffset: Float = cameraPosition.y <= -3.0 ? 0.32 : 0.10
+            toolOrigin = cameraPosition + right * 0.18 - up * 0.16 + cameraForward * forwardOffset
             toolDirection = cameraForward
         } else {
             let aimPoint = cameraPosition + cameraForward * 18.0

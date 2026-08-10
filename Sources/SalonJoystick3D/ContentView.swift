@@ -2644,6 +2644,8 @@ final class ChiptuneAudioEngine {
     private var splashBuffers: [AVAudioPCMBuffer] = []
     private var landingBuffers: [AVAudioPCMBuffer] = []
     private var laserIgnitionBuffer: AVAudioPCMBuffer?
+    private var laserPlayerHitBuffer: AVAudioPCMBuffer?
+    private var laserReflectionBuffer: AVAudioPCMBuffer?
     private var robloxOofBuffer: AVAudioPCMBuffer?
     private var nextSplash = 0
     private var nextLanding = 0
@@ -2702,6 +2704,8 @@ final class ChiptuneAudioEngine {
                 ].compactMap { $0 }
                 landingBuffers = [makeLandingBuffer(variant: 0), makeLandingBuffer(variant: 1)].compactMap { $0 }
                 laserIgnitionBuffer = makeLaserIgnitionBuffer()
+                laserPlayerHitBuffer = makeLaserPlayerHitBuffer()
+                laserReflectionBuffer = makeLaserReflectionBuffer()
                 robloxOofBuffer = makeRobloxOofBuffer()
             }
 
@@ -2796,6 +2800,32 @@ final class ChiptuneAudioEngine {
         }
     }
 
+    func playLaserPlayerHitSound() {
+        audioQueue.async { [weak self] in
+            guard let self, self.started, self.effectsEnabled else { return }
+            if let laserPlayerHitBuffer = self.laserPlayerHitBuffer {
+                self.effectsNode.volume = 0.95
+                self.effectsNode.scheduleBuffer(laserPlayerHitBuffer)
+                if !self.effectsNode.isPlaying {
+                    self.effectsNode.play()
+                }
+            }
+        }
+    }
+
+    func playLaserReflectionSound() {
+        audioQueue.async { [weak self] in
+            guard let self, self.started, self.effectsEnabled else { return }
+            if let laserReflectionBuffer = self.laserReflectionBuffer {
+                self.effectsNode.volume = 0.85
+                self.effectsNode.scheduleBuffer(laserReflectionBuffer)
+                if !self.effectsNode.isPlaying {
+                    self.effectsNode.play()
+                }
+            }
+        }
+    }
+
     func playRobloxOofDefeatSound() {
         audioQueue.async { [weak self] in
             guard let self, self.started, self.effectsEnabled else { return }
@@ -2855,6 +2885,48 @@ final class ChiptuneAudioEngine {
             let envelope = sin(progress * Double.pi) * exp(-progress * 2.2)
             let synth = sin(phase) * 0.55 + (sin(phase * 2.0) * 0.28)
             channels[0][frame] = Float(synth * envelope * 0.70)
+        }
+        return buffer
+    }
+
+    private func makeLaserPlayerHitBuffer() -> AVAudioPCMBuffer? {
+        let duration = 0.35
+        let frameCount = AVAudioFrameCount(format.sampleRate * duration)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
+              let channels = buffer.floatChannelData else {
+            return nil
+        }
+        buffer.frameLength = frameCount
+
+        for frame in 0..<Int(frameCount) {
+            let t = Double(frame) / format.sampleRate
+            let progress = t / duration
+            let freq = (650.0 - progress * 540.0) + sin(t * 180.0) * 60.0
+            let phase = 2.0 * Double.pi * freq * t
+            let envelope = sin(progress * Double.pi) * exp(-progress * 2.5)
+            let synth = (sin(phase) + 0.45 * sin(phase * 1.5) + 0.25 * sin(phase * 3.0)) * envelope
+            channels[0][frame] = Float(synth * 0.80)
+        }
+        return buffer
+    }
+
+    private func makeLaserReflectionBuffer() -> AVAudioPCMBuffer? {
+        let duration = 0.22
+        let frameCount = AVAudioFrameCount(format.sampleRate * duration)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
+              let channels = buffer.floatChannelData else {
+            return nil
+        }
+        buffer.frameLength = frameCount
+
+        for frame in 0..<Int(frameCount) {
+            let t = Double(frame) / format.sampleRate
+            let progress = t / duration
+            let freq = 1200.0 + progress * 1200.0
+            let phase = 2.0 * Double.pi * freq * t
+            let envelope = sin(progress * Double.pi) * exp(-progress * 3.0)
+            let synth = (sin(phase) + 0.30 * sin(phase * 2.0)) * envelope
+            channels[0][frame] = Float(synth * 0.75)
         }
         return buffer
     }
@@ -3688,9 +3760,9 @@ struct DefeatOverlayView: View {
         ZStack {
             // Dark translucent overlay over the 3D scene
             Color.black.opacity(0.65)
-                .ignoresSafeArea()
+                .ignoresSafeArea(.all)
 
-            VStack(spacing: 28) {
+            VStack {
                 Spacer()
 
                 // Centered GTA V / Snapchat Translucent Banner
@@ -3728,6 +3800,9 @@ struct DefeatOverlayView: View {
                             .shadow(color: .black, radius: 3)
                     }
                 }
+                .frame(maxWidth: .infinity)
+
+                Spacer().frame(height: 24)
 
                 Button(action: onRespawn) {
                     HStack(spacing: 8) {
@@ -3753,9 +3828,10 @@ struct DefeatOverlayView: View {
 
                 Spacer()
             }
+            .padding(.vertical, 20)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .ignoresSafeArea()
+        .ignoresSafeArea(.all)
         .onAppear {
             withAnimation(.spring(response: 0.45, dampingFraction: 0.70)) {
                 animateIn = true
