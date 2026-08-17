@@ -1799,8 +1799,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     }
 
     private func groundHeight(at position: SIMD3<Float>, insidePool: Bool) -> Float {
-        // 🏊‍♂️ Trampolín Ladder & Platform
-        if position.x >= 0.5 && position.x <= 2.2 && position.z >= -8.5 && position.z <= -4.2 {
+        // 🏊‍♂️ Trampolín Ladder & Platform (Solo activo fuera de la piscina)
+        if !insidePool && position.x >= 0.5 && position.x <= 2.2 && position.z >= -8.5 && position.z <= -4.2 {
             if position.z <= -6.8 {
                 let t = max(0, min(1, (position.z - (-8.5)) / (-6.8 - (-8.5))))
                 return t * 2.85
@@ -2100,7 +2100,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             cameraForward: SIMD4<Float>(cameraForward, 0),
             lightPosition: activeLightPos,
             lightColor: activeLightColor,
-            waterSimulation: SIMD4<Float>(dt, elapsedTime, cameraMode == .firstPerson ? 1 : 0, 0),
+            waterSimulation: SIMD4<Float>(dt, elapsedTime, cameraMode == .firstPerson ? 1 : 0, instanceAccelerationStructure != nil ? 1 : 0),
             waterImpulse: pendingWaterImpulse,
             toolOrigin: SIMD4<Float>(toolOrigin, 1),
             toolDirection: SIMD4<Float>(toolDirection, 0),

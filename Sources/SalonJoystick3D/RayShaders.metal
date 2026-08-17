@@ -645,6 +645,12 @@ kernel void raytracePatio(
             baseReflectivity = material.albedoReflectivity.w;
             roughness = material.normalRoughness.w;
         } else {
+            bool isHardwareRT = uniforms.waterSimulation.w > 0.5f;
+            if (isHardwareRT) {
+                accumulated += throughput * nightSky(currentRay.direction);
+                break;
+            }
+
             AnalyticalHit analytical = analyticalPatioIntersect(currentRay);
             // 🤖 3D Articulated Robot Fallback (Head, Torso, Backpack)
             for (uint b = 0; b < 5; ++b) {
