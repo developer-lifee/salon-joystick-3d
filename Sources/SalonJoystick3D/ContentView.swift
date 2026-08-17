@@ -238,12 +238,11 @@ struct ContentView: View {
             }
             .padding(12)
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(LinearGradient(colors: [.white.opacity(0.65), .white.opacity(0.12)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.2)
+                    .stroke(LinearGradient(colors: [.white.opacity(0.85), .white.opacity(0.25)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.2)
             )
-            .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 5)
+            .shadow(color: .black.opacity(0.20), radius: 8, x: 0, y: 4)
             .padding(.leading, 14)
             .padding(.top, 48)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -309,12 +308,11 @@ struct ContentView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
                     .background(.ultraThinMaterial, in: Capsule())
-                    .background(Color.black.opacity(0.25), in: Capsule())
                     .overlay(
                         Capsule()
-                            .stroke(LinearGradient(colors: [.white.opacity(0.70), .red.opacity(0.40)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.2)
+                            .stroke(LinearGradient(colors: [.white.opacity(0.85), .red.opacity(0.50)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.2)
                     )
-                    .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 5)
+                    .shadow(color: .black.opacity(0.20), radius: 8, x: 0, y: 4)
                 }
 
                 // Active 5 Mobile NPCs Health Meters HUD with Class Tiers
@@ -3964,8 +3962,8 @@ struct DefeatOverlayView: View {
                     ZStack {
                         // Frosted liquid glass backdrop fill
                         Capsule()
-                            .fill(Color.white.opacity(0.18))
-                            .background(Color.black.opacity(0.35), in: Capsule())
+                            .fill(Color.white.opacity(0.12))
+                            .background(.ultraThinMaterial, in: Capsule())
 
                         // Inner Specular Glint & Highlights
                         Capsule()

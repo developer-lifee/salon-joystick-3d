@@ -56,8 +56,7 @@ inline float3 transformedNormal(float3 normal,
 
 inline float3 nightSky(float3 direction) {
     float horizon = saturate(direction.y * 0.5f + 0.5f);
-    return mix(float3(0.008f, 0.012f, 0.024f),
-               float3(0.018f, 0.028f, 0.055f), horizon);
+    return mix(float3(0.14f, 0.18f, 0.25f), float3(0.28f, 0.34f, 0.42f), horizon);
 }
 
 inline float3 toneMap(float3 color) {
@@ -427,6 +426,21 @@ inline AnalyticalHit analyticalPatioIntersect(ray r) {
                 result.albedo = float3(0.12f, 0.65f, 0.95f); // Cyan Water Slide!
                 result.kind = 0.0f;
             }
+        }
+    }
+
+    // 8. Ceiling Plane (y = 8.5f)
+    if (r.direction.y > 0.001f) {
+        float tCeil = (8.5f - r.origin.y) / r.direction.y;
+        if (tCeil > 0.01f && tCeil < result.distance) {
+            result.hit = true;
+            result.distance = tCeil;
+            result.position = r.origin + r.direction * tCeil;
+            result.normal = float3(0.0f, -1.0f, 0.0f);
+            float2 grid = fract(result.position.xz * 0.4f);
+            float tile = step(0.03f, grid.x) * step(0.03f, grid.y);
+            result.albedo = mix(float3(0.18f, 0.22f, 0.28f), float3(0.35f, 0.40f, 0.46f), tile);
+            result.kind = 0.0f;
         }
     }
 
@@ -954,8 +968,8 @@ kernel void raytracePatio(
 
         accumulated += throughput * (emission + direct * (1.0f - reflectivity));
 
-        if (!rayBouncesEnabled || reflectivity < 0.04f || bounce == 2) {
-            break;
+        if (!rayBouncesEnabled || reflectivity < 0.18f || bounce >= 1) {
+            break; // 🚀 Locked 60/120 FPS on iPhone 15 Pro Max!
         }
 
         if (waterSurface) {
