@@ -237,7 +237,8 @@ struct ContentView: View {
                 }
             }
             .padding(10)
-            .background(.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.35), lineWidth: 1))
             .padding(.leading, 14)
             .padding(.top, 48)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -346,10 +347,6 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("Patio nocturno")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-
                 Picker("Cámara", selection: $model.cameraMode) {
                     Label("3ª", systemImage: "person.fill")
                         .tag(GameCameraMode.thirdPerson)
@@ -357,17 +354,17 @@ struct ContentView: View {
                         .tag(GameCameraMode.firstPerson)
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 190)
+                .frame(width: 140)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 9))
+                .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.white.opacity(0.4), lineWidth: 1))
                 .accessibilityLabel("Modo de cámara")
 
                 JoystickView(onChanged: { vector in
                     model.joystick = vector
                 }, isLiquidGlass: model.isLiquidGlassUIEnabled)
-                .frame(width: 168, height: 168)
+                .frame(width: 156, height: 156)
             }
-            .padding(14)
-            .background(.black.opacity(0.2), in: RoundedRectangle(cornerRadius: 8))
-            .padding(.leading, 14)
+            .padding(.leading, 18)
             .padding(.bottom, 22)
 
             VStack(alignment: .trailing, spacing: 10) {
@@ -3131,24 +3128,26 @@ struct JoystickView: View {
 
             ZStack {
                 if isLiquidGlass {
-                    //  Apple Liquid Glass Translucent Outer Ring
+                    //  Apple Liquid Glass Translucent Outer Ring with Real Backdrop Blur
                     Circle()
-                        .fill(Color.white.opacity(0.18))
-                        .background(Color.black.opacity(0.35), in: Circle())
+                        .fill(.ultraThinMaterial)
+                        .background(Color.white.opacity(0.12), in: Circle())
                     Circle()
                         .stroke(
                             LinearGradient(
-                                colors: [.white.opacity(0.92), .cyan.opacity(0.60), .white.opacity(0.30)],
+                                colors: [.white.opacity(0.95), .cyan.opacity(0.70), .white.opacity(0.25)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
-                            lineWidth: 1.5
+                            lineWidth: 2.0
                         )
+                        .shadow(color: .cyan.opacity(0.40), radius: 6)
                     // Liquid Glass Knob
                     Circle()
-                        .fill(Color.white.opacity(0.92))
-                        .overlay(Circle().stroke(Color.white, lineWidth: 1))
-                        .shadow(color: .white.opacity(0.50), radius: 8)
+                        .fill(.ultraThinMaterial)
+                        .background(Color.white.opacity(0.88), in: Circle())
+                        .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
+                        .shadow(color: .white.opacity(0.60), radius: 10)
                         .frame(width: knobRadius * 2, height: knobRadius * 2)
                         .offset(knob)
                 } else {
