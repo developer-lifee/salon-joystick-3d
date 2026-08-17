@@ -124,6 +124,7 @@ struct MetalGameView: UIViewRepresentable {
     func updateUIView(_ view: MTKView, context: Context) {
         (view as? PointResolutionMTKView)?.renderScale = model.renderResolution.scale
         context.coordinator.invertsCameraY = model.invertsCameraY
+        context.coordinator.renderer?.isPlayerDead = (model.playerHealth <= 0)
         context.coordinator.renderer?.onFPSUpdate = model.showsFPS
             ? context.coordinator.onFPSUpdate
             : nil

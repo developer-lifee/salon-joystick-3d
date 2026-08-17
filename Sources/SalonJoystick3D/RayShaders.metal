@@ -978,53 +978,48 @@ kernel void raytracePatio(
         accumulated += float3(9.5f, 0.08f, 0.02f) * (botBeam * 0.95f);
     }
 
-    // 🌊 🍄 Super Mario Bros / Mario 64 Style Organic Aquatic World (Surface Sky Ceiling, God Rays & Deep Abyss)
+    // 🌊 Clean Clear Pool Water & Underwater Pool Floor Grid
     if (uniforms.cameraPosition.y < 0.48f) {
         float3 cameraPos = uniforms.cameraPosition.xyz;
-        float hitX = cameraPos.x + primaryDirection.x * firstSurfaceDistance;
-        float hitY = cameraPos.y + primaryDirection.y * firstSurfaceDistance;
-        float hitZ = cameraPos.z + primaryDirection.z * firstSurfaceDistance;
         float simT = uniforms.waterSimulation.x * 2.5f;
 
-        // 1. Shimmering Surface Water Sky Ceiling (Looking up toward top pool boundary)
+        // 1. Pool Floor Tile Rendering (Floor at y = -3.5)
+        if (primaryDirection.y < -0.01f) {
+            float tFloor = (-3.5f - cameraPos.y) / primaryDirection.y;
+            if (tFloor > 0.01f && tFloor < firstSurfaceDistance) {
+                float3 pFloor = cameraPos + primaryDirection * tFloor;
+                if (pFloor.x > -5.35f && pFloor.x < 2.35f && pFloor.z > -4.20f && pFloor.z < 1.20f) {
+                    float2 tileUV = pFloor.xz * 1.5f;
+                    float2 grid = fract(tileUV);
+                    float grout = step(0.04f, grid.x) * step(0.04f, grid.y);
+                    float3 poolTileColor = mix(float3(0.05f, 0.35f, 0.55f), float3(0.18f, 0.75f, 0.92f), grout);
+                    
+                    // Wave caustics reflection on floor
+                    float caustic = saturate(sin(pFloor.x * 1.8f + simT) * cos(pFloor.z * 1.8f + simT * 1.2f) * 0.5f + 0.5f);
+                    poolTileColor += float3(0.15f, 0.45f, 0.65f) * caustic * 0.45f;
+                    
+                    float fogFactor = saturate(tFloor * 0.08f);
+                    float3 waterColor = mix(poolTileColor, float3(0.02f, 0.25f, 0.45f), fogFactor);
+                    accumulated = mix(accumulated, waterColor, 0.85f);
+                }
+            }
+        }
+
+        // 2. Shimmering Surface Water Ceiling (Looking up)
         if (primaryDirection.y > 0.05f) {
             float distToSurface = max(0.1f, (0.48f - cameraPos.y) / max(0.01f, primaryDirection.y));
             if (distToSurface < firstSurfaceDistance) {
                 float2 surfXZ = cameraPos.xz + primaryDirection.xz * distToSurface;
                 float wSurf = sin(surfXZ.x * 0.85f + simT) * cos(surfXZ.y * 0.85f + simT * 1.2f);
                 float3 surfaceLight = mix(float3(0.15f, 0.72f, 0.95f), float3(0.85f, 0.98f, 1.0f), saturate(wSurf * 0.5f + 0.5f));
-                accumulated += surfaceLight * 0.65f * exp(-distToSurface * 0.04f);
+                accumulated += surfaceLight * 0.45f;
             }
         }
 
-        // 2. Underwater Pool Floor & Wall Grid Outlines (Depth Reference Grid)
-        float floorGrid = step(0.04f, fract(hitX * 1.2f)) * step(0.04f, fract(hitZ * 1.2f));
-        float wallGrid = step(0.04f, fract(hitY * 1.2f));
-        float poolGridPattern = mix(0.55f, 1.0f, floorGrid * wallGrid);
-
-        // 3. Solar God Rays & Smooth Wave Refraction Caustics
-        float w1 = sin(hitX * 0.85f + hitZ * 0.68f + simT);
-        float w2 = sin(hitX * 1.25f - hitZ * 1.15f - simT * 1.3f);
-        float waveShimmer = saturate((w1 + w2) * 0.25f + 0.50f);
-        float godRays = saturate(pow(waveShimmer, 2.5f) * 0.85f) * saturate((hitY + 3.5f) / 4.0f);
-
-        // 4. Vertical Depth Color Gradient (Bright Turquoise Surface -> Deep Pool Blue Abyss Floor)
-        float depthFactor = saturate((hitY + 3.0f) / 3.48f); // 0 = Pool bottom, 1 = Surface
-        float3 shallowTurquoise = float3(0.08f, 0.55f, 0.78f);
-        float3 deepIndigoAbyss = float3(0.008f, 0.065f, 0.18f);
-        float3 marioWaterColor = mix(deepIndigoAbyss, shallowTurquoise, depthFactor) * poolGridPattern;
-
-        // 5. Floating Underwater Bubbles Around Player
-        float3 b1Pos = float3(cameraPos.x + sin(simT * 1.2f) * 0.85f, cameraPos.y + fmod(simT * 1.5f, 3.2f) - 1.2f, cameraPos.z + cos(simT * 1.2f) * 0.85f);
-        float distB1 = distance(cameraPos + primaryDirection * min(firstSurfaceDistance, 2.5f), b1Pos);
-        float bubbleGlow = smoothstep(0.12f, 0.02f, distB1) * 0.65f;
-        accumulated += float3(0.6f, 0.95f, 1.0f) * bubbleGlow;
-
-        float3 waterSunGlow = float3(0.12f, 0.65f, 0.88f) * (0.15f + godRays * 0.65f);
-        accumulated += waterSunGlow;
-
-        float distanceFog = 1.0f - exp(-firstSurfaceDistance * 0.055f);
-        accumulated = mix(accumulated, marioWaterColor, clamp(distanceFog, 0.0f, 0.65f));
+        // 3. Clear Underwater Tint Filter
+        float depthFactor = saturate((cameraPos.y + 3.5f) / 4.0f);
+        float3 waterTint = mix(float3(0.01f, 0.12f, 0.25f), float3(0.05f, 0.45f, 0.70f), depthFactor);
+        accumulated = mix(accumulated, waterTint, 0.35f);
     }
 
     output.write(half4(half3(toneMap(clamp(accumulated, 0.0f, 96.0f))), half(1.0f)), tid);

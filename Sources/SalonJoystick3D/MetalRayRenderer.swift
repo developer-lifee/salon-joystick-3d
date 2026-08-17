@@ -518,6 +518,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     var onScoreUpdate: ((Int) -> Void)?
     var onDamageTaken: ((Float) -> Void)?
     var onWaveUpdate: ((Int, Int, Int, Bool, Float) -> Void)?
+    var isPlayerDead: Bool = false
 
     private var currentWave: Int = 1
     private var botsKilledInCurrentWave: Int = 0
@@ -2116,13 +2117,18 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     }
 
     private func writeInstanceDescriptors() {
-        let isSubmerged = playerPosition.y < 0.4
+        let isInsidePoolArea = playerPosition.x > -5.35 && playerPosition.x < 2.35 && playerPosition.z > -4.20 && playerPosition.z < 1.20
+        let isSubmerged = isInsidePoolArea && playerPosition.y < 0.40
+        let isPlayerDead = self.isPlayerDead
         let isMirrorActive = (heldTool == .mirror && mirrorActiveRemaining > 0)
+
         let pPitch: Float
-        if isSubmerged {
-            // 🏊 Real Freestyle / Olympic Diving Forward Swimming Pose:
-            // Horizontal face-down swimming orientation, head forward, stomach towards bottom!
-            pPitch = 1.35
+        if isPlayerDead {
+            // ☠️ MORIDO :v Death Animation: Fall flat face down on the floor (+90 deg pitch!)
+            pPitch = 1.57
+        } else if isSubmerged {
+            // 🏊 Natural Swimming Pitch: Smoothly tilts with camera view (-25 to +25 deg)
+            pPitch = max(-0.4, min(0.4, orbitPitch))
         } else if isCoverActive {
             // 🛡️ GTA Crouch Cover Pitch: Forward crouch tilt (+25 deg pitch!)
             pPitch = 0.44
@@ -2130,6 +2136,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             // 🛷 Toboggan Sitting Pitch: Backwards sit tilt (-35 deg pitch!)
             pPitch = -0.62
         } else {
+            // 🧍 Upright Walking Posture on Land (0 pitch!)
             pPitch = 0
         }
 
