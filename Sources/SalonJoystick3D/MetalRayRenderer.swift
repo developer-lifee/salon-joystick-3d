@@ -1293,19 +1293,19 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         let speed = simd_length(horizontalVelocity)
         let isGrounded = playerPosition.y <= nextGroundHeight + 0.015
-        let playerWaterMovement = min(1, speed / 1.85) * sqrt(currentWaterImmersion)
-        if playerWaterMovement > 0.08 {
+        let playerWaterMovement = min(1, speed / 1.2) * currentWaterImmersion
+        if playerWaterMovement > 0.04 && currentlyInPool {
             playerWaterWakeCountdown -= dt
             if playerWaterWakeCountdown <= 0 {
                 pendingWaterImpulse = SIMD4<Float>(
                     playerPosition.x,
                     playerPosition.z,
-                    -0.18 - playerWaterMovement * 0.24,
+                    -0.38 - playerWaterMovement * 0.42,
                     1
                 )
-                playerWaterWakeCountdown = 0.16
+                playerWaterWakeCountdown = 0.12
             }
-        } else {
+        } else if !currentlyInPool {
             playerWaterWakeCountdown = 0
         }
         let floatWaterMovement = min(0.72, max(0, (simd_length(floatVelocity) - 0.04) / 0.95))
@@ -1790,8 +1790,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
     private func waterImmersion(at position: SIMD3<Float>, insidePool: Bool) -> Float {
         guard insidePool else { return 0 }
-        let waterSurface: Float = -0.07
-        return min(1, max(0, (waterSurface + 0.015 - position.y) / 0.16))
+        let waterSurface: Float = 0.40
+        return min(1, max(0.20, (waterSurface - position.y) / 0.80))
     }
 
     private func groundHeight(at position: SIMD3<Float>, insidePool: Bool) -> Float {
