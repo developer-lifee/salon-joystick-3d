@@ -625,6 +625,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private var lastCameraRight = SIMD3<Float>(1, 0, 0)
     private var lastCameraUp = SIMD3<Float>(0, 1, 0)
     private var lastCameraForward = SIMD3<Float>(0, 0, -1)
+    private var lastToolOrigin = SIMD3<Float>.zero
+    private var lastToolDirection = SIMD3<Float>(0, 0, -1)
     private var lastHeldTool = GameHeldTool.none
     private var laserActiveRemaining: Float = 0
     private var laserCooldownRemaining: Float = 0
@@ -1712,8 +1714,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private func checkCombatHits() {
         guard heldTool == .laser, laserActiveRemaining > 0 else { return }
 
-        let origin = lastCameraPosition
-        let direction = lastCameraForward
+        let origin = lastToolOrigin
+        let direction = lastToolDirection
         var closestIndex: Int?
         var closestDistance: Float = 35
 
@@ -1722,7 +1724,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             let alongRay = simd_dot(center - origin, direction)
             guard alongRay > 0, alongRay < closestDistance else { continue }
             let closestPoint = origin + direction * alongRay
-            guard simd_distance(center, closestPoint) < 0.68 else { continue }
+            guard simd_distance(center, closestPoint) < 1.35 else { continue }
             closestIndex = index
             closestDistance = alongRay
         }
@@ -2114,6 +2116,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         lastCameraRight = right * aspect * imagePlaneHeight
         lastCameraUp = up * imagePlaneHeight
         lastCameraForward = cameraForward
+        lastToolOrigin = toolOrigin
+        lastToolDirection = toolDirection
         withUnsafeBytes(of: &uniforms) { bytes in
             guard let baseAddress = bytes.baseAddress else { return }
             uniformBuffer.contents().copyMemory(from: baseAddress, byteCount: bytes.count)
