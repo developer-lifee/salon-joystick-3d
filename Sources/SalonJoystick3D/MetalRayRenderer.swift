@@ -486,12 +486,22 @@ private struct RTMeshBuilder {
     }
 }
 
+private extension MTLDevice {
+    var isHardwareRayTracingSupported: Bool {
+        let selector = Selector(("supportsRaytracing"))
+        if self.responds(to: selector) {
+            return self.supportsRaytracing
+        }
+        return false
+    }
+}
+
 private struct RTMeshResources {
     let vertexBuffer: MTLBuffer
     let primitiveBuffer: MTLBuffer
-    let accelerationStructure: MTLAccelerationStructure
-    let descriptor: MTLPrimitiveAccelerationStructureDescriptor
-    let scratchBuffer: MTLBuffer
+    let accelerationStructure: MTLAccelerationStructure?
+    let descriptor: MTLPrimitiveAccelerationStructureDescriptor?
+    let scratchBuffer: MTLBuffer?
     let vertexCount: Int
 }
 
@@ -532,9 +542,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private let floatMesh: RTMeshResources
     private let mirrorShieldMesh: RTMeshResources
     private let instanceBuffer: MTLBuffer
-    private let instanceDescriptor: MTLInstanceAccelerationStructureDescriptor
-    private let instanceAccelerationStructure: MTLAccelerationStructure
-    private let instanceScratchBuffer: MTLBuffer
+    private var instanceDescriptor: MTLInstanceAccelerationStructureDescriptor?
+    private var instanceAccelerationStructure: MTLAccelerationStructure?
+    private var instanceScratchBuffer: MTLBuffer?
     private let frameSemaphore = DispatchSemaphore(value: 1)
     private let audio: ChiptuneAudioEngine
 
@@ -719,29 +729,44 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
         self.instanceBuffer = instanceBuffer
 
-        let descriptor = MTLInstanceAccelerationStructureDescriptor()
-        descriptor.instancedAccelerationStructures = [
-            staticMesh.accelerationStructure,
-            playerMesh.accelerationStructure,
-            waterMesh.accelerationStructure,
-            floatMesh.accelerationStructure,
-            npcMesh.accelerationStructure,
-            mirrorShieldMesh.accelerationStructure
-        ]
-        descriptor.instanceCount = 10
-        descriptor.instanceDescriptorBuffer = instanceBuffer
-        self.instanceDescriptor = descriptor
+        if device.isHardwareRayTracingSupported,
+           let staticAS = staticMesh.accelerationStructure,
+           let playerAS = playerMesh.accelerationStructure,
+           let waterAS = waterMesh.accelerationStructure,
+           let floatAS = floatMesh.accelerationStructure,
+           let npcAS = npcMesh.accelerationStructure,
+           let shieldAS = mirrorShieldMesh.accelerationStructure {
+            let descriptor = MTLInstanceAccelerationStructureDescriptor()
+            descriptor.instancedAccelerationStructures = [
+                staticAS,
+                playerAS,
+                waterAS,
+                floatAS,
+                npcAS,
+                shieldAS
+            ]
+            descriptor.instanceCount = 10
+            descriptor.instanceDescriptorBuffer = instanceBuffer
+            self.instanceDescriptor = descriptor
 
-        let sizes = device.accelerationStructureSizes(descriptor: descriptor)
-        guard let instanceAccelerationStructure = device.makeAccelerationStructure(size: sizes.accelerationStructureSize),
-              let scratch = device.makeBuffer(
-                length: max(256, sizes.buildScratchBufferSize),
-                options: .storageModePrivate
-              ) else {
-            throw MetalRayRendererError.resourceCreationFailed
+            let sizes = device.accelerationStructureSizes(descriptor: descriptor)
+            if let instanceAccelerationStructure = device.makeAccelerationStructure(size: sizes.accelerationStructureSize),
+               let scratch = device.makeBuffer(
+                 length: max(256, sizes.buildScratchBufferSize),
+                 options: .storageModePrivate
+               ) {
+                self.instanceAccelerationStructure = instanceAccelerationStructure
+                self.instanceScratchBuffer = scratch
+            } else {
+                self.instanceDescriptor = nil
+                self.instanceAccelerationStructure = nil
+                self.instanceScratchBuffer = nil
+            }
+        } else {
+            self.instanceDescriptor = nil
+            self.instanceAccelerationStructure = nil
+            self.instanceScratchBuffer = nil
         }
-        self.instanceAccelerationStructure = instanceAccelerationStructure
-        self.instanceScratchBuffer = scratch
 
         super.init()
 
@@ -923,18 +948,24 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             waterVertexEncoder.endEncoding()
         }
 
-        if let accelerationEncoder = commandBuffer.makeAccelerationStructureCommandEncoder() {
+        if let instanceAS = instanceAccelerationStructure,
+           let instanceDesc = instanceDescriptor,
+           let instanceScratch = instanceScratchBuffer,
+           let waterAS = waterMesh.accelerationStructure,
+           let waterDesc = waterMesh.descriptor,
+           let waterScratch = waterMesh.scratchBuffer,
+           let accelerationEncoder = commandBuffer.makeAccelerationStructureCommandEncoder() {
             accelerationEncoder.refit(
-                sourceAccelerationStructure: waterMesh.accelerationStructure,
-                descriptor: waterMesh.descriptor,
-                destinationAccelerationStructure: waterMesh.accelerationStructure,
-                scratchBuffer: waterMesh.scratchBuffer,
+                sourceAccelerationStructure: waterAS,
+                descriptor: waterDesc,
+                destinationAccelerationStructure: waterAS,
+                scratchBuffer: waterScratch,
                 scratchBufferOffset: 0
             )
             accelerationEncoder.build(
-                accelerationStructure: instanceAccelerationStructure,
-                descriptor: instanceDescriptor,
-                scratchBuffer: instanceScratchBuffer,
+                accelerationStructure: instanceAS,
+                descriptor: instanceDesc,
+                scratchBuffer: instanceScratch,
                 scratchBufferOffset: 0
             )
             accelerationEncoder.endEncoding()
@@ -944,12 +975,14 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             laserEncoder.setComputePipelineState(laserPipeline)
             laserEncoder.setBuffer(uniformBuffer, offset: 0, index: 0)
             laserEncoder.setBuffer(instanceBuffer, offset: 0, index: 1)
-            laserEncoder.setAccelerationStructure(instanceAccelerationStructure, bufferIndex: 2)
+            if let instanceAS = instanceAccelerationStructure {
+                laserEncoder.setAccelerationStructure(instanceAS, bufferIndex: 2)
+            }
             laserEncoder.setBuffer(laserResultBuffer, offset: 0, index: 3)
             laserEncoder.setTexture(renderedWaterTexture, index: 0)
-            laserEncoder.useResource(staticMesh.accelerationStructure, usage: .read)
-            laserEncoder.useResource(waterMesh.accelerationStructure, usage: .read)
-            laserEncoder.useResource(floatMesh.accelerationStructure, usage: .read)
+            if let staticAS = staticMesh.accelerationStructure { laserEncoder.useResource(staticAS, usage: .read) }
+            if let waterAS = waterMesh.accelerationStructure { laserEncoder.useResource(waterAS, usage: .read) }
+            if let floatAS = floatMesh.accelerationStructure { laserEncoder.useResource(floatAS, usage: .read) }
             laserEncoder.dispatchThreads(
                 MTLSize(width: 1, height: 1, depth: 1),
                 threadsPerThreadgroup: MTLSize(width: 1, height: 1, depth: 1)
@@ -961,14 +994,16 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             encoder.setComputePipelineState(pipeline)
             encoder.setBuffer(uniformBuffer, offset: 0, index: 0)
             encoder.setBuffer(instanceBuffer, offset: 0, index: 1)
-            encoder.setAccelerationStructure(instanceAccelerationStructure, bufferIndex: 2)
+            if let instanceAS = instanceAccelerationStructure {
+                encoder.setAccelerationStructure(instanceAS, bufferIndex: 2)
+            }
             encoder.setBuffer(laserResultBuffer, offset: 0, index: 3)
             encoder.setTexture(drawable.texture, index: 0)
             encoder.setTexture(renderedWaterTexture, index: 1)
-            encoder.useResource(staticMesh.accelerationStructure, usage: .read)
-            encoder.useResource(playerMesh.accelerationStructure, usage: .read)
-            encoder.useResource(waterMesh.accelerationStructure, usage: .read)
-            encoder.useResource(floatMesh.accelerationStructure, usage: .read)
+            if let staticAS = staticMesh.accelerationStructure { encoder.useResource(staticAS, usage: .read) }
+            if let playerAS = playerMesh.accelerationStructure { encoder.useResource(playerAS, usage: .read) }
+            if let waterAS = waterMesh.accelerationStructure { encoder.useResource(waterAS, usage: .read) }
+            if let floatAS = floatMesh.accelerationStructure { encoder.useResource(floatAS, usage: .read) }
             encoder.dispatchThreads(
                 MTLSize(width: drawable.texture.width, height: drawable.texture.height, depth: 1),
                 threadsPerThreadgroup: MTLSize(width: 8, height: 8, depth: 1)
@@ -2124,14 +2159,17 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     }
 
     private func buildInitialInstanceAccelerationStructure() throws {
-        guard let commandBuffer = commandQueue.makeCommandBuffer(),
+        guard let instanceAS = instanceAccelerationStructure,
+              let instanceDesc = instanceDescriptor,
+              let instanceScratch = instanceScratchBuffer,
+              let commandBuffer = commandQueue.makeCommandBuffer(),
               let encoder = commandBuffer.makeAccelerationStructureCommandEncoder() else {
-            throw MetalRayRendererError.resourceCreationFailed
+            return
         }
         encoder.build(
-            accelerationStructure: instanceAccelerationStructure,
-            descriptor: instanceDescriptor,
-            scratchBuffer: instanceScratchBuffer,
+            accelerationStructure: instanceAS,
+            descriptor: instanceDesc,
+            scratchBuffer: instanceScratch,
             scratchBufferOffset: 0
         )
         encoder.endEncoding()
@@ -2183,6 +2221,17 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
         guard let vertexBuffer, let primitiveBuffer else {
             throw MetalRayRendererError.resourceCreationFailed
+        }
+
+        guard device.isHardwareRayTracingSupported else {
+            return RTMeshResources(
+                vertexBuffer: vertexBuffer,
+                primitiveBuffer: primitiveBuffer,
+                accelerationStructure: nil,
+                descriptor: nil,
+                scratchBuffer: nil,
+                vertexCount: builder.vertices.count
+            )
         }
 
         let geometry = MTLAccelerationStructureTriangleGeometryDescriptor()
