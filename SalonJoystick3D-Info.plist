@@ -5,11 +5,11 @@
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Ray Tracing Game</string>
+	<string>Laser Tracer</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.estebanavila.RtPruebas</string>
 	<key>CFBundleName</key>
-	<string>Ray Tracing Game</string>
+	<string>Laser Tracer</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -18,6 +18,12 @@
 	<string>1</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
+		<string>metal</string>
+		<string>raytracing</string>
+	</array>
 	<key>CFBundleIconName</key>
 	<string>AppIcon</string>
 	<key>CFBundleIcons</key>
