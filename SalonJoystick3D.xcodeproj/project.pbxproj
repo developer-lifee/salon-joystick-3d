@@ -18,6 +18,7 @@
 		D5A4842DEAA33B641E422FA9 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80B8C4723ADB8C2229A9789 /* ContentView.swift */; };
 		E8B2A9C102F3A4B5C6D7E8F9 /* GameCenterManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8B2A9C102F3A4B5C6D7E8FA /* GameCenterManager.swift */; };
 		E8B2A9C102F3A4B5C6D7E8FC /* GameKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E8B2A9C102F3A4B5C6D7E8FB /* GameKit.framework */; };
+		A10000000000000000000023 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000023 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -33,6 +34,7 @@
 		E8B2A9C102F3A4B5C6D7E8FA /* GameCenterManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = GameCenterManager.swift; path = Sources/SalonJoystick3D/GameCenterManager.swift; sourceTree = "<group>"; };
 		E8B2A9C102F3A4B5C6D7E8FB /* GameKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = GameKit.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/GameKit.framework; sourceTree = DEVELOPER_DIR; };
 		F80B8C4723ADB8C2229A9789 /* ContentView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ContentView.swift; path = Sources/SalonJoystick3D/ContentView.swift; sourceTree = "<group>"; };
+		B10000000000000000000023 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -87,6 +89,7 @@
 				7087DA9FEBEC21F557885BDE /* Frameworks */,
 				4D9605B8EAFA623B54C5C559 /* Sources/SalonJoystick3D */,
 				63A029923029842700B06885 /* Recovered References */,
+				B10000000000000000000023 /* Assets.xcassets */,
 			);
 			sourceTree = "<group>";
 		};
@@ -167,6 +170,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10000000000000000000023 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

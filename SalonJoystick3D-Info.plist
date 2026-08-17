@@ -40,6 +40,22 @@
 			<string>AppIcon</string>
 		</dict>
 	</dict>
+	<key>CFBundleIcons~ipad</key>
+	<dict>
+		<key>CFBundlePrimaryIcon</key>
+		<dict>
+			<key>CFBundleIconFiles</key>
+			<array>
+				<string>AppIcon_120</string>
+				<string>AppIcon_152</string>
+				<string>AppIcon_167</string>
+				<string>AppIcon_180</string>
+				<string>AppIcon_1024</string>
+			</array>
+			<key>CFBundleIconName</key>
+			<string>AppIcon</string>
+		</dict>
+	</dict>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSLocalNetworkUsageDescription</key>
