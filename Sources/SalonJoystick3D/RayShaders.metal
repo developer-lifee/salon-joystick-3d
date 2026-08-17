@@ -353,6 +353,83 @@ inline AnalyticalHit analyticalPatioIntersect(ray r) {
         }
     }
 
+    // 4. Rear Wall Mirror (Espejo de Pared at z = -8.95)
+    if (r.direction.z < -0.001f) {
+        float tMirror = (-8.95f - r.origin.z) / r.direction.z;
+        if (tMirror > 0.01f && tMirror < result.distance) {
+            float3 pMirror = r.origin + r.direction * tMirror;
+            if (pMirror.x > 1.35f && pMirror.x < 5.65f && pMirror.y > 0.72f && pMirror.y < 3.38f) {
+                result.hit = true;
+                result.distance = tMirror;
+                result.position = pMirror;
+                result.normal = float3(0.0f, 0.0f, 1.0f);
+                result.albedo = float3(0.95f, 0.96f, 0.98f);
+                result.kind = 1.0f; // Mirror surface!
+            }
+        }
+    }
+
+    // 5. Post Neon Light Fixture Sign (x = -7.55, y = 2.72, z = 6.65)
+    float3 postCenter = float3(-7.55f, 2.72f, 6.65f);
+    float3 ocPost = r.origin - postCenter;
+    float bPost = dot(ocPost, r.direction);
+    float cPost = dot(ocPost, ocPost) - 0.45f * 0.45f;
+    float discPost = bPost * bPost - cPost;
+    if (discPost > 0.0f) {
+        float tPost = -bPost - sqrt(discPost);
+        if (tPost > 0.01f && tPost < result.distance) {
+            result.hit = true;
+            result.distance = tPost;
+            result.position = r.origin + r.direction * tPost;
+            result.normal = normalize(result.position - postCenter);
+            result.albedo = float3(1.0f, 0.75f, 0.25f);
+            result.kind = 4.0f; // Emissive Neon Light Sign!
+        }
+    }
+
+    // 6. Springboard & Pool Ladder (Trampolín at y = 2.85)
+    if (r.direction.y < -0.001f) {
+        float tTramp = (2.85f - r.origin.y) / r.direction.y;
+        if (tTramp > 0.01f && tTramp < result.distance) {
+            float3 pTramp = r.origin + r.direction * tTramp;
+            if (pTramp.x > 0.5f && pTramp.x < 2.2f && pTramp.z > -8.5f && pTramp.z < -4.2f) {
+                result.hit = true;
+                result.distance = tTramp;
+                result.position = pTramp;
+                result.normal = float3(0.0f, 1.0f, 0.0f);
+                result.albedo = float3(0.85f, 0.85f, 0.88f);
+                result.kind = 0.0f;
+            }
+        }
+    }
+
+    // 7. Toboggan Water Slide Chute (Slanted chute from y=4.8 down to y=0.45)
+    float3 slideStart = float3(-3.8f, 4.8f, -15.8f);
+    float3 slideEnd = float3(-2.5f, 0.45f, -4.5f);
+    float3 slideAxis = slideEnd - slideStart;
+    float slideLen = length(slideAxis);
+    float3 slideDir = slideAxis / slideLen;
+    float3 ocSlide = r.origin - slideStart;
+    float projSlide = dot(ocSlide, slideDir);
+    if (projSlide > 0.0f && projSlide < slideLen) {
+        float3 closestPtOnSlide = slideStart + slideDir * projSlide;
+        float3 ocChute = r.origin - closestPtOnSlide;
+        float bChute = dot(ocChute, r.direction);
+        float cChute = dot(ocChute, ocChute) - 0.55f * 0.55f;
+        float discChute = bChute * bChute - cChute;
+        if (discChute > 0.0f) {
+            float tChute = -bChute - sqrt(discChute);
+            if (tChute > 0.01f && tChute < result.distance) {
+                result.hit = true;
+                result.distance = tChute;
+                result.position = r.origin + r.direction * tChute;
+                result.normal = normalize(result.position - closestPtOnSlide);
+                result.albedo = float3(0.12f, 0.65f, 0.95f); // Cyan Water Slide!
+                result.kind = 0.0f;
+            }
+        }
+    }
+
     return result;
 }
 
