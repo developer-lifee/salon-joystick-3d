@@ -402,9 +402,9 @@ inline AnalyticalHit analyticalPatioIntersect(ray r) {
         }
     }
 
-    // 7. Toboggan Water Slide Chute (Slanted chute from y=4.8 down to y=0.45)
-    float3 slideStart = float3(-3.8f, 4.8f, -15.8f);
-    float3 slideEnd = float3(-2.5f, 0.45f, -4.5f);
+    // 7. Toboggan Water Slide Chute (Slanted chute from top platform into pool)
+    float3 slideStart = float3(-3.8f, 3.8f, -3.5f);
+    float3 slideEnd = float3(-2.2f, 0.45f, -0.5f);
     float3 slideAxis = slideEnd - slideStart;
     float slideLen = length(slideAxis);
     float3 slideDir = slideAxis / slideLen;
@@ -646,25 +646,63 @@ kernel void raytracePatio(
             roughness = material.normalRoughness.w;
         } else {
             AnalyticalHit analytical = analyticalPatioIntersect(currentRay);
-            // 🤖 3D Bot Analytical Fallback for Simulator & Legacy Non-RT iPhones
+            // 🤖 3D Articulated Robot Fallback (Head, Torso, Backpack)
             for (uint b = 0; b < 5; ++b) {
-                float3 botCenter = float3(instances[4 + b].transformationMatrix[3].x,
-                                          instances[4 + b].transformationMatrix[3].y + 0.9f,
-                                          instances[4 + b].transformationMatrix[3].z);
-                if (botCenter.y > -5.0f) {
-                    float3 oc = currentRay.origin - botCenter;
-                    float bProj = dot(oc, currentRay.direction);
-                    float c = dot(oc, oc) - 0.45f * 0.45f;
-                    float disc = bProj * bProj - c;
-                    if (disc > 0.0f) {
-                        float tBot = -bProj - sqrt(disc);
-                        if (tBot > 0.01f && tBot < analytical.distance) {
+                float3 botPos = float3(instances[4 + b].transformationMatrix[3].x,
+                                       instances[4 + b].transformationMatrix[3].y,
+                                       instances[4 + b].transformationMatrix[3].z);
+                if (botPos.y > -5.0f) {
+                    // 1. Torso Armor
+                    float3 torsoCenter = botPos + float3(0.0f, 0.85f, 0.0f);
+                    float3 ocTorso = currentRay.origin - torsoCenter;
+                    float bTorso = dot(ocTorso, currentRay.direction);
+                    float cTorso = dot(ocTorso, ocTorso) - 0.38f * 0.38f;
+                    float discTorso = bTorso * bTorso - cTorso;
+                    if (discTorso > 0.0f) {
+                        float tTorso = -bTorso - sqrt(discTorso);
+                        if (tTorso > 0.01f && tTorso < analytical.distance) {
                             analytical.hit = true;
-                            analytical.distance = tBot;
-                            analytical.position = currentRay.origin + currentRay.direction * tBot;
-                            analytical.normal = normalize(analytical.position - botCenter);
-                            analytical.albedo = float3(0.85f, 0.25f, 0.25f);
+                            analytical.distance = tTorso;
+                            analytical.position = currentRay.origin + currentRay.direction * tTorso;
+                            analytical.normal = normalize(analytical.position - torsoCenter);
+                            analytical.albedo = (b == 4) ? float3(0.65f, 0.15f, 0.85f) : (b == 0 ? float3(0.15f, 0.75f, 0.42f) : float3(0.85f, 0.22f, 0.18f));
                             analytical.kind = 0.0f;
+                        }
+                    }
+
+                    // 2. Golden Robot Helmet with Visor
+                    float3 headCenter = botPos + float3(0.0f, 1.45f, 0.0f);
+                    float3 ocHead = currentRay.origin - headCenter;
+                    float bHead = dot(ocHead, currentRay.direction);
+                    float cHead = dot(ocHead, ocHead) - 0.26f * 0.26f;
+                    float discHead = bHead * bHead - cHead;
+                    if (discHead > 0.0f) {
+                        float tHead = -bHead - sqrt(discHead);
+                        if (tHead > 0.01f && tHead < analytical.distance) {
+                            analytical.hit = true;
+                            analytical.distance = tHead;
+                            analytical.position = currentRay.origin + currentRay.direction * tHead;
+                            analytical.normal = normalize(analytical.position - headCenter);
+                            analytical.albedo = float3(0.92f, 0.82f, 0.20f); // Gold Helmet!
+                            analytical.kind = 0.0f;
+                        }
+                    }
+
+                    // 3. Cyan Battery Backpack
+                    float3 packCenter = botPos + float3(0.0f, 0.95f, -0.22f);
+                    float3 ocPack = currentRay.origin - packCenter;
+                    float bPack = dot(ocPack, currentRay.direction);
+                    float cPack = dot(ocPack, ocPack) - 0.22f * 0.22f;
+                    float discPack = bPack * bPack - cPack;
+                    if (discPack > 0.0f) {
+                        float tPack = -bPack - sqrt(discPack);
+                        if (tPack > 0.01f && tPack < analytical.distance) {
+                            analytical.hit = true;
+                            analytical.distance = tPack;
+                            analytical.position = currentRay.origin + currentRay.direction * tPack;
+                            analytical.normal = normalize(analytical.position - packCenter);
+                            analytical.albedo = float3(0.15f, 0.85f, 0.95f); // Cyan Energy Cell!
+                            analytical.kind = 4.0f; // Glowing energy cell!
                         }
                     }
                 }
