@@ -244,6 +244,118 @@ kernel void updateWaterHeight(
     nextState.write(float4(height, velocity, 0.0f, 0.0f), tid);
 }
 
+struct AnalyticalHit {
+    bool hit;
+    float distance;
+    float3 position;
+    float3 normal;
+    float3 albedo;
+    float kind;
+};
+
+inline AnalyticalHit analyticalPatioIntersect(ray r) {
+    AnalyticalHit result;
+    result.hit = false;
+    result.distance = 1e5f;
+    result.position = float3(0.0f);
+    result.normal = float3(0.0f, 1.0f, 0.0f);
+    result.albedo = float3(0.3f);
+    result.kind = 0.0f;
+
+    // 1. Ground / Floor Plane (y = 0.0)
+    if (r.direction.y < -0.001f) {
+        float tFloor = (0.0f - r.origin.y) / r.direction.y;
+        if (tFloor > 0.01f && tFloor < result.distance) {
+            result.hit = true;
+            result.distance = tFloor;
+            result.position = r.origin + r.direction * tFloor;
+            result.normal = float3(0.0f, 1.0f, 0.0f);
+            
+            bool insidePool = (result.position.x > -5.35f && result.position.x < 2.35f &&
+                               result.position.z > -4.20f && result.position.z < 1.20f);
+            if (insidePool) {
+                float2 grid = fract(result.position.xz * 1.5f);
+                float grout = step(0.04f, grid.x) * step(0.04f, grid.y);
+                result.albedo = mix(float3(0.02f, 0.25f, 0.42f), float3(0.12f, 0.65f, 0.85f), grout);
+                result.kind = 3.0f;
+            } else {
+                float2 grid = fract(result.position.xz * 0.8f);
+                float grout = step(0.03f, grid.x) * step(0.03f, grid.y);
+                result.albedo = mix(float3(0.15f, 0.16f, 0.18f), float3(0.42f, 0.45f, 0.48f), grout);
+                result.kind = 0.0f;
+            }
+        }
+    }
+
+    // 2. Room Walls
+    // Back Wall (z = -9.0)
+    if (r.direction.z > 0.001f) {
+        float tWall = (-9.0f - r.origin.z) / r.direction.z;
+        if (tWall > 0.01f && tWall < result.distance) {
+            result.hit = true;
+            result.distance = tWall;
+            result.position = r.origin + r.direction * tWall;
+            result.normal = float3(0.0f, 0.0f, -1.0f);
+            result.albedo = float3(0.28f, 0.35f, 0.42f);
+            result.kind = 0.0f;
+        }
+    }
+    // Front Wall (z = 9.0)
+    if (r.direction.z < -0.001f) {
+        float tWall = (9.0f - r.origin.z) / r.direction.z;
+        if (tWall > 0.01f && tWall < result.distance) {
+            result.hit = true;
+            result.distance = tWall;
+            result.position = r.origin + r.direction * tWall;
+            result.normal = float3(0.0f, 0.0f, 1.0f);
+            result.albedo = float3(0.28f, 0.35f, 0.42f);
+            result.kind = 0.0f;
+        }
+    }
+    // Left Wall (x = -9.0)
+    if (r.direction.x < -0.001f) {
+        float tWall = (-9.0f - r.origin.x) / r.direction.x;
+        if (tWall > 0.01f && tWall < result.distance) {
+            result.hit = true;
+            result.distance = tWall;
+            result.position = r.origin + r.direction * tWall;
+            result.normal = float3(1.0f, 0.0f, 0.0f);
+            result.albedo = float3(0.24f, 0.30f, 0.38f);
+            result.kind = 0.0f;
+        }
+    }
+    // Right Wall (x = 9.0)
+    if (r.direction.x > 0.001f) {
+        float tWall = (9.0f - r.origin.x) / r.direction.x;
+        if (tWall > 0.01f && tWall < result.distance) {
+            result.hit = true;
+            result.distance = tWall;
+            result.position = r.origin + r.direction * tWall;
+            result.normal = float3(-1.0f, 0.0f, 0.0f);
+            result.albedo = float3(0.24f, 0.30f, 0.38f);
+            result.kind = 0.0f;
+        }
+    }
+
+    // 3. Pool Water Surface (y = 0.48)
+    if (r.direction.y < -0.001f && r.origin.y > 0.48f) {
+        float tWater = (0.48f - r.origin.y) / r.direction.y;
+        if (tWater > 0.01f && tWater < result.distance) {
+            float3 pWater = r.origin + r.direction * tWater;
+            if (pWater.x > -5.35f && pWater.x < 2.35f && pWater.z > -4.20f && pWater.z < 1.20f) {
+                result.hit = true;
+                result.distance = tWater;
+                result.position = pWater;
+                result.normal = float3(0.0f, 1.0f, 0.0f);
+                result.albedo = float3(0.08f, 0.52f, 0.72f);
+                result.kind = 2.0f;
+            }
+        }
+    }
+
+    return result;
+}
+
 kernel void updateWaterVertices(
     uint tid [[thread_position_in_grid]],
     device float3 *vertices [[buffer(0)]],
@@ -299,7 +411,12 @@ kernel void traceToolLaser(
     laserRay.max_distance = 30.0f;
     auto hit = tracer.intersect(laserRay, accelerationStructure, 0x05);
     if (hit.type == intersection_type::none) {
-        result.primaryEnd = float4(origin + direction * laserRay.max_distance, 1.0f);
+        AnalyticalHit analytical = analyticalPatioIntersect(laserRay);
+        if (analytical.hit) {
+            result.primaryEnd = float4(analytical.position, 1.0f);
+        } else {
+            result.primaryEnd = float4(origin + direction * laserRay.max_distance, 1.0f);
+        }
         return;
     }
 
@@ -415,22 +532,43 @@ kernel void raytracePatio(
         tracer.accept_any_intersection(false);
         uint rayMask = bounce == 0 && firstPerson ? 0x05 : 0x07;
         auto hit = tracer.intersect(currentRay, accelerationStructure, rayMask);
-        if (hit.type == intersection_type::none) {
-            accumulated += throughput * nightSky(currentRay.direction);
-            break;
-        }
-        if (bounce == 0) {
-            firstSurfaceDistance = hit.distance;
+        float3 position;
+        float3 normal;
+        float3 albedo;
+        float kind;
+        float baseReflectivity = 0.05f;
+        float roughness = 0.5f;
+
+        if (hit.type != intersection_type::none) {
+            if (bounce == 0) {
+                firstSurfaceDistance = hit.distance;
+            }
+            RTTriangleData material = *(const device RTTriangleData *)hit.primitive_data;
+            position = currentRay.origin + currentRay.direction * hit.distance;
+            normal = transformedNormal(material.normalRoughness.xyz, instances, hit.instance_id);
+            if (dot(normal, currentRay.direction) > 0.0f) {
+                normal = -normal;
+            }
+            kind = material.emissionKind.w;
+            albedo = material.albedoReflectivity.xyz;
+            baseReflectivity = material.albedoReflectivity.w;
+            roughness = material.normalRoughness.w;
+        } else {
+            AnalyticalHit analytical = analyticalPatioIntersect(currentRay);
+            if (!analytical.hit) {
+                accumulated += throughput * nightSky(currentRay.direction);
+                break;
+            }
+            if (bounce == 0) {
+                firstSurfaceDistance = analytical.distance;
+            }
+            position = analytical.position;
+            normal = analytical.normal;
+            albedo = analytical.albedo;
+            kind = analytical.kind;
+            baseReflectivity = (kind == 2.0f) ? 0.35f : 0.08f;
         }
 
-        RTTriangleData material = *(const device RTTriangleData *)hit.primitive_data;
-        float3 position = currentRay.origin + currentRay.direction * hit.distance;
-        float3 normal = transformedNormal(material.normalRoughness.xyz, instances, hit.instance_id);
-        if (dot(normal, currentRay.direction) > 0.0f) {
-            normal = -normal;
-        }
-
-        float kind = material.emissionKind.w;
         bool poolWaterSurface = kind > 1.5f && kind < 2.5f;
         bool puddleSurface = kind > 7.5f && kind < 8.5f;
         bool waterSurface = poolWaterSurface || puddleSurface;
@@ -445,8 +583,6 @@ kernel void raytracePatio(
             normal = normalize(normal + groutBump);
         }
 
-        float3 albedo = material.albedoReflectivity.xyz;
-        float baseReflectivity = material.albedoReflectivity.w;
         if ((kind > 1.5f && kind < 3.5f) || puddleSurface) {
             float viewCosine = saturate(dot(-currentRay.direction, normal));
             float fresnel = pow(1.0f - viewCosine, 5.0f);
@@ -454,7 +590,7 @@ kernel void raytracePatio(
             baseReflectivity = mix(baseReflectivity, maximumReflectivity, fresnel);
         }
         float reflectivity = rayBouncesEnabled ? baseReflectivity : 0.0f;
-        float3 emission = material.emissionKind.xyz;
+        float3 emission = float3(0.0f);
         float emitterIntensity = 1.0f;
         if (kind > 3.5f && kind < 4.5f) emitterIntensity = uniforms.lightStates.x;
         if (kind > 4.5f && kind < 5.5f) emitterIntensity = uniforms.lightStates.w;
@@ -535,7 +671,7 @@ kernel void raytracePatio(
             float3 halfDirection = normalize(lightDirection - currentRay.direction);
             float gloss = pow(
                 saturate(dot(normal, halfDirection)),
-                mix(18.0f, 280.0f, 1.0f - material.normalRoughness.w)
+                mix(18.0f, 280.0f, 1.0f - roughness)
             );
             float specularStrength = waterSurface ? 1.15f : 0.14f;
             lampContribution += uniforms.lightColor.xyz * attenuation * gloss * specularStrength;
