@@ -2112,12 +2112,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     }
 
     private func writeInstanceDescriptors() {
-        let isSubterraneanSubmerged = playerPosition.y <= -3.0
+        let isSubmerged = playerPosition.y < 0.4
         let isMirrorActive = (heldTool == .mirror && mirrorActiveRemaining > 0)
         let pPitch: Float
-        if isSubterraneanSubmerged {
-            // 🏊 Super Mario Diving Pitch: Horizontal swimming orientation (-70 deg pitch!)
-            pPitch = -1.22
+        if isSubmerged {
+            // 🏊 Real Freestyle / Olympic Diving Forward Swimming Pose:
+            // Horizontal face-down swimming orientation, head forward, stomach towards bottom!
+            pPitch = 1.35
         } else if isCoverActive {
             // 🛡️ GTA Crouch Cover Pitch: Forward crouch tilt (+25 deg pitch!)
             pPitch = 0.44
