@@ -1040,7 +1040,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
     private func flushDamageReport(rawDt: Float) {
         damageReportTimer += rawDt
-        if damageReportTimer >= 0.10 && pendingDamageAccumulator > 0 {
+        if damageReportTimer >= 0.28 && pendingDamageAccumulator > 0 {
             let dmg = pendingDamageAccumulator
             pendingDamageAccumulator = 0
             damageReportTimer = 0
@@ -1078,9 +1078,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let isSubterranean = playerPosition.y <= -3.0
         let currentGroundHeight = isSubterranean ? -8.50 : groundHeight(at: playerPosition, insidePool: currentlyInPool)
         let currentlyOnFloat = currentlyInPool && isStandingOnFloat(playerPosition)
-        let movementSpeed: Float = currentlyInPool && !currentlyOnFloat ? 2.8 : (isSubterranean ? 3.8 : 3.6)
+        let isUnderFire = pendingDamageAccumulator > 0
+        let baseSpeed: Float = currentlyInPool && !currentlyOnFloat ? 3.2 : (isSubterranean ? 4.2 : 4.0)
+        let movementSpeed: Float = isUnderFire ? baseSpeed * 1.30 : baseSpeed // ⚡ Escape Evasion Boost (+30% speed under fire!)
         let targetVelocity = desiredDirection * (magnitude > 0.08 ? movementSpeed * magnitude : 0)
-        let response = 1 - exp(-dt * (magnitude > 0.08 ? 13 : 18))
+        let response = 1 - exp(-dt * (magnitude > 0.08 ? 16 : 22))
         horizontalVelocity += (targetVelocity - horizontalVelocity) * response
         if simd_length(horizontalVelocity) < 0.015 && magnitude <= 0.08 {
             horizontalVelocity = .zero
