@@ -1371,11 +1371,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 if proj > 0 && proj < 22.0 {
                     let closest = origin + forward * proj
                     if simd_distance(center, closest) < 0.70 {
-                        npcRespawnTimers[i] = 5.0
-                        npcPositions[i].y = -10
                         audio.playWaterDisturbance(intensity: 0.90)
                         onScoreUpdate?(400)
-                        recordBotElimination()
+                        handleNPCElimination(index: i)
                     }
                 }
             }
@@ -1422,6 +1420,18 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             audio.playWaterDisturbance(intensity: 1.0)
             onDamageTaken?(-25.0) // Health regen rest reward (+25 HP)
         }
+    }
+
+    private func handleNPCElimination(index: Int) {
+        let activeBotsCount = npcPositions.indices.filter({ npcRespawnTimers[$0] <= 0 }).count
+        let totalWaveSpawnsSoFar = botsKilledInCurrentWave + activeBotsCount
+        if totalWaveSpawnsSoFar < totalBotsInWave {
+            npcRespawnTimers[index] = 4.0
+        } else {
+            npcRespawnTimers[index] = 9999.0
+        }
+        npcPositions[index].y = -10
+        recordBotElimination()
     }
 
     private func updateNPCSimulation(dt: Float, rawDt: Float) {
@@ -1647,13 +1657,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                                 onNPCHealthsUpdate?(npcHealths)
 
                                 if npcHealths[targetIdx] <= 0 {
-                                    npcRespawnTimers[targetIdx] = botCooldown
-                                    npcPositions[targetIdx].y = -10
                                     botLaserActiveTimers[index] = 0
                                     botLaserCooldownTimers[index] = botCooldown
                                     audio.playWaterDisturbance(intensity: 1.0)
                                     onScoreUpdate?(500)
-                                    recordBotElimination()
+                                    handleNPCElimination(index: targetIdx)
                                 }
                                 break
                             }
@@ -1721,11 +1729,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             onNPCHealthsUpdate?(npcHealths)
 
             if npcHealths[closestIndex] <= 0 {
-                npcRespawnTimers[closestIndex] = 2.0
-                npcPositions[closestIndex].y = -10
                 audio.playWaterDisturbance(intensity: 0.85)
                 onScoreUpdate?(250)
-                recordBotElimination()
+                handleNPCElimination(index: closestIndex)
             }
         }
 
@@ -1768,10 +1774,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             onNPCHealthsUpdate?(npcHealths)
 
             if npcHealths[reflectedTarget] <= 0 {
-                npcRespawnTimers[reflectedTarget] = 1.6
-                npcPositions[reflectedTarget].y = -10
                 onScoreUpdate?(350)
-                recordBotElimination()
+                handleNPCElimination(index: reflectedTarget)
             }
         }
     }
