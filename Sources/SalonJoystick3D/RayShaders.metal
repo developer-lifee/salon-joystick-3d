@@ -962,8 +962,9 @@ kernel void raytracePatio(
     }
 
     // 🌊 Clean Clear Pool Water & Underwater Pool Floor Grid
-    if (uniforms.cameraPosition.y < 0.48f) {
-        float3 cameraPos = uniforms.cameraPosition.xyz;
+    float3 cameraPos = uniforms.cameraPosition.xyz;
+    bool isCameraInPoolXZ = (cameraPos.x > -5.35f && cameraPos.x < 2.35f && cameraPos.z > -4.20f && cameraPos.z < 1.20f);
+    if (isCameraInPoolXZ && cameraPos.y < 0.38f) {
         float simT = uniforms.waterSimulation.x * 2.5f;
 
         // 1. Pool Floor Tile Rendering (Floor at y = -3.5)

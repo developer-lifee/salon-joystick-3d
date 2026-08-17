@@ -1254,7 +1254,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             // Position locked during slide descent to prevent ground clamping
             proposed = playerPosition
         } else if currentlyInPool && !willBeOnFloat {
-            proposed.y = max(-0.66, min(1.5, proposed.y))
+            proposed.y = max(-3.20, min(1.5, proposed.y))
         } else if proposed.y <= nextGroundHeight {
             if !wasGrounded && verticalVelocity < -1.2 {
                 landingSpeed = -verticalVelocity
@@ -2129,8 +2129,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             // ☠️ MORIDO :v Death Animation: Fall flat face down on the floor (+90 deg pitch!)
             pPitch = 1.57
         } else if isSubmerged {
-            // 🏊 Natural Swimming Pitch: Smoothly tilts with camera view (-25 to +25 deg)
-            pPitch = max(-0.4, min(0.4, orbitPitch))
+            // 🏊‍♂️ Fluid Diving & Swimming Body Pitch: Dynamic tilt tracking view angle (-50 to +50 deg)
+            pPitch = max(-0.85, min(0.85, orbitPitch * 1.5))
         } else if isCoverActive {
             // 🛡️ GTA Crouch Cover Pitch: Forward crouch tilt (+25 deg pitch!)
             pPitch = 0.44

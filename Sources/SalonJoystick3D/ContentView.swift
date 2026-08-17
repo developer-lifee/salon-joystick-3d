@@ -236,9 +236,14 @@ struct ContentView: View {
                         .foregroundStyle(.white)
                 }
             }
-            .padding(10)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.35), lineWidth: 1))
+            .padding(12)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(LinearGradient(colors: [.white.opacity(0.65), .white.opacity(0.12)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.2)
+            )
+            .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 5)
             .padding(.leading, 14)
             .padding(.top, 48)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -268,11 +273,12 @@ struct ContentView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 12))
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.yellow.opacity(0.6), lineWidth: 1.5)
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(LinearGradient(colors: [.yellow.opacity(0.8), .orange.opacity(0.4)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.5)
                     )
+                    .shadow(color: .black.opacity(0.4), radius: 10, x: 0, y: 5)
                 } else {
                     HStack(spacing: 10) {
                         HStack(spacing: 4) {
@@ -300,13 +306,15 @@ struct ContentView: View {
                                 .foregroundStyle(.white)
                         }
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
-                    .background(.black.opacity(0.65), in: Capsule())
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .background(Color.black.opacity(0.25), in: Capsule())
                     .overlay(
                         Capsule()
-                            .stroke(Color.red.opacity(0.5), lineWidth: 1)
+                            .stroke(LinearGradient(colors: [.white.opacity(0.70), .red.opacity(0.40)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.2)
                     )
+                    .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 5)
                 }
 
                 // Active 5 Mobile NPCs Health Meters HUD with Class Tiers
