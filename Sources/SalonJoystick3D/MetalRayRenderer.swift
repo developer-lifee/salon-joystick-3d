@@ -566,12 +566,12 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private var verticalVelocity: Float = 0
     private var playerYaw: Float = .pi
     private var isSlidingOnToboggan: Bool = false
-    private var npcPositions = [
-        SIMD3<Float>(-13.5, 0, -13.5),
-        SIMD3<Float>(13.5, 0, -13.5),
-        SIMD3<Float>(-13.5, 0, 13.5),
-        SIMD3<Float>(13.5, 0, 13.5),
-        SIMD3<Float>(0, 0, 14.5)
+    private var npcPositions: [SIMD3<Float>] = [
+        SIMD3<Float>(-3.8, 0, -2.8),
+        SIMD3<Float>(1.8, 0, -2.8),
+        SIMD3<Float>(-3.8, 0, 0.2),
+        SIMD3<Float>(1.8, 0, 0.2),
+        SIMD3<Float>(-1.0, 0, -3.5)
     ]
     private var npcYaws = [Float.pi * 0.25, Float.pi * 1.7, Float.pi * 0.75, Float.pi * 1.25, Float.pi * 0.0]
     private var npcRespawnTimers = [Float](repeating: 0, count: 5)
@@ -901,131 +901,133 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
     func draw(in view: MTKView) {
-        _ = frameSemaphore.wait(timeout: .distantFuture)
-        guard let drawable = view.currentDrawable,
-              let commandBuffer = commandQueue.makeCommandBuffer() else {
-            frameSemaphore.signal()
-            return
-        }
-        commandBuffer.addCompletedHandler { [frameSemaphore] _ in
-            frameSemaphore.signal()
-        }
-
-        let now = CACurrentMediaTime()
-        let rawDt = Float(min(1.0 / 30.0, max(0, now - lastFrameTime)))
-        lastFrameTime = now
-        let effectiveDt = isGamePaused ? 0.0 : (isSlowMotionActive ? rawDt * 0.20 : rawDt)
-        if !isGamePaused {
-            elapsedTime += effectiveDt
-            updateSimulation(dt: effectiveDt, rawDt: rawDt)
-        }
-        writeInstanceDescriptors()
-        writeUniforms(texture: drawable.texture, dt: effectiveDt)
-
-        var renderedWaterTexture = waterTextures[waterStateIndex]
-        let nextWaterStateIndex = 1 - waterStateIndex
-        if let waterEncoder = commandBuffer.makeComputeCommandEncoder() {
-            waterEncoder.setComputePipelineState(waterPipeline)
-            waterEncoder.setBuffer(uniformBuffer, offset: 0, index: 0)
-            waterEncoder.setTexture(waterTextures[waterStateIndex], index: 0)
-            waterEncoder.setTexture(waterTextures[nextWaterStateIndex], index: 1)
-            waterEncoder.dispatchThreads(
-                MTLSize(width: 64, height: 48, depth: 1),
-                threadsPerThreadgroup: MTLSize(width: 8, height: 8, depth: 1)
-            )
-            waterEncoder.endEncoding()
-            renderedWaterTexture = waterTextures[nextWaterStateIndex]
-            waterStateIndex = nextWaterStateIndex
-        }
-
-        if let waterVertexEncoder = commandBuffer.makeComputeCommandEncoder() {
-            waterVertexEncoder.setComputePipelineState(waterVertexPipeline)
-            waterVertexEncoder.setBuffer(waterMesh.vertexBuffer, offset: 0, index: 0)
-            waterVertexEncoder.setTexture(renderedWaterTexture, index: 0)
-            waterVertexEncoder.dispatchThreads(
-                MTLSize(width: waterMesh.vertexCount, height: 1, depth: 1),
-                threadsPerThreadgroup: MTLSize(width: 64, height: 1, depth: 1)
-            )
-            waterVertexEncoder.endEncoding()
-        }
-
-        if let instanceAS = instanceAccelerationStructure,
-           let instanceDesc = instanceDescriptor,
-           let instanceScratch = instanceScratchBuffer,
-           let waterAS = waterMesh.accelerationStructure,
-           let waterDesc = waterMesh.descriptor,
-           let waterScratch = waterMesh.scratchBuffer,
-           let accelerationEncoder = commandBuffer.makeAccelerationStructureCommandEncoder() {
-            accelerationEncoder.refit(
-                sourceAccelerationStructure: waterAS,
-                descriptor: waterDesc,
-                destinationAccelerationStructure: waterAS,
-                scratchBuffer: waterScratch,
-                scratchBufferOffset: 0
-            )
-            accelerationEncoder.build(
-                accelerationStructure: instanceAS,
-                descriptor: instanceDesc,
-                scratchBuffer: instanceScratch,
-                scratchBufferOffset: 0
-            )
-            accelerationEncoder.endEncoding()
-        }
-
-        if let laserEncoder = commandBuffer.makeComputeCommandEncoder() {
-            laserEncoder.setComputePipelineState(laserPipeline)
-            laserEncoder.setBuffer(uniformBuffer, offset: 0, index: 0)
-            laserEncoder.setBuffer(instanceBuffer, offset: 0, index: 1)
-            if let instanceAS = instanceAccelerationStructure {
-                laserEncoder.setAccelerationStructure(instanceAS, bufferIndex: 2)
+        autoreleasepool {
+            _ = frameSemaphore.wait(timeout: .distantFuture)
+            guard let drawable = view.currentDrawable,
+                  let commandBuffer = commandQueue.makeCommandBuffer() else {
+                frameSemaphore.signal()
+                return
             }
-            laserEncoder.setBuffer(laserResultBuffer, offset: 0, index: 3)
-            laserEncoder.setTexture(renderedWaterTexture, index: 0)
-            if let staticAS = staticMesh.accelerationStructure { laserEncoder.useResource(staticAS, usage: .read) }
-            if let waterAS = waterMesh.accelerationStructure { laserEncoder.useResource(waterAS, usage: .read) }
-            if let floatAS = floatMesh.accelerationStructure { laserEncoder.useResource(floatAS, usage: .read) }
-            laserEncoder.dispatchThreads(
-                MTLSize(width: 1, height: 1, depth: 1),
-                threadsPerThreadgroup: MTLSize(width: 1, height: 1, depth: 1)
-            )
-            laserEncoder.endEncoding()
-        }
-
-        if let encoder = commandBuffer.makeComputeCommandEncoder() {
-            encoder.setComputePipelineState(pipeline)
-            encoder.setBuffer(uniformBuffer, offset: 0, index: 0)
-            encoder.setBuffer(instanceBuffer, offset: 0, index: 1)
-            if let instanceAS = instanceAccelerationStructure {
-                encoder.setAccelerationStructure(instanceAS, bufferIndex: 2)
+            commandBuffer.addCompletedHandler { [frameSemaphore] _ in
+                frameSemaphore.signal()
             }
-            encoder.setBuffer(laserResultBuffer, offset: 0, index: 3)
-            encoder.setTexture(drawable.texture, index: 0)
-            encoder.setTexture(renderedWaterTexture, index: 1)
-            if let staticAS = staticMesh.accelerationStructure { encoder.useResource(staticAS, usage: .read) }
-            if let playerAS = playerMesh.accelerationStructure { encoder.useResource(playerAS, usage: .read) }
-            if let waterAS = waterMesh.accelerationStructure { encoder.useResource(waterAS, usage: .read) }
-            if let floatAS = floatMesh.accelerationStructure { encoder.useResource(floatAS, usage: .read) }
-            encoder.dispatchThreads(
-                MTLSize(width: drawable.texture.width, height: drawable.texture.height, depth: 1),
-                threadsPerThreadgroup: MTLSize(width: 8, height: 8, depth: 1)
-            )
-            encoder.endEncoding()
-        }
 
-        commandBuffer.present(drawable)
-        commandBuffer.commit()
-        pendingWaterImpulse = .zero
+            let now = CACurrentMediaTime()
+            let rawDt = Float(min(1.0 / 30.0, max(0, now - lastFrameTime)))
+            lastFrameTime = now
+            let effectiveDt = isGamePaused ? 0.0 : (isSlowMotionActive ? rawDt * 0.20 : rawDt)
+            if !isGamePaused {
+                elapsedTime += effectiveDt
+                updateSimulation(dt: effectiveDt, rawDt: rawDt)
+            }
+            writeInstanceDescriptors()
+            writeUniforms(texture: drawable.texture, dt: effectiveDt)
 
-        fpsFrameCount += 1
-        let fpsDuration = now - fpsStartTime
-        if fpsDuration >= 0.5 {
-            let framesPerSecond = Double(fpsFrameCount) / fpsDuration
-            onFPSUpdate?(framesPerSecond)
-#if DEBUG
-            print(String(format: "MetalRT %.1f FPS at %dx%d", framesPerSecond, drawable.texture.width, drawable.texture.height))
-#endif
-            fpsFrameCount = 0
-            fpsStartTime = now
+            var renderedWaterTexture = waterTextures[waterStateIndex]
+            let nextWaterStateIndex = 1 - waterStateIndex
+            if let waterEncoder = commandBuffer.makeComputeCommandEncoder() {
+                waterEncoder.setComputePipelineState(waterPipeline)
+                waterEncoder.setBuffer(uniformBuffer, offset: 0, index: 0)
+                waterEncoder.setTexture(waterTextures[waterStateIndex], index: 0)
+                waterEncoder.setTexture(waterTextures[nextWaterStateIndex], index: 1)
+                waterEncoder.dispatchThreads(
+                    MTLSize(width: 64, height: 48, depth: 1),
+                    threadsPerThreadgroup: MTLSize(width: 8, height: 8, depth: 1)
+                )
+                waterEncoder.endEncoding()
+                renderedWaterTexture = waterTextures[nextWaterStateIndex]
+                waterStateIndex = nextWaterStateIndex
+            }
+
+            if let waterVertexEncoder = commandBuffer.makeComputeCommandEncoder() {
+                waterVertexEncoder.setComputePipelineState(waterVertexPipeline)
+                waterVertexEncoder.setBuffer(waterMesh.vertexBuffer, offset: 0, index: 0)
+                waterVertexEncoder.setTexture(renderedWaterTexture, index: 0)
+                waterVertexEncoder.dispatchThreads(
+                    MTLSize(width: waterMesh.vertexCount, height: 1, depth: 1),
+                    threadsPerThreadgroup: MTLSize(width: 64, height: 1, depth: 1)
+                )
+                waterVertexEncoder.endEncoding()
+            }
+
+            if let instanceAS = instanceAccelerationStructure,
+               let instanceDesc = instanceDescriptor,
+               let instanceScratch = instanceScratchBuffer,
+               let waterAS = waterMesh.accelerationStructure,
+               let waterDesc = waterMesh.descriptor,
+               let waterScratch = waterMesh.scratchBuffer,
+               let accelerationEncoder = commandBuffer.makeAccelerationStructureCommandEncoder() {
+                accelerationEncoder.refit(
+                    sourceAccelerationStructure: waterAS,
+                    descriptor: waterDesc,
+                    destinationAccelerationStructure: waterAS,
+                    scratchBuffer: waterScratch,
+                    scratchBufferOffset: 0
+                )
+                accelerationEncoder.build(
+                    accelerationStructure: instanceAS,
+                    descriptor: instanceDesc,
+                    scratchBuffer: instanceScratch,
+                    scratchBufferOffset: 0
+                )
+                accelerationEncoder.endEncoding()
+            }
+
+            if let laserEncoder = commandBuffer.makeComputeCommandEncoder() {
+                laserEncoder.setComputePipelineState(laserPipeline)
+                laserEncoder.setBuffer(uniformBuffer, offset: 0, index: 0)
+                laserEncoder.setBuffer(instanceBuffer, offset: 0, index: 1)
+                if let instanceAS = instanceAccelerationStructure {
+                    laserEncoder.setAccelerationStructure(instanceAS, bufferIndex: 2)
+                }
+                laserEncoder.setBuffer(laserResultBuffer, offset: 0, index: 3)
+                laserEncoder.setTexture(renderedWaterTexture, index: 0)
+                if let staticAS = staticMesh.accelerationStructure { laserEncoder.useResource(staticAS, usage: .read) }
+                if let waterAS = waterMesh.accelerationStructure { laserEncoder.useResource(waterAS, usage: .read) }
+                if let floatAS = floatMesh.accelerationStructure { laserEncoder.useResource(floatAS, usage: .read) }
+                laserEncoder.dispatchThreads(
+                    MTLSize(width: 1, height: 1, depth: 1),
+                    threadsPerThreadgroup: MTLSize(width: 1, height: 1, depth: 1)
+                )
+                laserEncoder.endEncoding()
+            }
+
+            if let encoder = commandBuffer.makeComputeCommandEncoder() {
+                encoder.setComputePipelineState(pipeline)
+                encoder.setBuffer(uniformBuffer, offset: 0, index: 0)
+                encoder.setBuffer(instanceBuffer, offset: 0, index: 1)
+                if let instanceAS = instanceAccelerationStructure {
+                    encoder.setAccelerationStructure(instanceAS, bufferIndex: 2)
+                }
+                encoder.setBuffer(laserResultBuffer, offset: 0, index: 3)
+                encoder.setTexture(drawable.texture, index: 0)
+                encoder.setTexture(renderedWaterTexture, index: 1)
+                if let staticAS = staticMesh.accelerationStructure { encoder.useResource(staticAS, usage: .read) }
+                if let playerAS = playerMesh.accelerationStructure { encoder.useResource(playerAS, usage: .read) }
+                if let waterAS = waterMesh.accelerationStructure { encoder.useResource(waterAS, usage: .read) }
+                if let floatAS = floatMesh.accelerationStructure { encoder.useResource(floatAS, usage: .read) }
+                encoder.dispatchThreads(
+                    MTLSize(width: drawable.texture.width, height: drawable.texture.height, depth: 1),
+                    threadsPerThreadgroup: MTLSize(width: 8, height: 8, depth: 1)
+                )
+                encoder.endEncoding()
+            }
+
+            commandBuffer.present(drawable)
+            commandBuffer.commit()
+            pendingWaterImpulse = .zero
+
+            fpsFrameCount += 1
+            let fpsDuration = now - fpsStartTime
+            if fpsDuration >= 0.5 {
+                let framesPerSecond = Double(fpsFrameCount) / fpsDuration
+                onFPSUpdate?(framesPerSecond)
+    #if DEBUG
+                print(String(format: "MetalRT %.1f FPS at %dx%d", framesPerSecond, drawable.texture.width, drawable.texture.height))
+    #endif
+                fpsFrameCount = 0
+                fpsStartTime = now
+            }
         }
     }
 
