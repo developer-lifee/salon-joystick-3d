@@ -532,25 +532,66 @@ kernel void raytracePatio(
         tracer.accept_any_intersection(false);
         uint rayMask = bounce == 0 && firstPerson ? 0x05 : 0x07;
         auto hit = tracer.intersect(currentRay, accelerationStructure, rayMask);
-        if (hit.type == intersection_type::none) {
-            accumulated += throughput * nightSky(currentRay.direction);
-            break;
-        }
-        if (bounce == 0) {
-            firstSurfaceDistance = hit.distance;
-        }
+        float3 position;
+        float3 normal;
+        float3 albedo;
+        float kind;
+        float baseReflectivity = 0.05f;
+        float roughness = 0.5f;
 
-        RTTriangleData material = *(const device RTTriangleData *)hit.primitive_data;
-        float3 position = currentRay.origin + currentRay.direction * hit.distance;
-        float3 normal = transformedNormal(material.normalRoughness.xyz, instances, hit.instance_id);
-        if (dot(normal, currentRay.direction) > 0.0f) {
-            normal = -normal;
-        }
+        if (hit.type != intersection_type::none) {
+            if (bounce == 0) {
+                firstSurfaceDistance = hit.distance;
+            }
+            RTTriangleData material = *(const device RTTriangleData *)hit.primitive_data;
+            position = currentRay.origin + currentRay.direction * hit.distance;
+            normal = transformedNormal(material.normalRoughness.xyz, instances, hit.instance_id);
+            if (dot(normal, currentRay.direction) > 0.0f) {
+                normal = -normal;
+            }
+            kind = material.emissionKind.w;
+            albedo = material.albedoReflectivity.xyz;
+            baseReflectivity = material.albedoReflectivity.w;
+            roughness = material.normalRoughness.w;
+        } else {
+            AnalyticalHit analytical = analyticalPatioIntersect(currentRay);
+            // 🤖 3D Bot Analytical Fallback for Simulator & Legacy Non-RT iPhones
+            for (uint b = 0; b < 5; ++b) {
+                float3 botCenter = float3(instances[4 + b].transformationMatrix[3].x,
+                                          instances[4 + b].transformationMatrix[3].y + 0.9f,
+                                          instances[4 + b].transformationMatrix[3].z);
+                if (botCenter.y > -5.0f) {
+                    float3 oc = currentRay.origin - botCenter;
+                    float bProj = dot(oc, currentRay.direction);
+                    float c = dot(oc, oc) - 0.45f * 0.45f;
+                    float disc = bProj * bProj - c;
+                    if (disc > 0.0f) {
+                        float tBot = -bProj - sqrt(disc);
+                        if (tBot > 0.01f && tBot < analytical.distance) {
+                            analytical.hit = true;
+                            analytical.distance = tBot;
+                            analytical.position = currentRay.origin + currentRay.direction * tBot;
+                            analytical.normal = normalize(analytical.position - botCenter);
+                            analytical.albedo = float3(0.85f, 0.25f, 0.25f);
+                            analytical.kind = 0.0f;
+                        }
+                    }
+                }
+            }
 
-        float kind = material.emissionKind.w;
-        float3 albedo = material.albedoReflectivity.xyz;
-        float baseReflectivity = material.albedoReflectivity.w;
-        float roughness = material.normalRoughness.w;
+            if (!analytical.hit) {
+                accumulated += throughput * nightSky(currentRay.direction);
+                break;
+            }
+            if (bounce == 0) {
+                firstSurfaceDistance = analytical.distance;
+            }
+            position = analytical.position;
+            normal = analytical.normal;
+            albedo = analytical.albedo;
+            kind = analytical.kind;
+            baseReflectivity = (kind == 2.0f) ? 0.35f : 0.08f;
+        }
 
         bool poolWaterSurface = kind > 1.5f && kind < 2.5f;
         bool puddleSurface = kind > 7.5f && kind < 8.5f;
