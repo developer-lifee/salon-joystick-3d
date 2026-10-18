@@ -413,11 +413,20 @@ private struct RTMeshBuilder {
         }
     }
 
+    enum CharacterPose {
+        case stand
+        case walk
+        case cover
+        case swim
+        case sit
+    }
+
     mutating func addCharacter(
         origin: SIMD3<Float>,
         color: SIMD3<Float>,
         eyes: Bool = true,
-        holdsTool: Bool = false
+        holdsTool: Bool = false,
+        pose: CharacterPose = .stand
     ) {
         let suit = RTMaterial(color: color, roughness: 0.42, reflectivity: 0.18)
         let armor = RTMaterial(color: SIMD3<Float>(0.08, 0.12, 0.16), roughness: 0.18, reflectivity: 0.65)
@@ -426,62 +435,224 @@ private struct RTMeshBuilder {
         let dark = RTMaterial(color: SIMD3<Float>(repeating: 0.012), roughness: 0.92)
         let scubaTankMat = RTMaterial(color: SIMD3<Float>(0.92, 0.85, 0.12), roughness: 0.15, reflectivity: 0.75)
         let flipperMat = RTMaterial(color: SIMD3<Float>(0.95, 0.45, 0.05), roughness: 0.25, reflectivity: 0.40)
+        let toolMat = RTMaterial(color: SIMD3<Float>(0.055, 0.060, 0.065), roughness: 0.34, reflectivity: 0.10)
 
-        // Torso & Armor Chest Plate
-        addSphere(center: origin + SIMD3<Float>(0, 0.86, 0), radii: SIMD3<Float>(0.34, 0.50, 0.27), material: suit)
-        addBox(center: origin + SIMD3<Float>(0, 0.92, 0.16), size: SIMD3<Float>(0.44, 0.42, 0.12), material: armor)
-        addSphere(center: origin + SIMD3<Float>(0, 0.95, 0.23), radii: SIMD3<Float>(repeating: 0.08), material: coreEmissive)
+        switch pose {
+        case .cover:
+            // 🛡️ GTA Tactical Crouch Cover (Centro de gravedad bajo, rodilla hincada, codos en guardia)
+            let torsoO = origin + SIMD3<Float>(0, 0.50, 0.06)
+            addSphere(center: torsoO, radii: SIMD3<Float>(0.32, 0.44, 0.26), material: suit)
+            addBox(center: origin + SIMD3<Float>(0, 0.54, 0.20), size: SIMD3<Float>(0.42, 0.38, 0.12), material: armor)
+            addSphere(center: origin + SIMD3<Float>(0, 0.57, 0.26), radii: SIMD3<Float>(repeating: 0.08), material: coreEmissive)
 
-        // 🤿 Scuba Oxygen Tank on Back & Regulator Valve
-        addBox(center: origin + SIMD3<Float>(0, 0.92, -0.22), size: SIMD3<Float>(0.28, 0.55, 0.18), material: scubaTankMat)
-        addSphere(center: origin + SIMD3<Float>(0, 1.22, -0.22), radii: SIMD3<Float>(repeating: 0.09), material: armor)
+            // Scuba Tank pegado a espalda
+            addBox(center: origin + SIMD3<Float>(0, 0.54, -0.16), size: SIMD3<Float>(0.28, 0.48, 0.18), material: scubaTankMat)
+            addSphere(center: origin + SIMD3<Float>(0, 0.80, -0.16), radii: SIMD3<Float>(repeating: 0.08), material: armor)
 
-        // Helmet & Curved Visor
-        addSphere(center: origin + SIMD3<Float>(0, 1.55, 0), radii: SIMD3<Float>(repeating: 0.32), material: suit)
-        addBox(center: origin + SIMD3<Float>(0, 1.58, 0.22), size: SIMD3<Float>(0.38, 0.18, 0.14), material: visor)
+            // Helmet & Visor inclinados hacia la cobertura
+            addSphere(center: origin + SIMD3<Float>(0, 1.05, 0.12), radii: SIMD3<Float>(repeating: 0.30), material: suit)
+            addBox(center: origin + SIMD3<Float>(0, 1.07, 0.32), size: SIMD3<Float>(0.36, 0.17, 0.14), material: visor)
+            if eyes {
+                addSphere(center: origin + SIMD3<Float>(-0.10, 1.09, 0.38), radii: SIMD3<Float>(repeating: 0.038), material: dark, segments: 7, rings: 4)
+                addSphere(center: origin + SIMD3<Float>( 0.10, 1.09, 0.38), radii: SIMD3<Float>(repeating: 0.038), material: dark, segments: 7, rings: 4)
+            }
 
-        // 🦾 Articulated Upper Arms, Elbow Joints & Forearms
-        // Left & Right Shoulder Joints
-        addSphere(center: origin + SIMD3<Float>(-0.42, 1.15, 0), radii: SIMD3<Float>(repeating: 0.11), material: armor)
-        addSphere(center: origin + SIMD3<Float>( 0.42, 1.15, 0), radii: SIMD3<Float>(repeating: 0.11), material: armor)
-        // Upper Arms
-        addBox(center: origin + SIMD3<Float>(-0.42, 0.96, 0), size: SIMD3<Float>(0.14, 0.28, 0.15), material: suit)
-        addBox(center: origin + SIMD3<Float>( 0.42, 0.96, 0), size: SIMD3<Float>(0.14, 0.28, 0.15), material: suit)
-        // 🦾 ELBOW JOINTS (Articulaciones de Codo Visibles)
-        addSphere(center: origin + SIMD3<Float>(-0.42, 0.80, 0.02), radii: SIMD3<Float>(repeating: 0.095), material: armor)
-        addSphere(center: origin + SIMD3<Float>( 0.42, 0.80, 0.02), radii: SIMD3<Float>(repeating: 0.095), material: armor)
-        // Forearms (Bent forward slightly at elbow joint!)
-        addBox(center: origin + SIMD3<Float>(-0.42, 0.65, 0.08), size: SIMD3<Float>(0.13, 0.26, 0.16), material: suit)
-        addBox(center: origin + SIMD3<Float>( 0.42, 0.65, 0.08), size: SIMD3<Float>(0.13, 0.26, 0.16), material: suit)
+            // 🦾 Codos en guardia táctica cubriendo pecho/cabeza
+            addSphere(center: origin + SIMD3<Float>(-0.38, 0.74, 0.08), radii: SIMD3<Float>(repeating: 0.10), material: armor)
+            addSphere(center: origin + SIMD3<Float>( 0.38, 0.74, 0.08), radii: SIMD3<Float>(repeating: 0.10), material: armor)
+            addBox(center: origin + SIMD3<Float>(-0.34, 0.62, 0.16), size: SIMD3<Float>(0.13, 0.24, 0.14), material: suit)
+            addBox(center: origin + SIMD3<Float>( 0.34, 0.62, 0.16), size: SIMD3<Float>(0.13, 0.24, 0.14), material: suit)
+            // Codos articulados flexionados a 90º
+            addSphere(center: origin + SIMD3<Float>(-0.30, 0.48, 0.22), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+            addSphere(center: origin + SIMD3<Float>( 0.30, 0.48, 0.22), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+            // Antebrazos cruzados al frente en guardia
+            addBox(center: origin + SIMD3<Float>(-0.16, 0.50, 0.28), size: SIMD3<Float>(0.24, 0.12, 0.14), material: suit)
+            addBox(center: origin + SIMD3<Float>( 0.16, 0.50, 0.28), size: SIMD3<Float>(0.24, 0.12, 0.14), material: suit)
+            if holdsTool {
+                addBox(center: origin + SIMD3<Float>(0.26, 0.50, 0.36), size: SIMD3<Float>(0.12, 0.14, 0.38), material: toolMat)
+            }
 
-        // 🦵 Articulated Thighs, Knee Joints, Calves & Scuba Flippers
-        // Hip Joints
-        addSphere(center: origin + SIMD3<Float>(-0.16, 0.52, 0), radii: SIMD3<Float>(repeating: 0.10), material: armor)
-        addSphere(center: origin + SIMD3<Float>( 0.16, 0.52, 0), radii: SIMD3<Float>(repeating: 0.10), material: armor)
-        // Thighs
-        addBox(center: origin + SIMD3<Float>(-0.16, 0.38, 0), size: SIMD3<Float>(0.15, 0.26, 0.16), material: suit)
-        addBox(center: origin + SIMD3<Float>( 0.16, 0.38, 0), size: SIMD3<Float>(0.15, 0.26, 0.16), material: suit)
-        // 🦵 KNEE JOINTS (Articulaciones de Rodilla Visibles)
-        addSphere(center: origin + SIMD3<Float>(-0.16, 0.23, 0.02), radii: SIMD3<Float>(repeating: 0.095), material: armor)
-        addSphere(center: origin + SIMD3<Float>( 0.16, 0.23, 0.02), radii: SIMD3<Float>(repeating: 0.095), material: armor)
-        // Calves
-        addBox(center: origin + SIMD3<Float>(-0.16, 0.10, 0.03), size: SIMD3<Float>(0.14, 0.24, 0.15), material: suit)
-        addBox(center: origin + SIMD3<Float>( 0.16, 0.10, 0.03), size: SIMD3<Float>(0.14, 0.24, 0.15), material: suit)
-        // 🤿 Scuba Diving Flippers / Boots
-        addBox(center: origin + SIMD3<Float>(-0.16, 0.02, 0.16), size: SIMD3<Float>(0.17, 0.05, 0.36), material: flipperMat)
-        addBox(center: origin + SIMD3<Float>( 0.16, 0.02, 0.16), size: SIMD3<Float>(0.17, 0.05, 0.36), material: flipperMat)
+            // 🦵 Piernas agachadas: derecha hincada en suelo, izquierda flexionada al pecho
+            // Cadera
+            addSphere(center: origin + SIMD3<Float>(-0.16, 0.34, 0.04), radii: SIMD3<Float>(repeating: 0.10), material: armor)
+            addSphere(center: origin + SIMD3<Float>( 0.16, 0.34, -0.04), radii: SIMD3<Float>(repeating: 0.10), material: armor)
+            // Pierna Izq (alzada hacia el pecho, rodilla alta)
+            addBox(center: origin + SIMD3<Float>(-0.16, 0.28, 0.16), size: SIMD3<Float>(0.15, 0.24, 0.16), material: suit)
+            addSphere(center: origin + SIMD3<Float>(-0.16, 0.32, 0.28), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+            addBox(center: origin + SIMD3<Float>(-0.16, 0.16, 0.28), size: SIMD3<Float>(0.14, 0.22, 0.15), material: suit)
+            addBox(center: origin + SIMD3<Float>(-0.16, 0.03, 0.42), size: SIMD3<Float>(0.17, 0.05, 0.36), material: flipperMat)
+            // Pierna Der (rodilla apoyada en tierra)
+            addBox(center: origin + SIMD3<Float>(0.16, 0.20, -0.10), size: SIMD3<Float>(0.15, 0.24, 0.16), material: suit)
+            addSphere(center: origin + SIMD3<Float>(0.16, 0.09, -0.16), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+            addBox(center: origin + SIMD3<Float>(0.16, 0.06, -0.04), size: SIMD3<Float>(0.14, 0.12, 0.22), material: suit)
+            addBox(center: origin + SIMD3<Float>(0.16, 0.03, 0.12), size: SIMD3<Float>(0.17, 0.05, 0.36), material: flipperMat)
 
-        if eyes {
-            addSphere(center: origin + SIMD3<Float>(-0.11, 1.60, 0.29), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
-            addSphere(center: origin + SIMD3<Float>( 0.11, 1.60, 0.29), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
-        }
-        if holdsTool {
-            let tool = RTMaterial(color: SIMD3<Float>(0.055, 0.060, 0.065), roughness: 0.34, reflectivity: 0.10)
-            addBox(
-                center: origin + SIMD3<Float>(0.47, 0.65, 0.28),
-                size: SIMD3<Float>(0.14, 0.16, 0.42),
-                material: tool
-            )
+        case .swim:
+            // 🏊 Mario Buceo: Brazos arqueados en braza y patada alterna de aletas
+            let torsoO = origin + SIMD3<Float>(0, 0.86, 0)
+            addSphere(center: torsoO, radii: SIMD3<Float>(0.34, 0.50, 0.27), material: suit)
+            addBox(center: origin + SIMD3<Float>(0, 0.92, 0.16), size: SIMD3<Float>(0.44, 0.42, 0.12), material: armor)
+            addSphere(center: origin + SIMD3<Float>(0, 0.95, 0.23), radii: SIMD3<Float>(repeating: 0.08), material: coreEmissive)
+            addBox(center: origin + SIMD3<Float>(0, 0.92, -0.22), size: SIMD3<Float>(0.28, 0.55, 0.18), material: scubaTankMat)
+            addSphere(center: origin + SIMD3<Float>(0, 1.22, -0.22), radii: SIMD3<Float>(repeating: 0.09), material: armor)
+            addSphere(center: origin + SIMD3<Float>(0, 1.55, 0), radii: SIMD3<Float>(repeating: 0.32), material: suit)
+            addBox(center: origin + SIMD3<Float>(0, 1.58, 0.22), size: SIMD3<Float>(0.38, 0.18, 0.14), material: visor)
+            if eyes {
+                addSphere(center: origin + SIMD3<Float>(-0.11, 1.60, 0.29), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
+                addSphere(center: origin + SIMD3<Float>( 0.11, 1.60, 0.29), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
+            }
+
+            // Brazos arqueados para impulso en agua
+            addSphere(center: origin + SIMD3<Float>(-0.46, 1.15, 0), radii: SIMD3<Float>(repeating: 0.11), material: armor)
+            addSphere(center: origin + SIMD3<Float>( 0.46, 1.15, 0), radii: SIMD3<Float>(repeating: 0.11), material: armor)
+            addBox(center: origin + SIMD3<Float>(-0.48, 0.98, 0.08), size: SIMD3<Float>(0.14, 0.28, 0.15), material: suit)
+            addBox(center: origin + SIMD3<Float>( 0.48, 0.98, 0.08), size: SIMD3<Float>(0.14, 0.28, 0.15), material: suit)
+            // Codos arqueados
+            addSphere(center: origin + SIMD3<Float>(-0.50, 0.82, 0.14), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+            addSphere(center: origin + SIMD3<Float>( 0.50, 0.82, 0.14), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+            addBox(center: origin + SIMD3<Float>(-0.42, 0.68, 0.22), size: SIMD3<Float>(0.13, 0.26, 0.16), material: suit)
+            addBox(center: origin + SIMD3<Float>( 0.42, 0.68, 0.22), size: SIMD3<Float>(0.13, 0.26, 0.16), material: suit)
+            if holdsTool {
+                addBox(center: origin + SIMD3<Float>(0.47, 0.68, 0.32), size: SIMD3<Float>(0.14, 0.16, 0.42), material: toolMat)
+            }
+
+            // Piernas en patada de aletas (Flutter Kick)
+            addSphere(center: origin + SIMD3<Float>(-0.16, 0.52, 0), radii: SIMD3<Float>(repeating: 0.10), material: armor)
+            addSphere(center: origin + SIMD3<Float>( 0.16, 0.52, 0), radii: SIMD3<Float>(repeating: 0.10), material: armor)
+            // Pierna Izq (arriba batiendo)
+            addBox(center: origin + SIMD3<Float>(-0.16, 0.40, -0.08), size: SIMD3<Float>(0.15, 0.26, 0.16), material: suit)
+            addSphere(center: origin + SIMD3<Float>(-0.16, 0.26, -0.14), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+            addBox(center: origin + SIMD3<Float>(-0.16, 0.14, -0.20), size: SIMD3<Float>(0.14, 0.24, 0.15), material: suit)
+            addBox(center: origin + SIMD3<Float>(-0.16, 0.04, -0.34), size: SIMD3<Float>(0.17, 0.05, 0.38), material: flipperMat)
+            // Pierna Der (abajo)
+            addBox(center: origin + SIMD3<Float>( 0.16, 0.38, 0.08), size: SIMD3<Float>(0.15, 0.26, 0.16), material: suit)
+            addSphere(center: origin + SIMD3<Float>( 0.16, 0.22, 0.12), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+            addBox(center: origin + SIMD3<Float>( 0.16, 0.10, 0.10), size: SIMD3<Float>(0.14, 0.24, 0.15), material: suit)
+            addBox(center: origin + SIMD3<Float>( 0.16, 0.02, 0.24), size: SIMD3<Float>(0.17, 0.05, 0.38), material: flipperMat)
+
+        case .sit:
+            // 🛷 Tobogán: Sentado con piernas extendidas al frente y rodillas a 30º
+            let torsoO = origin + SIMD3<Float>(0, 0.58, -0.10)
+            addSphere(center: torsoO, radii: SIMD3<Float>(0.34, 0.48, 0.27), material: suit)
+            addBox(center: origin + SIMD3<Float>(0, 0.64, 0.06), size: SIMD3<Float>(0.44, 0.40, 0.12), material: armor)
+            addSphere(center: origin + SIMD3<Float>(0, 0.67, 0.13), radii: SIMD3<Float>(repeating: 0.08), material: coreEmissive)
+            addBox(center: origin + SIMD3<Float>(0, 0.64, -0.32), size: SIMD3<Float>(0.28, 0.52, 0.18), material: scubaTankMat)
+            addSphere(center: origin + SIMD3<Float>(0, 0.92, -0.32), radii: SIMD3<Float>(repeating: 0.09), material: armor)
+            addSphere(center: origin + SIMD3<Float>(0, 1.25, -0.06), radii: SIMD3<Float>(repeating: 0.32), material: suit)
+            addBox(center: origin + SIMD3<Float>(0, 1.28, 0.16), size: SIMD3<Float>(0.38, 0.18, 0.14), material: visor)
+            if eyes {
+                addSphere(center: origin + SIMD3<Float>(-0.11, 1.30, 0.23), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
+                addSphere(center: origin + SIMD3<Float>( 0.11, 1.30, 0.23), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
+            }
+
+            // Brazos a los lados sujetando la rampa
+            addSphere(center: origin + SIMD3<Float>(-0.42, 0.86, -0.10), radii: SIMD3<Float>(repeating: 0.11), material: armor)
+            addSphere(center: origin + SIMD3<Float>( 0.42, 0.86, -0.10), radii: SIMD3<Float>(repeating: 0.11), material: armor)
+            addBox(center: origin + SIMD3<Float>(-0.44, 0.70, -0.08), size: SIMD3<Float>(0.14, 0.28, 0.15), material: suit)
+            addBox(center: origin + SIMD3<Float>( 0.44, 0.70, -0.08), size: SIMD3<Float>(0.14, 0.28, 0.15), material: suit)
+            addSphere(center: origin + SIMD3<Float>(-0.44, 0.54, -0.06), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+            addSphere(center: origin + SIMD3<Float>( 0.44, 0.54, -0.06), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+            addBox(center: origin + SIMD3<Float>(-0.42, 0.38, 0.06), size: SIMD3<Float>(0.13, 0.26, 0.16), material: suit)
+            addBox(center: origin + SIMD3<Float>( 0.42, 0.38, 0.06), size: SIMD3<Float>(0.13, 0.26, 0.16), material: suit)
+
+            // Piernas proyectadas al frente sentadas
+            addSphere(center: origin + SIMD3<Float>(-0.16, 0.26, -0.04), radii: SIMD3<Float>(repeating: 0.10), material: armor)
+            addSphere(center: origin + SIMD3<Float>( 0.16, 0.26, -0.04), radii: SIMD3<Float>(repeating: 0.10), material: armor)
+            addBox(center: origin + SIMD3<Float>(-0.16, 0.26, 0.18), size: SIMD3<Float>(0.15, 0.18, 0.30), material: suit)
+            addBox(center: origin + SIMD3<Float>( 0.16, 0.26, 0.18), size: SIMD3<Float>(0.15, 0.18, 0.30), material: suit)
+            // Rodillas flexionadas hacia arriba
+            addSphere(center: origin + SIMD3<Float>(-0.16, 0.30, 0.38), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+            addSphere(center: origin + SIMD3<Float>( 0.16, 0.30, 0.38), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+            addBox(center: origin + SIMD3<Float>(-0.16, 0.18, 0.52), size: SIMD3<Float>(0.14, 0.22, 0.16), material: suit)
+            addBox(center: origin + SIMD3<Float>( 0.16, 0.18, 0.52), size: SIMD3<Float>(0.14, 0.22, 0.16), material: suit)
+            addBox(center: origin + SIMD3<Float>(-0.16, 0.08, 0.70), size: SIMD3<Float>(0.17, 0.06, 0.36), material: flipperMat)
+            addBox(center: origin + SIMD3<Float>( 0.16, 0.08, 0.70), size: SIMD3<Float>(0.17, 0.06, 0.36), material: flipperMat)
+
+        case .walk:
+            // 🏃 Walk / Run: Zancada dinámica con flexión alterna de codos y rodillas
+            let torsoO = origin + SIMD3<Float>(0, 0.86, 0)
+            addSphere(center: torsoO, radii: SIMD3<Float>(0.34, 0.50, 0.27), material: suit)
+            addBox(center: origin + SIMD3<Float>(0, 0.92, 0.16), size: SIMD3<Float>(0.44, 0.42, 0.12), material: armor)
+            addSphere(center: origin + SIMD3<Float>(0, 0.95, 0.23), radii: SIMD3<Float>(repeating: 0.08), material: coreEmissive)
+            addBox(center: origin + SIMD3<Float>(0, 0.92, -0.22), size: SIMD3<Float>(0.28, 0.55, 0.18), material: scubaTankMat)
+            addSphere(center: origin + SIMD3<Float>(0, 1.22, -0.22), radii: SIMD3<Float>(repeating: 0.09), material: armor)
+            addSphere(center: origin + SIMD3<Float>(0, 1.55, 0), radii: SIMD3<Float>(repeating: 0.32), material: suit)
+            addBox(center: origin + SIMD3<Float>(0, 1.58, 0.22), size: SIMD3<Float>(0.38, 0.18, 0.14), material: visor)
+            if eyes {
+                addSphere(center: origin + SIMD3<Float>(-0.11, 1.60, 0.29), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
+                addSphere(center: origin + SIMD3<Float>( 0.11, 1.60, 0.29), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
+            }
+
+            // Brazo Izq adelante (codo flexionado a 75º)
+            addSphere(center: origin + SIMD3<Float>(-0.42, 1.15, 0.04), radii: SIMD3<Float>(repeating: 0.11), material: armor)
+            addBox(center: origin + SIMD3<Float>(-0.42, 0.98, 0.08), size: SIMD3<Float>(0.14, 0.28, 0.15), material: suit)
+            addSphere(center: origin + SIMD3<Float>(-0.42, 0.82, 0.15), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+            addBox(center: origin + SIMD3<Float>(-0.38, 0.68, 0.25), size: SIMD3<Float>(0.13, 0.26, 0.16), material: suit)
+
+            // Brazo Der atrás
+            addSphere(center: origin + SIMD3<Float>( 0.42, 1.15, -0.04), radii: SIMD3<Float>(repeating: 0.11), material: armor)
+            addBox(center: origin + SIMD3<Float>( 0.42, 0.98, -0.08), size: SIMD3<Float>(0.14, 0.28, 0.15), material: suit)
+            addSphere(center: origin + SIMD3<Float>( 0.42, 0.82, -0.15), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+            addBox(center: origin + SIMD3<Float>( 0.42, 0.68, -0.22), size: SIMD3<Float>(0.13, 0.26, 0.16), material: suit)
+            if holdsTool {
+                addBox(center: origin + SIMD3<Float>(0.47, 0.68, 0.12), size: SIMD3<Float>(0.14, 0.16, 0.42), material: toolMat)
+            }
+
+            // Pierna Izq adelante (zancada con rodilla flexionada)
+            addSphere(center: origin + SIMD3<Float>(-0.16, 0.52, 0), radii: SIMD3<Float>(repeating: 0.10), material: armor)
+            addBox(center: origin + SIMD3<Float>(-0.16, 0.38, 0.12), size: SIMD3<Float>(0.15, 0.26, 0.16), material: suit)
+            addSphere(center: origin + SIMD3<Float>(-0.16, 0.24, 0.20), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+            addBox(center: origin + SIMD3<Float>(-0.16, 0.10, 0.22), size: SIMD3<Float>(0.14, 0.24, 0.15), material: suit)
+            addBox(center: origin + SIMD3<Float>(-0.16, 0.02, 0.38), size: SIMD3<Float>(0.17, 0.05, 0.36), material: flipperMat)
+
+            // Pierna Der atrás (empuje de marcha)
+            addSphere(center: origin + SIMD3<Float>( 0.16, 0.52, 0), radii: SIMD3<Float>(repeating: 0.10), material: armor)
+            addBox(center: origin + SIMD3<Float>( 0.16, 0.38, -0.12), size: SIMD3<Float>(0.15, 0.26, 0.16), material: suit)
+            addSphere(center: origin + SIMD3<Float>( 0.16, 0.24, -0.20), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+            addBox(center: origin + SIMD3<Float>( 0.16, 0.12, -0.26), size: SIMD3<Float>(0.14, 0.24, 0.15), material: suit)
+            addBox(center: origin + SIMD3<Float>( 0.16, 0.04, -0.16), size: SIMD3<Float>(0.17, 0.05, 0.36), material: flipperMat)
+
+        case .stand:
+            // 🧍 Stand: Pose erguida de combate con articulaciones naturales
+            let torsoO = origin + SIMD3<Float>(0, 0.86, 0)
+            addSphere(center: torsoO, radii: SIMD3<Float>(0.34, 0.50, 0.27), material: suit)
+            addBox(center: origin + SIMD3<Float>(0, 0.92, 0.16), size: SIMD3<Float>(0.44, 0.42, 0.12), material: armor)
+            addSphere(center: origin + SIMD3<Float>(0, 0.95, 0.23), radii: SIMD3<Float>(repeating: 0.08), material: coreEmissive)
+            addBox(center: origin + SIMD3<Float>(0, 0.92, -0.22), size: SIMD3<Float>(0.28, 0.55, 0.18), material: scubaTankMat)
+            addSphere(center: origin + SIMD3<Float>(0, 1.22, -0.22), radii: SIMD3<Float>(repeating: 0.09), material: armor)
+            addSphere(center: origin + SIMD3<Float>(0, 1.55, 0), radii: SIMD3<Float>(repeating: 0.32), material: suit)
+            addBox(center: origin + SIMD3<Float>(0, 1.58, 0.22), size: SIMD3<Float>(0.38, 0.18, 0.14), material: visor)
+            if eyes {
+                addSphere(center: origin + SIMD3<Float>(-0.11, 1.60, 0.29), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
+                addSphere(center: origin + SIMD3<Float>( 0.11, 1.60, 0.29), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
+            }
+
+            // Brazos
+            addSphere(center: origin + SIMD3<Float>(-0.42, 1.15, 0), radii: SIMD3<Float>(repeating: 0.11), material: armor)
+            addSphere(center: origin + SIMD3<Float>( 0.42, 1.15, 0), radii: SIMD3<Float>(repeating: 0.11), material: armor)
+            addBox(center: origin + SIMD3<Float>(-0.42, 0.96, 0), size: SIMD3<Float>(0.14, 0.28, 0.15), material: suit)
+            addBox(center: origin + SIMD3<Float>( 0.42, 0.96, 0), size: SIMD3<Float>(0.14, 0.28, 0.15), material: suit)
+            // Codos articulados flexionados al frente
+            addSphere(center: origin + SIMD3<Float>(-0.42, 0.80, 0.03), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+            addSphere(center: origin + SIMD3<Float>( 0.42, 0.80, 0.03), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+            addBox(center: origin + SIMD3<Float>(-0.42, 0.65, 0.09), size: SIMD3<Float>(0.13, 0.26, 0.16), material: suit)
+            addBox(center: origin + SIMD3<Float>( 0.42, 0.65, 0.09), size: SIMD3<Float>(0.13, 0.26, 0.16), material: suit)
+            if holdsTool {
+                addBox(center: origin + SIMD3<Float>(0.47, 0.65, 0.28), size: SIMD3<Float>(0.14, 0.16, 0.42), material: toolMat)
+            }
+
+            // Piernas
+            addSphere(center: origin + SIMD3<Float>(-0.16, 0.52, 0), radii: SIMD3<Float>(repeating: 0.10), material: armor)
+            addSphere(center: origin + SIMD3<Float>( 0.16, 0.52, 0), radii: SIMD3<Float>(repeating: 0.10), material: armor)
+            addBox(center: origin + SIMD3<Float>(-0.16, 0.38, 0), size: SIMD3<Float>(0.15, 0.26, 0.16), material: suit)
+            addBox(center: origin + SIMD3<Float>( 0.16, 0.38, 0), size: SIMD3<Float>(0.15, 0.26, 0.16), material: suit)
+            // Rodillas articuladas
+            addSphere(center: origin + SIMD3<Float>(-0.16, 0.23, 0.03), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+            addSphere(center: origin + SIMD3<Float>( 0.16, 0.23, 0.03), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+            addBox(center: origin + SIMD3<Float>(-0.16, 0.10, 0.03), size: SIMD3<Float>(0.14, 0.24, 0.15), material: suit)
+            addBox(center: origin + SIMD3<Float>( 0.16, 0.10, 0.03), size: SIMD3<Float>(0.14, 0.24, 0.15), material: suit)
+            addBox(center: origin + SIMD3<Float>(-0.16, 0.02, 0.16), size: SIMD3<Float>(0.17, 0.05, 0.36), material: flipperMat)
+            addBox(center: origin + SIMD3<Float>( 0.16, 0.02, 0.16), size: SIMD3<Float>(0.17, 0.05, 0.36), material: flipperMat)
         }
     }
 }
@@ -538,6 +709,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private let laserResultBuffer: MTLBuffer
     private let staticMesh: RTMeshResources
     private let playerMesh: RTMeshResources
+    private let playerWalkMesh: RTMeshResources
+    private let playerCoverMesh: RTMeshResources
+    private let playerSwimMesh: RTMeshResources
+    private let playerSitMesh: RTMeshResources
     private let npcMesh: RTMeshResources
     private let waterMesh: RTMeshResources
     private let floatMesh: RTMeshResources
@@ -709,13 +884,21 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         self.laserResultBuffer = laserResultBuffer
 
         let staticBuilder = Self.makeStaticScene()
-        let playerBuilder = Self.makePlayerMesh()
+        let playerBuilder = Self.makePlayerMesh(pose: .stand)
+        let playerWalkBuilder = Self.makePlayerMesh(pose: .walk)
+        let playerCoverBuilder = Self.makePlayerMesh(pose: .cover)
+        let playerSwimBuilder = Self.makePlayerMesh(pose: .swim)
+        let playerSitBuilder = Self.makePlayerMesh(pose: .sit)
         let npcBuilder = Self.makeNPCMesh()
         let waterBuilder = Self.makeWaterMesh()
         let floatBuilder = Self.makeFloatMesh()
         let mirrorShieldBuilder = Self.makeMirrorShieldMesh()
         self.staticMesh = try Self.makeMesh(builder: staticBuilder, device: device, queue: commandQueue)
         self.playerMesh = try Self.makeMesh(builder: playerBuilder, device: device, queue: commandQueue)
+        self.playerWalkMesh = try Self.makeMesh(builder: playerWalkBuilder, device: device, queue: commandQueue)
+        self.playerCoverMesh = try Self.makeMesh(builder: playerCoverBuilder, device: device, queue: commandQueue)
+        self.playerSwimMesh = try Self.makeMesh(builder: playerSwimBuilder, device: device, queue: commandQueue)
+        self.playerSitMesh = try Self.makeMesh(builder: playerSitBuilder, device: device, queue: commandQueue)
         self.npcMesh = try Self.makeMesh(builder: npcBuilder, device: device, queue: commandQueue)
         self.waterMesh = try Self.makeMesh(
             builder: waterBuilder,
@@ -735,18 +918,26 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if device.isHardwareRayTracingSupported,
            let staticAS = staticMesh.accelerationStructure,
            let playerAS = playerMesh.accelerationStructure,
+           let playerWalkAS = playerWalkMesh.accelerationStructure,
+           let playerCoverAS = playerCoverMesh.accelerationStructure,
+           let playerSwimAS = playerSwimMesh.accelerationStructure,
+           let playerSitAS = playerSitMesh.accelerationStructure,
            let waterAS = waterMesh.accelerationStructure,
            let floatAS = floatMesh.accelerationStructure,
            let npcAS = npcMesh.accelerationStructure,
            let shieldAS = mirrorShieldMesh.accelerationStructure {
             let descriptor = MTLInstanceAccelerationStructureDescriptor()
             descriptor.instancedAccelerationStructures = [
-                staticAS,
-                playerAS,
-                waterAS,
-                floatAS,
-                npcAS,
-                shieldAS
+                staticAS,        // 0
+                playerAS,        // 1 (stand)
+                waterAS,         // 2
+                floatAS,         // 3
+                npcAS,           // 4
+                shieldAS,        // 5
+                playerCoverAS,   // 6 (cover GTA)
+                playerSwimAS,    // 7 (swim Mario)
+                playerSitAS,     // 8 (sit tobogán)
+                playerWalkAS     // 9 (walk articulado)
             ]
             descriptor.instanceCount = 10
             descriptor.instanceDescriptorBuffer = instanceBuffer
@@ -1006,6 +1197,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 encoder.setTexture(renderedWaterTexture, index: 1)
                 if let staticAS = staticMesh.accelerationStructure { encoder.useResource(staticAS, usage: .read) }
                 if let playerAS = playerMesh.accelerationStructure { encoder.useResource(playerAS, usage: .read) }
+                if let playerWalkAS = playerWalkMesh.accelerationStructure { encoder.useResource(playerWalkAS, usage: .read) }
+                if let playerCoverAS = playerCoverMesh.accelerationStructure { encoder.useResource(playerCoverAS, usage: .read) }
+                if let playerSwimAS = playerSwimMesh.accelerationStructure { encoder.useResource(playerSwimAS, usage: .read) }
+                if let playerSitAS = playerSitMesh.accelerationStructure { encoder.useResource(playerSitAS, usage: .read) }
                 if let waterAS = waterMesh.accelerationStructure { encoder.useResource(waterAS, usage: .read) }
                 if let floatAS = floatMesh.accelerationStructure { encoder.useResource(floatAS, usage: .read) }
                 encoder.dispatchThreads(
@@ -1076,7 +1271,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             desiredDirection = simd_normalize(desiredDirection)
         }
 
-        let currentlyInPool = isInsidePoolXZ(playerPosition) && playerPosition.y > -3.0
+        let currentlyInPool = isInsidePoolXZ(playerPosition) && playerPosition.y < 0.15 && playerPosition.y > -3.0
         let isSubterranean = playerPosition.y <= -3.0
         let currentGroundHeight = isSubterranean ? -8.50 : groundHeight(at: playerPosition, insidePool: currentlyInPool)
         let currentlyOnFloat = currentlyInPool && isStandingOnFloat(playerPosition)
@@ -1199,13 +1394,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         proposed.z = max(-17.0, min(17.0, proposed.z))
         resolveFloatCollision(position: &proposed)
         resolveRockCollisions(position: &proposed)
-        let willBeInPool = isInsidePoolXZ(proposed) && proposed.y > -3.0
+        let willBeInPool = isInsidePoolXZ(proposed) && proposed.y < 0.15 && proposed.y > -3.0
         let nextGroundHeight = groundHeight(at: proposed, insidePool: willBeInPool)
         let willBeOnFloat = willBeInPool && nextGroundHeight > -0.1
         let wasGrounded = playerPosition.y <= currentGroundHeight + 0.05 || (currentlyInPool && playerPosition.y <= 0.1)
 
         // Smooth Auto-Step Up for Stairs & Ramps (step height up to 0.45m)
-        if !currentlyInPool && nextGroundHeight > currentGroundHeight && (nextGroundHeight - currentGroundHeight) <= 0.45 {
+        if (!currentlyInPool || playerPosition.y >= -0.25) && nextGroundHeight > currentGroundHeight && (nextGroundHeight - currentGroundHeight) <= 0.45 {
             if playerPosition.y <= currentGroundHeight + 0.15 {
                 proposed.y = nextGroundHeight
             }
@@ -1799,14 +1994,15 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     }
 
     private func groundHeight(at position: SIMD3<Float>, insidePool: Bool) -> Float {
-        // 🏊‍♂️ Trampolín Ladder & Platform (Solo activo fuera de la piscina)
-        if !insidePool && position.x >= 0.5 && position.x <= 2.2 && position.z >= -8.5 && position.z <= -4.2 {
+        // 🏊‍♂️ Trampolín Ladder & Platform (Rampa y soporte continuo cerca de la esquina)
+        if position.x >= 0.5 && position.x <= 2.2 && position.z >= -8.5 && position.z <= -4.0 {
             if position.z <= -6.8 {
                 let t = max(0, min(1, (position.z - (-8.5)) / (-6.8 - (-8.5))))
                 return t * 2.85
             } else if position.y >= 1.5 {
                 return 2.85
             }
+            return 0.0
         }
         // 🌀 Tobogán Vertical Ladder & Platform Top
         if position.x >= -5.5 && position.x <= -2.1 && position.z >= -17.2 && position.z <= -13.5 {
@@ -2160,9 +2356,25 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         let playerRenderPos = (cameraMode == .firstPerson) ? SIMD3<Float>(0, -100, 0) : pPos
 
+        let isMoving = hypot(joystick.dx, joystick.dy) > 0.15
+        let playerASIndex: UInt32
+        if isPlayerDead {
+            playerASIndex = 1
+        } else if isSubmerged || playerPosition.y <= -3.0 {
+            playerASIndex = 7 // 🏊 Swim Mario
+        } else if isCoverActive {
+            playerASIndex = 6 // 🛡️ GTA Crouch Cover
+        } else if isSlidingOnToboggan {
+            playerASIndex = 8 // 🛷 Sit Tobogán
+        } else if isMoving {
+            playerASIndex = 9 // 🏃 Walk / Run articulado
+        } else {
+            playerASIndex = 1 // 🧍 Stand articulado
+        }
+
         let descriptors = [
             Self.makeInstanceDescriptor(translation: .zero, yaw: 0, pitch: 0, mask: 0x01, accelerationStructureIndex: 0),
-            Self.makeInstanceDescriptor(translation: playerRenderPos, yaw: playerYaw, pitch: pPitch, mask: 0x02, accelerationStructureIndex: 1),
+            Self.makeInstanceDescriptor(translation: playerRenderPos, yaw: playerYaw, pitch: pPitch, mask: 0x02, accelerationStructureIndex: playerASIndex),
             Self.makeInstanceDescriptor(translation: .zero, yaw: 0, pitch: 0, mask: 0x04, accelerationStructureIndex: 2),
             Self.makeInstanceDescriptor(translation: floatPosition, yaw: floatYaw, pitch: 0, mask: 0x01, accelerationStructureIndex: 3),
             Self.makeInstanceDescriptor(translation: npcPositions[0], yaw: npcYaws[0], pitch: 0, mask: 0x01, accelerationStructureIndex: 4),
@@ -2302,9 +2514,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         )
     }
 
-    private static func makePlayerMesh() -> RTMeshBuilder {
+    private static func makePlayerMesh(pose: RTMeshBuilder.CharacterPose = .stand) -> RTMeshBuilder {
         var builder = RTMeshBuilder()
-        builder.addCharacter(origin: .zero, color: SIMD3<Float>(0.08, 0.82, 0.68), holdsTool: true)
+        builder.addCharacter(origin: .zero, color: SIMD3<Float>(0.08, 0.82, 0.68), holdsTool: true, pose: pose)
         return builder
     }
 
@@ -2418,7 +2630,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
 
 
-        builder.addBox(center: SIMD3<Float>(0, -0.12, 0), size: SIMD3<Float>(36.0, 0.24, 36.0), material: deck)
+        // 🏊‍♂️ Salón Deck Framing the Pool Opening (North, South, West, East sections)
+        builder.addBox(center: SIMD3<Float>(0, -0.12, -11.1), size: SIMD3<Float>(36.0, 0.24, 13.8), material: deck)
+        builder.addBox(center: SIMD3<Float>(0, -0.12, 9.6), size: SIMD3<Float>(36.0, 0.24, 16.8), material: deck)
+        builder.addBox(center: SIMD3<Float>(-11.7, -0.12, -1.5), size: SIMD3<Float>(12.6, 0.24, 5.4), material: deck)
+        builder.addBox(center: SIMD3<Float>(10.2, -0.12, -1.5), size: SIMD3<Float>(15.6, 0.24, 5.4), material: deck)
         builder.addBox(center: SIMD3<Float>(0, 3.5, -17.8), size: SIMD3<Float>(36, 7, 0.4), material: wall)
         builder.addBox(center: SIMD3<Float>(0, 3.5, 17.8), size: SIMD3<Float>(36, 7, 0.4), material: wall)
         builder.addBox(center: SIMD3<Float>(-17.8, 3.5, 0), size: SIMD3<Float>(0.4, 7, 36), material: wall)

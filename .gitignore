@@ -1,5 +1,6 @@
 # Xcode & Swift Build Artifacts
 build/
+build_output/
 DerivedData/
 DerivedDataDevice/
 *.xcodeproj/xcuserdata/
