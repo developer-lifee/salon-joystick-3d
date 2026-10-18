@@ -742,11 +742,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private var playerYaw: Float = .pi
     private var isSlidingOnToboggan: Bool = false
     private var npcPositions: [SIMD3<Float>] = [
-        SIMD3<Float>(-3.8, 0, -2.8),
-        SIMD3<Float>(1.8, 0, -2.8),
-        SIMD3<Float>(-3.8, 0, 0.2),
-        SIMD3<Float>(1.8, 0, 0.2),
-        SIMD3<Float>(-1.0, 0, -3.5)
+        SIMD3<Float>(-13.5, 0, -13.5),
+        SIMD3<Float>(13.5, 0, -13.5),
+        SIMD3<Float>(-13.5, 0, 13.5),
+        SIMD3<Float>(13.5, 0, 13.5),
+        SIMD3<Float>(0, 0, 14.5)
     ]
     private var npcYaws = [Float.pi * 0.25, Float.pi * 1.7, Float.pi * 0.75, Float.pi * 1.25, Float.pi * 0.0]
     private var npcRespawnTimers = [Float](repeating: 0, count: 5)
@@ -1724,15 +1724,64 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 playerPosition.z - npcPositions[index].z
             )
             let distance = simd_length(offset)
-            let direction = distance > 0.001 ? offset / distance : SIMD2<Float>(0, 1)
+            let rawDirection = distance > 0.001 ? offset / distance : SIMD2<Float>(0, 1)
 
             // Dynamic difficulty scaling per wave (Call of Duty Black Ops Zombies style!)
             let speed: Float = min(4.2, 2.0 + Float(currentWave) * 0.35 + Float(index) * 0.3)
             let botCooldown: Float = max(1.4, 4.5 - Float(currentWave) * 0.40)
             let aimSpeedScale: Float = min(12.0, 5.5 + Float(currentWave) * 0.75)
+
+            // 🪨 Dynamic Rock Evasion & Flanking Steering:
+            var moveDirection = rawDirection
+            let botPos2D = SIMD2<Float>(npcPositions[index].x, npcPositions[index].z)
+            var strongestAvoidance = SIMD2<Float>.zero
+            var maxAvoidanceWeight: Float = 0
+
+            for rock in rtRiverRocks {
+                guard npcPositions[index].y < rock.center.y + rock.radii.y + 0.50 else { continue }
+                let rockCenter2D = SIMD2<Float>(rock.center.x, rock.center.z)
+                let toRock = rockCenter2D - botPos2D
+                let distToRock = simd_length(toRock)
+                let rockRadius = max(rock.radii.x, rock.radii.z) + 0.42
+
+                guard distToRock > 0.001 else { continue }
+                let dirToRock = toRock / distToRock
+
+                let isNearRock = distToRock < (rockRadius + 0.35)
+                let forwardDot = simd_dot(rawDirection, dirToRock)
+                let isHeadingIntoRock = forwardDot > 0.10 && distToRock < (rockRadius + 2.4)
+
+                if isNearRock || isHeadingIntoRock {
+                    // Compute tangents clockwise and counter-clockwise around the rock
+                    let tangentL = SIMD2<Float>(-dirToRock.y, dirToRock.x)
+                    let tangentR = SIMD2<Float>(dirToRock.y, -dirToRock.x)
+
+                    // Pick the tangent that aligns best with the direction towards the player
+                    let dotL = simd_dot(tangentL, rawDirection)
+                    let dotR = simd_dot(tangentR, rawDirection)
+                    let chosenTangent = (dotL >= dotR) ? tangentL : tangentR
+
+                    let normalAway = -dirToRock
+                    let steer = isNearRock
+                        ? simd_normalize(chosenTangent * 0.82 + normalAway * 0.45)
+                        : chosenTangent
+
+                    let weight: Float = isNearRock ? 1.0 : max(0, min(1.0, 1.0 - (distToRock - rockRadius) / 2.4))
+                    if weight > maxAvoidanceWeight {
+                        maxAvoidanceWeight = weight
+                        strongestAvoidance = steer
+                    }
+                }
+            }
+
+            if maxAvoidanceWeight > 0 {
+                let blend = min(0.96, maxAvoidanceWeight * 0.92)
+                moveDirection = simd_normalize(rawDirection * (1.0 - blend) + strongestAvoidance * blend)
+            }
+
             if distance > 0.65 {
-                var proposedX = npcPositions[index].x + direction.x * speed * dt
-                var proposedZ = npcPositions[index].z + direction.y * speed * dt
+                var proposedX = npcPositions[index].x + moveDirection.x * speed * dt
+                var proposedZ = npcPositions[index].z + moveDirection.y * speed * dt
 
                 // Outer Patio Wall Colliders (Expanded 34m x 34m Arena)
                 proposedX = max(-17.0, min(17.0, proposedX))
@@ -1765,7 +1814,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 npcPositions[index].x = proposedX
                 npcPositions[index].z = proposedZ
             }
-            npcYaws[index] = atan2(direction.x, direction.y)
+            npcYaws[index] = atan2(moveDirection.x, moveDirection.y)
 
             // Smooth human-like aim tracking & dispersion
             let actualPlayerCenter = playerPosition + SIMD3<Float>(0, 1.10, 0)
@@ -1994,16 +2043,6 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     }
 
     private func groundHeight(at position: SIMD3<Float>, insidePool: Bool) -> Float {
-        // 🏊‍♂️ Trampolín Ladder & Platform (Rampa y soporte continuo cerca de la esquina)
-        if position.x >= 0.5 && position.x <= 2.2 && position.z >= -8.5 && position.z <= -4.0 {
-            if position.z <= -6.8 {
-                let t = max(0, min(1, (position.z - (-8.5)) / (-6.8 - (-8.5))))
-                return t * 2.85
-            } else if position.y >= 1.5 {
-                return 2.85
-            }
-            return 0.0
-        }
         // 🌀 Tobogán Vertical Ladder & Platform Top
         if position.x >= -5.5 && position.x <= -2.1 && position.z >= -17.2 && position.z <= -13.5 {
             if position.y >= 3.5 {
@@ -2377,11 +2416,41 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             Self.makeInstanceDescriptor(translation: playerRenderPos, yaw: playerYaw, pitch: pPitch, mask: 0x02, accelerationStructureIndex: playerASIndex),
             Self.makeInstanceDescriptor(translation: .zero, yaw: 0, pitch: 0, mask: 0x04, accelerationStructureIndex: 2),
             Self.makeInstanceDescriptor(translation: floatPosition, yaw: floatYaw, pitch: 0, mask: 0x01, accelerationStructureIndex: 3),
-            Self.makeInstanceDescriptor(translation: npcPositions[0], yaw: npcYaws[0], pitch: 0, mask: 0x01, accelerationStructureIndex: 4),
-            Self.makeInstanceDescriptor(translation: npcPositions[1], yaw: npcYaws[1], pitch: 0, mask: 0x01, accelerationStructureIndex: 4),
-            Self.makeInstanceDescriptor(translation: npcPositions[2], yaw: npcYaws[2], pitch: 0, mask: 0x01, accelerationStructureIndex: 4),
-            Self.makeInstanceDescriptor(translation: npcPositions[3], yaw: npcYaws[3], pitch: 0, mask: 0x01, accelerationStructureIndex: 4),
-            Self.makeInstanceDescriptor(translation: npcPositions[4], yaw: npcYaws[4], pitch: 0, mask: 0x01, accelerationStructureIndex: 4),
+            Self.makeInstanceDescriptor(
+                translation: (npcHealths[0] > 0 && npcRespawnTimers[0] <= 0 && !isWaveIntermission) ? npcPositions[0] : SIMD3<Float>(0, -500, 0),
+                yaw: npcYaws[0],
+                pitch: 0,
+                mask: (npcHealths[0] > 0 && npcRespawnTimers[0] <= 0 && !isWaveIntermission) ? 0x01 : 0x00,
+                accelerationStructureIndex: 4
+            ),
+            Self.makeInstanceDescriptor(
+                translation: (npcHealths[1] > 0 && npcRespawnTimers[1] <= 0 && !isWaveIntermission) ? npcPositions[1] : SIMD3<Float>(0, -500, 0),
+                yaw: npcYaws[1],
+                pitch: 0,
+                mask: (npcHealths[1] > 0 && npcRespawnTimers[1] <= 0 && !isWaveIntermission) ? 0x01 : 0x00,
+                accelerationStructureIndex: 4
+            ),
+            Self.makeInstanceDescriptor(
+                translation: (npcHealths[2] > 0 && npcRespawnTimers[2] <= 0 && !isWaveIntermission) ? npcPositions[2] : SIMD3<Float>(0, -500, 0),
+                yaw: npcYaws[2],
+                pitch: 0,
+                mask: (npcHealths[2] > 0 && npcRespawnTimers[2] <= 0 && !isWaveIntermission) ? 0x01 : 0x00,
+                accelerationStructureIndex: 4
+            ),
+            Self.makeInstanceDescriptor(
+                translation: (npcHealths[3] > 0 && npcRespawnTimers[3] <= 0 && !isWaveIntermission) ? npcPositions[3] : SIMD3<Float>(0, -500, 0),
+                yaw: npcYaws[3],
+                pitch: 0,
+                mask: (npcHealths[3] > 0 && npcRespawnTimers[3] <= 0 && !isWaveIntermission) ? 0x01 : 0x00,
+                accelerationStructureIndex: 4
+            ),
+            Self.makeInstanceDescriptor(
+                translation: (npcHealths[4] > 0 && npcRespawnTimers[4] <= 0 && !isWaveIntermission) ? npcPositions[4] : SIMD3<Float>(0, -500, 0),
+                yaw: npcYaws[4],
+                pitch: 0,
+                mask: (npcHealths[4] > 0 && npcRespawnTimers[4] <= 0 && !isWaveIntermission) ? 0x01 : 0x00,
+                accelerationStructureIndex: 4
+            ),
             Self.makeInstanceDescriptor(translation: shieldPos, yaw: effYaw, pitch: effPitch, mask: 0x01, accelerationStructureIndex: 5)
         ]
         descriptors.withUnsafeBytes { bytes in
