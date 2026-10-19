@@ -629,6 +629,7 @@ kernel void raytracePatio(
         float kind;
         float baseReflectivity = 0.05f;
         float roughness = 0.5f;
+        float3 emission = float3(0.0f);
 
         if (hit.type != intersection_type::none) {
             if (bounce == 0) {
@@ -641,6 +642,7 @@ kernel void raytracePatio(
                 normal = -normal;
             }
             kind = material.emissionKind.w;
+            emission = material.emissionKind.xyz;
             albedo = material.albedoReflectivity.xyz;
             baseReflectivity = material.albedoReflectivity.w;
             roughness = material.normalRoughness.w;
@@ -730,6 +732,7 @@ kernel void raytracePatio(
 
         bool poolWaterSurface = kind > 1.5f && kind < 2.5f;
         bool puddleSurface = kind > 7.5f && kind < 8.5f;
+        bool jellySurface = kind > 8.5f && kind < 9.5f;
         bool waterSurface = poolWaterSurface || puddleSurface;
         if (poolWaterSurface) {
             normal = simulatedWaterNormal(position, waterState);
@@ -740,6 +743,29 @@ kernel void raytracePatio(
             float grout = step(0.04f, grid.x) * step(0.04f, grid.y);
             float3 groutBump = float3((1.0f - grout) * 0.12f, 0.0f, (1.0f - grout) * 0.12f);
             normal = normalize(normal + groutBump);
+        } else if (jellySurface) {
+            // 🧪 Diablillo de Gelatina: Textura orgánica húmeda con micro-relieve, SSS Fresnel y motas luminosas internas
+            float3 pCell = position * 28.0f;
+            float3 bump = float3(
+                sin(pCell.x) * cos(pCell.y * 1.1f),
+                sin(pCell.y) * cos(pCell.z * 1.1f),
+                sin(pCell.z) * cos(pCell.x * 1.1f)
+            ) * 0.085f;
+            normal = normalize(normal + bump);
+
+            // Motas / burbujas internas brillantes de gelatina (Amarillo-Lima bioluminiscente)
+            float3 cellId = floor(position * 34.0f);
+            float3 cellUV = fract(position * 34.0f) - 0.5f;
+            float cellHash = fract(sin(dot(cellId, float3(12.9898f, 78.233f, 37.719f))) * 43758.5453f);
+            float speckle = (cellHash > 0.84f) ? smoothstep(0.32f, 0.08f, length(cellUV)) : 0.0f;
+            albedo = mix(albedo, float3(0.82f, 1.0f, 0.24f), speckle * 0.85f);
+
+            // Dispersión Subsuperficial (SSS) tipo gomita / slime translúcido en los bordes (Fresnel)
+            float viewCos = saturate(dot(-currentRay.direction, normal));
+            float rimSSS = pow(1.0f - viewCos, 2.2f);
+            emission += albedo * float3(0.55f, 1.25f, 0.25f) * (0.28f + rimSSS * 0.85f) + float3(0.75f, 1.0f, 0.22f) * (speckle * 0.65f);
+            baseReflectivity = mix(0.14f, 0.68f, pow(1.0f - viewCos, 4.0f));
+            roughness = 0.12f;
         }
 
         if ((kind > 1.5f && kind < 3.5f) || puddleSurface) {
@@ -749,7 +775,6 @@ kernel void raytracePatio(
             baseReflectivity = mix(baseReflectivity, maximumReflectivity, fresnel);
         }
         float reflectivity = rayBouncesEnabled ? baseReflectivity : 0.0f;
-        float3 emission = float3(0.0f);
         float emitterIntensity = 1.0f;
         if (kind > 3.5f && kind < 4.5f) emitterIntensity = uniforms.lightStates.x;
         if (kind > 4.5f && kind < 5.5f) emitterIntensity = uniforms.lightStates.w;
@@ -969,7 +994,7 @@ kernel void raytracePatio(
                 ray transmissionRay;
                 transmissionRay.origin = position - normal * 0.018f;
                 transmissionRay.direction = normalize(refractedDirection);
-                transmissionRay.max_distance = 4.0f;
+                transmissionRay.max_distance = 14.0f;
                 tracer.accept_any_intersection(false);
                 auto transmissionHit = tracer.intersect(transmissionRay, accelerationStructure, 0x01);
                 if (transmissionHit.type != intersection_type::none) {

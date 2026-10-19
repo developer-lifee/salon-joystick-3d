@@ -421,40 +421,110 @@ private struct RTMeshBuilder {
         case sit
     }
 
+    /// 👹 Fase 2: Construye la cabeza, orejas puntiagudas, gafas Cat-Eye en V, boca con 4 colmillos y lengua del Diablillo de Gelatina
+    mutating func addJellyGremlinHeadAndTorso(
+        bellyCenter: SIMD3<Float>,
+        headCenter: SIMD3<Float>,
+        jellyMat: RTMaterial
+    ) {
+        let innerEarMat = RTMaterial(color: SIMD3<Float>(0.10, 0.48, 0.08), roughness: 0.25, reflectivity: 0.15, kind: 9.0)
+        let glassesFrame = RTMaterial(color: SIMD3<Float>(0.04, 0.16, 0.06), roughness: 0.10, reflectivity: 0.65)
+        let glassesLens = RTMaterial(color: SIMD3<Float>(0.05, 0.52, 0.22), roughness: 0.02, emission: SIMD3<Float>(0.02, 0.22, 0.08), reflectivity: 0.94, kind: 1.0)
+        let mouthCavity = RTMaterial(color: SIMD3<Float>(0.03, 0.11, 0.03), roughness: 0.85, reflectivity: 0.04)
+        let tongueMat = RTMaterial(color: SIMD3<Float>(0.18, 0.68, 0.26), roughness: 0.22, reflectivity: 0.25)
+        let fangMat = RTMaterial(color: SIMD3<Float>(0.96, 0.95, 0.86), roughness: 0.12, emission: SIMD3<Float>(0.12, 0.12, 0.08), reflectivity: 0.35)
+
+        // 1. Cuerpo aperado (Pancita ancha abajo + torso/cabeza rechoncha arriba)
+        addSphere(center: bellyCenter, radii: SIMD3<Float>(0.40, 0.44, 0.35), material: jellyMat, segments: 16, rings: 10)
+        addSphere(center: headCenter, radii: SIMD3<Float>(0.37, 0.38, 0.33), material: jellyMat, segments: 16, rings: 10)
+
+        // 2. Orejas largas puntiagudas de Diablillo / Goblin (curvadas hacia arriba y afuera)
+        for side: Float in [-1.0, 1.0] {
+            addSphere(center: headCenter + SIMD3<Float>(side * 0.28, 0.24, -0.02), radii: SIMD3<Float>(0.11, 0.16, 0.08), material: jellyMat, segments: 10, rings: 6)
+            addSphere(center: headCenter + SIMD3<Float>(side * 0.36, 0.38, -0.03), radii: SIMD3<Float>(0.085, 0.15, 0.065), material: jellyMat, segments: 10, rings: 6)
+            addSphere(center: headCenter + SIMD3<Float>(side * 0.43, 0.52, -0.04), radii: SIMD3<Float>(0.055, 0.12, 0.045), material: jellyMat, segments: 8, rings: 5)
+            addSphere(center: headCenter + SIMD3<Float>(side * 0.48, 0.63, -0.05), radii: SIMD3<Float>(0.030, 0.07, 0.030), material: jellyMat, segments: 8, rings: 4)
+            // Cavidad interna de la oreja
+            addSphere(center: headCenter + SIMD3<Float>(side * 0.34, 0.36, 0.025), radii: SIMD3<Float>(0.055, 0.12, 0.035), material: innerEarMat, segments: 8, rings: 5)
+        }
+
+        // 3. Cejas fruncidas sobre las gafas
+        addSphere(center: headCenter + SIMD3<Float>(-0.11, 0.14, 0.28), radii: SIMD3<Float>(0.11, 0.055, 0.07), material: jellyMat, segments: 8, rings: 5)
+        addSphere(center: headCenter + SIMD3<Float>( 0.11, 0.14, 0.28), radii: SIMD3<Float>(0.11, 0.055, 0.07), material: jellyMat, segments: 8, rings: 5)
+
+        // 4. Gafas Cat-Eye en "V" (Montura oscura puntiaguda + Lentes Esmeralda Reflectivos)
+        // Puente central de las gafas
+        addBox(center: headCenter + SIMD3<Float>(0, 0.04, 0.34), size: SIMD3<Float>(0.10, 0.045, 0.05), material: glassesFrame)
+        for side: Float in [-1.0, 1.0] {
+            // Escalones en V hacia las puntas exteriores Cat-Eye
+            addBox(center: headCenter + SIMD3<Float>(side * 0.12, 0.06, 0.33), size: SIMD3<Float>(0.14, 0.09, 0.05), material: glassesFrame)
+            addBox(center: headCenter + SIMD3<Float>(side * 0.22, 0.10, 0.30), size: SIMD3<Float>(0.14, 0.09, 0.05), material: glassesFrame)
+            addBox(center: headCenter + SIMD3<Float>(side * 0.31, 0.15, 0.26), size: SIMD3<Float>(0.11, 0.07, 0.045), material: glassesFrame)
+            addBox(center: headCenter + SIMD3<Float>(side * 0.37, 0.19, 0.22), size: SIMD3<Float>(0.07, 0.045, 0.04), material: glassesFrame)
+            // Lentes verdes brillantes reflectivos
+            addSphere(center: headCenter + SIMD3<Float>(side * 0.15, 0.07, 0.345), radii: SIMD3<Float>(0.10, 0.042, 0.025), material: glassesLens, segments: 8, rings: 5)
+            addSphere(center: headCenter + SIMD3<Float>(side * 0.25, 0.11, 0.315), radii: SIMD3<Float>(0.08, 0.036, 0.025), material: glassesLens, segments: 8, rings: 5)
+        }
+
+        // 5. Boca ancha abierta con lengua verde y 4 colmillos blancos afilados
+        addSphere(center: headCenter + SIMD3<Float>(0, -0.13, 0.26), radii: SIMD3<Float>(0.23, 0.12, 0.10), material: mouthCavity, segments: 12, rings: 6)
+        // Lengua
+        addSphere(center: headCenter + SIMD3<Float>(0, -0.17, 0.28), radii: SIMD3<Float>(0.11, 0.042, 0.09), material: tongueMat, segments: 8, rings: 5)
+        // Labio inferior
+        addSphere(center: headCenter + SIMD3<Float>(0, -0.24, 0.28), radii: SIMD3<Float>(0.20, 0.045, 0.08), material: jellyMat, segments: 10, rings: 5)
+        // 2 Colmillos superiores + 2 Colmillos inferiores
+        for side: Float in [-1.0, 1.0] {
+            addSphere(center: headCenter + SIMD3<Float>(side * 0.12, -0.06, 0.32), radii: SIMD3<Float>(0.026, 0.052, 0.026), material: fangMat, segments: 6, rings: 4)
+            addSphere(center: headCenter + SIMD3<Float>(side * 0.10, -0.19, 0.32), radii: SIMD3<Float>(0.024, 0.046, 0.024), material: fangMat, segments: 6, rings: 4)
+        }
+    }
+
     mutating func addCharacter(
         origin: SIMD3<Float>,
         color: SIMD3<Float>,
         eyes: Bool = true,
         holdsTool: Bool = false,
-        pose: CharacterPose = .stand
+        pose: CharacterPose = .stand,
+        isJellyGremlin: Bool = false
     ) {
-        let suit = RTMaterial(color: color, roughness: 0.42, reflectivity: 0.18)
-        let armor = RTMaterial(color: SIMD3<Float>(0.08, 0.12, 0.16), roughness: 0.18, reflectivity: 0.65)
+        let suit = isJellyGremlin
+            ? RTMaterial(color: SIMD3<Float>(0.24, 0.84, 0.14), roughness: 0.12, reflectivity: 0.24, kind: 9.0)
+            : RTMaterial(color: color, roughness: 0.42, reflectivity: 0.18)
+        let armor = isJellyGremlin
+            ? RTMaterial(color: SIMD3<Float>(0.18, 0.72, 0.11), roughness: 0.14, reflectivity: 0.22, kind: 9.0)
+            : RTMaterial(color: SIMD3<Float>(0.08, 0.12, 0.16), roughness: 0.18, reflectivity: 0.65)
         let visor = RTMaterial(color: SIMD3<Float>(0.05, 0.85, 0.98), roughness: 0.02, emission: SIMD3<Float>(0.1, 0.45, 0.75), reflectivity: 0.94, kind: 1.0)
         let coreEmissive = RTMaterial(color: SIMD3<Float>(1.0, 0.2, 0.4), roughness: 0.10, emission: SIMD3<Float>(3.5, 0.8, 1.2), reflectivity: 0.50, kind: 5.0)
         let dark = RTMaterial(color: SIMD3<Float>(repeating: 0.012), roughness: 0.92)
         let scubaTankMat = RTMaterial(color: SIMD3<Float>(0.92, 0.85, 0.12), roughness: 0.15, reflectivity: 0.75)
-        let flipperMat = RTMaterial(color: SIMD3<Float>(0.95, 0.45, 0.05), roughness: 0.25, reflectivity: 0.40)
+        let flipperMat = isJellyGremlin
+            ? RTMaterial(color: SIMD3<Float>(0.20, 0.76, 0.12), roughness: 0.14, reflectivity: 0.22, kind: 9.0)
+            : RTMaterial(color: SIMD3<Float>(0.95, 0.45, 0.05), roughness: 0.25, reflectivity: 0.40)
+        let clawMat = RTMaterial(color: SIMD3<Float>(0.92, 0.94, 0.80), roughness: 0.15, reflectivity: 0.30)
         let toolMat = RTMaterial(color: SIMD3<Float>(0.055, 0.060, 0.065), roughness: 0.34, reflectivity: 0.10)
 
         switch pose {
         case .cover:
             // 🛡️ GTA Tactical Crouch Cover (Centro de gravedad bajo, rodilla hincada, codos en guardia)
-            let torsoO = origin + SIMD3<Float>(0, 0.50, 0.06)
-            addSphere(center: torsoO, radii: SIMD3<Float>(0.32, 0.44, 0.26), material: suit)
-            addBox(center: origin + SIMD3<Float>(0, 0.54, 0.20), size: SIMD3<Float>(0.42, 0.38, 0.12), material: armor)
-            addSphere(center: origin + SIMD3<Float>(0, 0.57, 0.26), radii: SIMD3<Float>(repeating: 0.08), material: coreEmissive)
-
-            // Scuba Tank pegado a espalda
-            addBox(center: origin + SIMD3<Float>(0, 0.54, -0.16), size: SIMD3<Float>(0.28, 0.48, 0.18), material: scubaTankMat)
-            addSphere(center: origin + SIMD3<Float>(0, 0.80, -0.16), radii: SIMD3<Float>(repeating: 0.08), material: armor)
-
-            // Helmet & Visor inclinados hacia la cobertura
-            addSphere(center: origin + SIMD3<Float>(0, 1.05, 0.12), radii: SIMD3<Float>(repeating: 0.30), material: suit)
-            addBox(center: origin + SIMD3<Float>(0, 1.07, 0.32), size: SIMD3<Float>(0.36, 0.17, 0.14), material: visor)
-            if eyes {
-                addSphere(center: origin + SIMD3<Float>(-0.10, 1.09, 0.38), radii: SIMD3<Float>(repeating: 0.038), material: dark, segments: 7, rings: 4)
-                addSphere(center: origin + SIMD3<Float>( 0.10, 1.09, 0.38), radii: SIMD3<Float>(repeating: 0.038), material: dark, segments: 7, rings: 4)
+            if isJellyGremlin {
+                addJellyGremlinHeadAndTorso(
+                    bellyCenter: origin + SIMD3<Float>(0, 0.48, 0.04),
+                    headCenter: origin + SIMD3<Float>(0, 0.92, 0.10),
+                    jellyMat: suit
+                )
+            } else {
+                let torsoO = origin + SIMD3<Float>(0, 0.50, 0.06)
+                addSphere(center: torsoO, radii: SIMD3<Float>(0.32, 0.44, 0.26), material: suit)
+                addBox(center: origin + SIMD3<Float>(0, 0.54, 0.20), size: SIMD3<Float>(0.42, 0.38, 0.12), material: armor)
+                addSphere(center: origin + SIMD3<Float>(0, 0.57, 0.26), radii: SIMD3<Float>(repeating: 0.08), material: coreEmissive)
+                addBox(center: origin + SIMD3<Float>(0, 0.54, -0.16), size: SIMD3<Float>(0.28, 0.48, 0.18), material: scubaTankMat)
+                addSphere(center: origin + SIMD3<Float>(0, 0.80, -0.16), radii: SIMD3<Float>(repeating: 0.08), material: armor)
+                addSphere(center: origin + SIMD3<Float>(0, 1.05, 0.12), radii: SIMD3<Float>(repeating: 0.30), material: suit)
+                addBox(center: origin + SIMD3<Float>(0, 1.07, 0.32), size: SIMD3<Float>(0.36, 0.17, 0.14), material: visor)
+                if eyes {
+                    addSphere(center: origin + SIMD3<Float>(-0.10, 1.09, 0.38), radii: SIMD3<Float>(repeating: 0.038), material: dark, segments: 7, rings: 4)
+                    addSphere(center: origin + SIMD3<Float>( 0.10, 1.09, 0.38), radii: SIMD3<Float>(repeating: 0.038), material: dark, segments: 7, rings: 4)
+                }
             }
 
             // 🦾 Codos en guardia táctica cubriendo pecho/cabeza
@@ -489,17 +559,25 @@ private struct RTMeshBuilder {
 
         case .swim:
             // 🏊 Mario Buceo: Brazos arqueados en braza y patada alterna de aletas
-            let torsoO = origin + SIMD3<Float>(0, 0.86, 0)
-            addSphere(center: torsoO, radii: SIMD3<Float>(0.34, 0.50, 0.27), material: suit)
-            addBox(center: origin + SIMD3<Float>(0, 0.92, 0.16), size: SIMD3<Float>(0.44, 0.42, 0.12), material: armor)
-            addSphere(center: origin + SIMD3<Float>(0, 0.95, 0.23), radii: SIMD3<Float>(repeating: 0.08), material: coreEmissive)
-            addBox(center: origin + SIMD3<Float>(0, 0.92, -0.22), size: SIMD3<Float>(0.28, 0.55, 0.18), material: scubaTankMat)
-            addSphere(center: origin + SIMD3<Float>(0, 1.22, -0.22), radii: SIMD3<Float>(repeating: 0.09), material: armor)
-            addSphere(center: origin + SIMD3<Float>(0, 1.55, 0), radii: SIMD3<Float>(repeating: 0.32), material: suit)
-            addBox(center: origin + SIMD3<Float>(0, 1.58, 0.22), size: SIMD3<Float>(0.38, 0.18, 0.14), material: visor)
-            if eyes {
-                addSphere(center: origin + SIMD3<Float>(-0.11, 1.60, 0.29), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
-                addSphere(center: origin + SIMD3<Float>( 0.11, 1.60, 0.29), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
+            if isJellyGremlin {
+                addJellyGremlinHeadAndTorso(
+                    bellyCenter: origin + SIMD3<Float>(0, 0.78, 0),
+                    headCenter: origin + SIMD3<Float>(0, 1.32, 0.04),
+                    jellyMat: suit
+                )
+            } else {
+                let torsoO = origin + SIMD3<Float>(0, 0.86, 0)
+                addSphere(center: torsoO, radii: SIMD3<Float>(0.34, 0.50, 0.27), material: suit)
+                addBox(center: origin + SIMD3<Float>(0, 0.92, 0.16), size: SIMD3<Float>(0.44, 0.42, 0.12), material: armor)
+                addSphere(center: origin + SIMD3<Float>(0, 0.95, 0.23), radii: SIMD3<Float>(repeating: 0.08), material: coreEmissive)
+                addBox(center: origin + SIMD3<Float>(0, 0.92, -0.22), size: SIMD3<Float>(0.28, 0.55, 0.18), material: scubaTankMat)
+                addSphere(center: origin + SIMD3<Float>(0, 1.22, -0.22), radii: SIMD3<Float>(repeating: 0.09), material: armor)
+                addSphere(center: origin + SIMD3<Float>(0, 1.55, 0), radii: SIMD3<Float>(repeating: 0.32), material: suit)
+                addBox(center: origin + SIMD3<Float>(0, 1.58, 0.22), size: SIMD3<Float>(0.38, 0.18, 0.14), material: visor)
+                if eyes {
+                    addSphere(center: origin + SIMD3<Float>(-0.11, 1.60, 0.29), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
+                    addSphere(center: origin + SIMD3<Float>( 0.11, 1.60, 0.29), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
+                }
             }
 
             // Brazos arqueados para impulso en agua
@@ -532,17 +610,25 @@ private struct RTMeshBuilder {
 
         case .sit:
             // 🛷 Tobogán: Sentado con piernas extendidas al frente y rodillas a 30º
-            let torsoO = origin + SIMD3<Float>(0, 0.58, -0.10)
-            addSphere(center: torsoO, radii: SIMD3<Float>(0.34, 0.48, 0.27), material: suit)
-            addBox(center: origin + SIMD3<Float>(0, 0.64, 0.06), size: SIMD3<Float>(0.44, 0.40, 0.12), material: armor)
-            addSphere(center: origin + SIMD3<Float>(0, 0.67, 0.13), radii: SIMD3<Float>(repeating: 0.08), material: coreEmissive)
-            addBox(center: origin + SIMD3<Float>(0, 0.64, -0.32), size: SIMD3<Float>(0.28, 0.52, 0.18), material: scubaTankMat)
-            addSphere(center: origin + SIMD3<Float>(0, 0.92, -0.32), radii: SIMD3<Float>(repeating: 0.09), material: armor)
-            addSphere(center: origin + SIMD3<Float>(0, 1.25, -0.06), radii: SIMD3<Float>(repeating: 0.32), material: suit)
-            addBox(center: origin + SIMD3<Float>(0, 1.28, 0.16), size: SIMD3<Float>(0.38, 0.18, 0.14), material: visor)
-            if eyes {
-                addSphere(center: origin + SIMD3<Float>(-0.11, 1.30, 0.23), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
-                addSphere(center: origin + SIMD3<Float>( 0.11, 1.30, 0.23), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
+            if isJellyGremlin {
+                addJellyGremlinHeadAndTorso(
+                    bellyCenter: origin + SIMD3<Float>(0, 0.54, -0.10),
+                    headCenter: origin + SIMD3<Float>(0, 1.06, -0.04),
+                    jellyMat: suit
+                )
+            } else {
+                let torsoO = origin + SIMD3<Float>(0, 0.58, -0.10)
+                addSphere(center: torsoO, radii: SIMD3<Float>(0.34, 0.48, 0.27), material: suit)
+                addBox(center: origin + SIMD3<Float>(0, 0.64, 0.06), size: SIMD3<Float>(0.44, 0.40, 0.12), material: armor)
+                addSphere(center: origin + SIMD3<Float>(0, 0.67, 0.13), radii: SIMD3<Float>(repeating: 0.08), material: coreEmissive)
+                addBox(center: origin + SIMD3<Float>(0, 0.64, -0.32), size: SIMD3<Float>(0.28, 0.52, 0.18), material: scubaTankMat)
+                addSphere(center: origin + SIMD3<Float>(0, 0.92, -0.32), radii: SIMD3<Float>(repeating: 0.09), material: armor)
+                addSphere(center: origin + SIMD3<Float>(0, 1.25, -0.06), radii: SIMD3<Float>(repeating: 0.32), material: suit)
+                addBox(center: origin + SIMD3<Float>(0, 1.28, 0.16), size: SIMD3<Float>(0.38, 0.18, 0.14), material: visor)
+                if eyes {
+                    addSphere(center: origin + SIMD3<Float>(-0.11, 1.30, 0.23), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
+                    addSphere(center: origin + SIMD3<Float>( 0.11, 1.30, 0.23), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
+                }
             }
 
             // Brazos a los lados sujetando la rampa
@@ -570,17 +656,25 @@ private struct RTMeshBuilder {
 
         case .walk:
             // 🏃 Walk / Run: Zancada dinámica con flexión alterna de codos y rodillas
-            let torsoO = origin + SIMD3<Float>(0, 0.86, 0)
-            addSphere(center: torsoO, radii: SIMD3<Float>(0.34, 0.50, 0.27), material: suit)
-            addBox(center: origin + SIMD3<Float>(0, 0.92, 0.16), size: SIMD3<Float>(0.44, 0.42, 0.12), material: armor)
-            addSphere(center: origin + SIMD3<Float>(0, 0.95, 0.23), radii: SIMD3<Float>(repeating: 0.08), material: coreEmissive)
-            addBox(center: origin + SIMD3<Float>(0, 0.92, -0.22), size: SIMD3<Float>(0.28, 0.55, 0.18), material: scubaTankMat)
-            addSphere(center: origin + SIMD3<Float>(0, 1.22, -0.22), radii: SIMD3<Float>(repeating: 0.09), material: armor)
-            addSphere(center: origin + SIMD3<Float>(0, 1.55, 0), radii: SIMD3<Float>(repeating: 0.32), material: suit)
-            addBox(center: origin + SIMD3<Float>(0, 1.58, 0.22), size: SIMD3<Float>(0.38, 0.18, 0.14), material: visor)
-            if eyes {
-                addSphere(center: origin + SIMD3<Float>(-0.11, 1.60, 0.29), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
-                addSphere(center: origin + SIMD3<Float>( 0.11, 1.60, 0.29), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
+            if isJellyGremlin {
+                addJellyGremlinHeadAndTorso(
+                    bellyCenter: origin + SIMD3<Float>(0, 0.76, 0.02),
+                    headCenter: origin + SIMD3<Float>(0, 1.30, 0.05),
+                    jellyMat: suit
+                )
+            } else {
+                let torsoO = origin + SIMD3<Float>(0, 0.86, 0)
+                addSphere(center: torsoO, radii: SIMD3<Float>(0.34, 0.50, 0.27), material: suit)
+                addBox(center: origin + SIMD3<Float>(0, 0.92, 0.16), size: SIMD3<Float>(0.44, 0.42, 0.12), material: armor)
+                addSphere(center: origin + SIMD3<Float>(0, 0.95, 0.23), radii: SIMD3<Float>(repeating: 0.08), material: coreEmissive)
+                addBox(center: origin + SIMD3<Float>(0, 0.92, -0.22), size: SIMD3<Float>(0.28, 0.55, 0.18), material: scubaTankMat)
+                addSphere(center: origin + SIMD3<Float>(0, 1.22, -0.22), radii: SIMD3<Float>(repeating: 0.09), material: armor)
+                addSphere(center: origin + SIMD3<Float>(0, 1.55, 0), radii: SIMD3<Float>(repeating: 0.32), material: suit)
+                addBox(center: origin + SIMD3<Float>(0, 1.58, 0.22), size: SIMD3<Float>(0.38, 0.18, 0.14), material: visor)
+                if eyes {
+                    addSphere(center: origin + SIMD3<Float>(-0.11, 1.60, 0.29), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
+                    addSphere(center: origin + SIMD3<Float>( 0.11, 1.60, 0.29), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
+                }
             }
 
             // Brazo Izq adelante (codo flexionado a 75º)
@@ -614,17 +708,25 @@ private struct RTMeshBuilder {
 
         case .stand:
             // 🧍 Stand: Pose erguida de combate con articulaciones naturales
-            let torsoO = origin + SIMD3<Float>(0, 0.86, 0)
-            addSphere(center: torsoO, radii: SIMD3<Float>(0.34, 0.50, 0.27), material: suit)
-            addBox(center: origin + SIMD3<Float>(0, 0.92, 0.16), size: SIMD3<Float>(0.44, 0.42, 0.12), material: armor)
-            addSphere(center: origin + SIMD3<Float>(0, 0.95, 0.23), radii: SIMD3<Float>(repeating: 0.08), material: coreEmissive)
-            addBox(center: origin + SIMD3<Float>(0, 0.92, -0.22), size: SIMD3<Float>(0.28, 0.55, 0.18), material: scubaTankMat)
-            addSphere(center: origin + SIMD3<Float>(0, 1.22, -0.22), radii: SIMD3<Float>(repeating: 0.09), material: armor)
-            addSphere(center: origin + SIMD3<Float>(0, 1.55, 0), radii: SIMD3<Float>(repeating: 0.32), material: suit)
-            addBox(center: origin + SIMD3<Float>(0, 1.58, 0.22), size: SIMD3<Float>(0.38, 0.18, 0.14), material: visor)
-            if eyes {
-                addSphere(center: origin + SIMD3<Float>(-0.11, 1.60, 0.29), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
-                addSphere(center: origin + SIMD3<Float>( 0.11, 1.60, 0.29), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
+            if isJellyGremlin {
+                addJellyGremlinHeadAndTorso(
+                    bellyCenter: origin + SIMD3<Float>(0, 0.76, 0.02),
+                    headCenter: origin + SIMD3<Float>(0, 1.30, 0.04),
+                    jellyMat: suit
+                )
+            } else {
+                let torsoO = origin + SIMD3<Float>(0, 0.86, 0)
+                addSphere(center: torsoO, radii: SIMD3<Float>(0.34, 0.50, 0.27), material: suit)
+                addBox(center: origin + SIMD3<Float>(0, 0.92, 0.16), size: SIMD3<Float>(0.44, 0.42, 0.12), material: armor)
+                addSphere(center: origin + SIMD3<Float>(0, 0.95, 0.23), radii: SIMD3<Float>(repeating: 0.08), material: coreEmissive)
+                addBox(center: origin + SIMD3<Float>(0, 0.92, -0.22), size: SIMD3<Float>(0.28, 0.55, 0.18), material: scubaTankMat)
+                addSphere(center: origin + SIMD3<Float>(0, 1.22, -0.22), radii: SIMD3<Float>(repeating: 0.09), material: armor)
+                addSphere(center: origin + SIMD3<Float>(0, 1.55, 0), radii: SIMD3<Float>(repeating: 0.32), material: suit)
+                addBox(center: origin + SIMD3<Float>(0, 1.58, 0.22), size: SIMD3<Float>(0.38, 0.18, 0.14), material: visor)
+                if eyes {
+                    addSphere(center: origin + SIMD3<Float>(-0.11, 1.60, 0.29), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
+                    addSphere(center: origin + SIMD3<Float>( 0.11, 1.60, 0.29), radii: SIMD3<Float>(repeating: 0.04), material: dark, segments: 7, rings: 4)
+                }
             }
 
             // Brazos
@@ -637,6 +739,15 @@ private struct RTMeshBuilder {
             addSphere(center: origin + SIMD3<Float>( 0.42, 0.80, 0.03), radii: SIMD3<Float>(repeating: 0.095), material: armor)
             addBox(center: origin + SIMD3<Float>(-0.42, 0.65, 0.09), size: SIMD3<Float>(0.13, 0.26, 0.16), material: suit)
             addBox(center: origin + SIMD3<Float>( 0.42, 0.65, 0.09), size: SIMD3<Float>(0.13, 0.26, 0.16), material: suit)
+            if isJellyGremlin {
+                // Garras en manos y pies del Diablillo
+                for side: Float in [-1.0, 1.0] {
+                    addSphere(center: origin + SIMD3<Float>(side * 0.42, 0.50, 0.13), radii: SIMD3<Float>(0.03, 0.06, 0.03), material: clawMat, segments: 6, rings: 4)
+                    addSphere(center: origin + SIMD3<Float>(side * 0.38, 0.51, 0.16), radii: SIMD3<Float>(0.025, 0.055, 0.025), material: clawMat, segments: 6, rings: 4)
+                    addSphere(center: origin + SIMD3<Float>(side * 0.19, 0.04, 0.36), radii: SIMD3<Float>(0.032, 0.035, 0.06), material: clawMat, segments: 6, rings: 4)
+                    addSphere(center: origin + SIMD3<Float>(side * 0.13, 0.04, 0.36), radii: SIMD3<Float>(0.032, 0.035, 0.06), material: clawMat, segments: 6, rings: 4)
+                }
+            }
             if holdsTool {
                 addBox(center: origin + SIMD3<Float>(0.47, 0.65, 0.28), size: SIMD3<Float>(0.14, 0.16, 0.42), material: toolMat)
             }
@@ -1246,6 +1357,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
     }
 
+    private var swimStrokeTimer: Float = 0
+
     private func updateSimulation(dt: Float, rawDt: Float) {
         updateToolTimers(dt: dt)
         updateNPCSimulation(dt: dt, rawDt: rawDt)
@@ -1268,13 +1381,14 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             desiredDirection = simd_normalize(desiredDirection)
         }
 
-        // 🌊 Subterranean Easter Egg: Salida natural nadando hacia la apertura de la piscina
-        let currentlyInPool = isInsidePoolXZ(playerPosition) && playerPosition.y < 0.15 && playerPosition.y > -1.5
-        let isSubterranean = playerPosition.y <= -1.5
+        // 🌊 Subterranean Easter Egg & Piscina Profunda (-2.15m): Salida natural nadando hacia la apertura de la piscina
+        let currentlyInPool = isInsidePoolXZ(playerPosition) && playerPosition.y < 0.15 && playerPosition.y > -2.55
+        let isSubterranean = playerPosition.y <= -2.55
         let currentGroundHeight = isSubterranean ? -11.0 : groundHeight(at: playerPosition, insidePool: currentlyInPool)
         let currentlyOnFloat = currentlyInPool && isStandingOnFloat(playerPosition)
         let isUnderFire = pendingDamageAccumulator > 0
-        let baseSpeed: Float = currentlyInPool && !currentlyOnFloat ? 3.2 : (isSubterranean ? 4.2 : 4.0)
+        let isDivingInPool = currentlyInPool && !currentlyOnFloat && playerPosition.y <= -0.80
+        let baseSpeed: Float = isDivingInPool ? 3.8 : (currentlyInPool && !currentlyOnFloat ? 3.2 : (isSubterranean ? 4.4 : 4.0))
         let movementSpeed: Float = isUnderFire ? baseSpeed * 1.30 : baseSpeed // ⚡ Escape Evasion Boost (+30% speed under fire!)
         let targetVelocity = desiredDirection * (magnitude > 0.08 ? movementSpeed * magnitude : 0)
         let response = 1 - exp(-dt * (magnitude > 0.08 ? 16 : 22))
@@ -1336,7 +1450,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             isSlidingOnToboggan = false
             audio.setGlideIntensity(0)
             audio.setWaterMovementIntensity(0)
-            audio.playLaserReflectionSound()
+            audio.playSubterraneanPortalPlungeSound()
         }
 
         // 🛡️ 🪨 Tactical Rock Cover System (Pegarse a Cobertura)
@@ -1386,7 +1500,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         proposed.z = max(-17.0, min(17.0, proposed.z))
         resolveFloatCollision(position: &proposed)
         resolveRockCollisions(position: &proposed)
-        let willBeInPool = isInsidePoolXZ(proposed) && proposed.y < 0.15 && proposed.y > -3.0
+        let willBeInPool = isInsidePoolXZ(proposed) && proposed.y < 0.15 && proposed.y > -2.55
         let nextGroundHeight = groundHeight(at: proposed, insidePool: willBeInPool)
         let willBeOnFloat = willBeInPool && nextGroundHeight > -0.1
         let wasGrounded = playerPosition.y <= currentGroundHeight + 0.05 || (currentlyInPool && playerPosition.y <= 0.1)
@@ -1398,35 +1512,85 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
         }
 
-        let isSubterraneanSubmerged = playerPosition.y <= -1.5 || proposed.y <= -1.5
+        let isSubterraneanSubmerged = playerPosition.y <= -2.55 || proposed.y <= -2.55
         let onTrampolineBoard = playerPosition.x >= 0.7 && playerPosition.x <= 2.1 && playerPosition.z >= -6.9 && playerPosition.z <= -3.7 && playerPosition.y >= 2.7
+        // Ángulo vertical de mirada para control de buceo 3D: negativo = mirando hacia el fondo, positivo = mirando hacia arriba
+        let divePitch: Float = cameraMode == .firstPerson ? firstPersonPitch : -(orbitPitch - 0.36)
 
         if jumpQueued {
             jumpQueued = false
             if isSubterraneanSubmerged {
-                verticalVelocity = 4.2 // Impulso de nado ascendente
+                verticalVelocity = 4.4 // Impulso de brazada submarina
+                audio.playSwimStrokeSound(intensity: 0.90)
+            } else if willBeInPool && !willBeOnFloat {
+                if proposed.y <= -0.65 {
+                    // En inmersión dentro de la piscina: brazada de buceo hacia arriba o en dirección de mirada
+                    verticalVelocity = divePitch < -0.22 ? -2.8 : 4.0
+                    audio.playSwimStrokeSound(intensity: 0.85)
+                } else if divePitch < -0.18 {
+                    // Mirando hacia abajo en la piscina: zambullida hacia el fondo (-2.15m)
+                    verticalVelocity = -3.4
+                    audio.playSwimStrokeSound(intensity: 0.88)
+                } else {
+                    verticalVelocity = 4.2
+                }
             } else if onTrampolineBoard {
                 verticalVelocity = 4.8
                 horizontalVelocity = SIMD2<Float>(0.0, 5.5)
             } else if wasGrounded {
-                verticalVelocity = currentlyInPool ? 3.8 : 5.2
+                verticalVelocity = 5.2
             }
         }
 
         if isSubterraneanSubmerged {
-            // Smooth zero-gravity underwater swimming & viscous fluid drag
-            horizontalVelocity *= exp(-dt * 2.5)
-            verticalVelocity = max(-0.45, verticalVelocity - dt * 1.0)
-        } else if willBeInPool && !willBeOnFloat {
-            // Smooth pool fluid physics without surface bobbing glitches
-            let depthInWater = max(0, -proposed.y)
-            let targetY: Float = -0.35
-            if depthInWater > 0 {
-                let diff = targetY - proposed.y
-                verticalVelocity += diff * 12.0 * dt
-                verticalVelocity *= exp(-dt * 3.5)
+            // 🤿 Modo Buceo 3D Subterráneo: propulsión vertical fluida siguiendo el ángulo de cámara + brazadas rítmicas
+            if magnitude > 0.10 {
+                let targetVerticalSwim = sin(divePitch) * movementSpeed * magnitude * 0.85
+                verticalVelocity += (targetVerticalSwim - verticalVelocity) * min(1.0, dt * 4.5)
+                swimStrokeTimer -= dt
+                if swimStrokeTimer <= 0 {
+                    audio.playSwimStrokeSound(intensity: 0.62 * magnitude)
+                    swimStrokeTimer = 0.54
+                }
             } else {
-                verticalVelocity -= 6.5 * dt
+                verticalVelocity = max(-0.38, verticalVelocity - dt * 0.75)
+                swimStrokeTimer = min(swimStrokeTimer, 0.15)
+            }
+            horizontalVelocity *= exp(-dt * 2.2)
+        } else if willBeInPool && !willBeOnFloat {
+            // 🤿 Piscina Profunda (-2.15m) con Modo Buceo Activo
+            let wantsToDive = magnitude > 0.12 && divePitch < -0.16
+            let wantsToAscend = magnitude > 0.12 && divePitch > 0.18
+            if wantsToDive || proposed.y <= -0.78 {
+                if magnitude > 0.12 && abs(divePitch) > 0.12 {
+                    let targetDiveVel = sin(divePitch) * movementSpeed * magnitude * 0.95
+                    verticalVelocity += (targetDiveVel - verticalVelocity) * min(1.0, dt * 5.5)
+                } else {
+                    // Flotabilidad suave y gradual cuando se deja de bucear en el fondo de la piscina
+                    verticalVelocity += 1.35 * dt
+                    verticalVelocity *= exp(-dt * 2.8)
+                }
+                if magnitude > 0.15 {
+                    swimStrokeTimer -= dt
+                    if swimStrokeTimer <= 0 {
+                        audio.playSwimStrokeSound(intensity: 0.58 * magnitude)
+                        swimStrokeTimer = 0.54
+                    }
+                }
+            } else if wantsToAscend && proposed.y < -0.35 {
+                verticalVelocity += 4.5 * dt
+                verticalVelocity *= exp(-dt * 3.0)
+            } else {
+                // Flotación estable a nivel del pecho/hombros cerca de la superficie (-0.38m)
+                let depthInWater = max(0, -proposed.y)
+                let targetY: Float = -0.38
+                if depthInWater > 0 {
+                    let diff = targetY - proposed.y
+                    verticalVelocity += diff * 10.5 * dt
+                    verticalVelocity *= exp(-dt * 3.5)
+                } else {
+                    verticalVelocity -= 6.5 * dt
+                }
             }
             horizontalVelocity *= exp(-dt * 2.2)
         } else if isCoverActive {
@@ -1437,20 +1601,20 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         var landingSpeed: Float = 0
         proposed.y += verticalVelocity * dt
-        if proposed.y <= -1.5 || playerPosition.y <= -1.5 {
+        if proposed.y <= -2.55 || playerPosition.y <= -2.55 {
             // 🌊 CÁMARA SUBTERRÁNEA GIGANTE (Piso a -11.0m y Techo Sólido con salida exclusiva por la piscina)
             proposed.y = max(-11.0, proposed.y)
 
             let insidePoolOpening = proposed.x >= -5.35 && proposed.x <= 2.35 && proposed.z >= -4.20 && proposed.z <= 1.20
             if insidePoolOpening {
-                // Puede ascender libremente y emerger al agua de la piscina
-                if proposed.y >= -0.35 {
-                    verticalVelocity = max(0.5, verticalVelocity)
+                // Puede ascender libremente desde la cámara subterránea hacia la piscina profunda
+                if proposed.y >= -2.10 {
+                    verticalVelocity = max(0.8, verticalVelocity)
                 }
             } else {
-                // Techo sólido subterráneo: no se puede salir salvo por el rectángulo de la piscina
-                if proposed.y >= -0.45 {
-                    proposed.y = -0.45
+                // Techo sólido subterráneo (bajo el nivel de la piscina profunda): salida exclusiva por el hueco de la piscina
+                if proposed.y >= -2.60 {
+                    proposed.y = -2.60
                     verticalVelocity = min(0, verticalVelocity)
                 }
             }
@@ -1458,9 +1622,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             // Position locked during slide descent to prevent ground clamping
             proposed = playerPosition
         } else if currentlyInPool && !willBeOnFloat {
-            if proposed.y <= nextGroundHeight && proposed.y > -2.0 {
+            if proposed.y <= nextGroundHeight && proposed.y > -2.50 {
                 proposed.y = nextGroundHeight
-                verticalVelocity = 0
+                verticalVelocity = max(0, verticalVelocity)
             } else {
                 proposed.y = max(-11.0, min(1.5, proposed.y))
             }
@@ -2066,7 +2230,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if distance < 0.84 && position.y >= floatTop - 0.10 {
             return floatTop
         }
-        return -0.66
+        return -2.15
     }
 
     private func isStandingOnFloat(_ position: SIMD3<Float>) -> Bool {
@@ -2227,13 +2391,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     }
 
     private func writeUniforms(texture: MTLTexture, dt: Float) {
-        let currentlyInPool = isInsidePoolXZ(playerPosition) && playerPosition.y > -3.0
+        let currentlyInPool = isInsidePoolXZ(playerPosition) && playerPosition.y > -2.55
         let targetOffsetY: Float
         if isCoverActive {
             targetOffsetY = (cameraMode == .firstPerson ? 0.70 : 0.60)
         } else if currentlyInPool && cameraMode == .thirdPerson {
-            targetOffsetY = max(1.35, 1.10 - playerPosition.y * 0.5)
-        } else if playerPosition.y <= -3.0 {
+            targetOffsetY = max(1.15, 1.10 - max(-0.8, playerPosition.y) * 0.35)
+        } else if playerPosition.y <= -2.55 {
             targetOffsetY = (cameraMode == .firstPerson ? 1.25 : 0.85)
         } else {
             targetOffsetY = (cameraMode == .firstPerson ? 1.56 : 1.10)
@@ -2263,7 +2427,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             fieldOfView = 72
         } else {
             // ☁️ 🐢 Super Mario 64 Lakitu Cloud Camera (Elevated trailing over right shoulder with organic cloud lag!)
-            let isSubterraneanTarget = playerPosition.y <= -3.0
+            let isSubterraneanTarget = playerPosition.y <= -2.55
             let distance: Float = 4.6
             let shoulderOffset: Float = 0.45
             let heightOffset: Float = isSubterraneanTarget ? 1.15 : 1.75
@@ -2306,7 +2470,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let toolOrigin: SIMD3<Float>
         var toolDirection: SIMD3<Float>
         if cameraMode == .firstPerson {
-            let forwardOffset: Float = cameraPosition.y <= -3.0 ? 0.32 : 0.10
+            let forwardOffset: Float = cameraPosition.y <= -2.55 ? 0.32 : 0.10
             toolOrigin = cameraPosition + right * 0.18 - up * 0.16 + cameraForward * forwardOffset
             toolDirection = cameraForward
         } else {
@@ -2322,7 +2486,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         default: renderTool = heldTool
         }
 
-        if cameraPosition.y <= -3.0 && heldTool == .laser {
+        if cameraPosition.y <= -2.55 && heldTool == .laser {
             let waterNormal = SIMD3<Float>(0, 1, 0)
             let eta: Float = 1.0 / 1.33 // Snell's Law underwater refraction index!
             let cosI = max(-1.0, min(1.0, -simd_dot(waterNormal, toolDirection)))
@@ -2333,7 +2497,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
         }
 
-        let isSubterraneanIlluminated = cameraPosition.y <= -3.0
+        let isSubterraneanIlluminated = cameraPosition.y <= -2.55
         let activeLightPos = isSubterraneanIlluminated ? SIMD4<Float>(0.0, -5.2, 0.0, 1) : SIMD4<Float>(-7.55, 2.72, 6.65, 1)
         let activeLightColor = isSubterraneanIlluminated ? SIMD4<Float>(0.10, 0.95, 0.98, 48.0) : SIMD4<Float>(1.0, 0.66, 0.24, lightStates.effectiveIntensity(.post) * 46)
 
@@ -2370,10 +2534,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     }
 
     private func writeInstanceDescriptors() {
-        let isInsidePoolArea = playerPosition.x > -5.35 && playerPosition.x < 2.35 && playerPosition.z > -4.20 && playerPosition.z < 1.20
-        // 🏊‍♂️ Natación e inclinación de nado SOLO en inmersión profunda bajo el agua (reino subterráneo Y <= -2.5m)
-        // En la piscina de la superficie el agua llega a la cintura (Y > -1.0m), manteniéndose erguido.
-        let isDeepSubmerged = playerPosition.y <= -2.5
+        // 🏊‍♂️ Natación e inclinación de buceo cuando se sumerge en la piscina profunda (Y <= -0.85m) o en el reino subterráneo
+        let isDeepSubmerged = playerPosition.y <= -0.85
         let isPlayerDead = self.isPlayerDead
         let isMirrorActive = (heldTool == .mirror && mirrorActiveRemaining > 0)
 
@@ -2383,7 +2545,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             pPitch = 1.57
         } else if isDeepSubmerged {
             // 🏊‍♂️ Fluid Diving & Swimming Body Pitch: Dynamic tilt tracking view angle (-50 to +50 deg)
-            pPitch = max(-0.85, min(0.85, orbitPitch * 1.5))
+            pPitch = max(-0.85, min(0.85, (orbitPitch - 0.36) * 1.6))
         } else if isCoverActive {
             // 🛡️ GTA Crouch Cover Pitch: Forward crouch tilt (+25 deg pitch!)
             pPitch = 0.44
@@ -2391,7 +2553,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             // 🛷 Toboggan Sitting Pitch: Backwards sit tilt (-35 deg pitch!)
             pPitch = -0.62
         } else {
-            // 🧍 Postura erguida caminando en tierra o en la piscina de superficie (0 pitch!)
+            // 🧍 Postura erguida caminando en tierra o en la superficie de la piscina (0 pitch!)
             pPitch = 0
         }
 
@@ -2597,7 +2759,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
     private static func makePlayerMesh(pose: RTMeshBuilder.CharacterPose = .stand) -> RTMeshBuilder {
         var builder = RTMeshBuilder()
-        builder.addCharacter(origin: .zero, color: SIMD3<Float>(0.08, 0.82, 0.68), holdsTool: true, pose: pose)
+        builder.addCharacter(
+            origin: .zero,
+            color: SIMD3<Float>(0.24, 0.88, 0.22),
+            holdsTool: true,
+            pose: pose,
+            isJellyGremlin: true
+        )
         return builder
     }
 
@@ -2684,7 +2852,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         var builder = RTMeshBuilder()
         let deck = RTMaterial(color: SIMD3<Float>(0.13, 0.16, 0.17), roughness: 0.76, reflectivity: 0.04)
         let wall = RTMaterial(color: SIMD3<Float>(0.035, 0.045, 0.065), roughness: 0.9)
-        let poolTile = RTMaterial(color: SIMD3<Float>(0.16, 0.23, 0.22), roughness: 0.42, reflectivity: 0.05)
+        let poolTile = RTMaterial(color: SIMD3<Float>(0.14, 0.24, 0.26), roughness: 0.36, reflectivity: 0.08)
         let coping = RTMaterial(color: SIMD3<Float>(0.28, 0.30, 0.30), roughness: 0.16, reflectivity: 0.42, kind: 3)
         let mirror = RTMaterial(color: SIMD3<Float>(0.92, 0.95, 0.98), roughness: 0.01, reflectivity: 0.97, kind: 1)
         let shallowWater = RTMaterial(
@@ -2773,11 +2941,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         builder.addBox(center: SIMD3<Float>(-17.8, -5.80, 0), size: SIMD3<Float>(0.4, 11.6, 36.0), material: subWallMat)
         builder.addBox(center: SIMD3<Float>(17.8, -5.80, 0), size: SIMD3<Float>(0.4, 11.6, 36.0), material: subWallMat)
 
-        // 3. Techo Sólido Subterráneo que sella todo excepto el acceso de la piscina
-        builder.addBox(center: SIMD3<Float>(0, -0.25, -11.0), size: SIMD3<Float>(36.0, 0.25, 13.6), material: subCeilingMat)
-        builder.addBox(center: SIMD3<Float>(0, -0.25, 9.6), size: SIMD3<Float>(36.0, 0.25, 16.8), material: subCeilingMat)
-        builder.addBox(center: SIMD3<Float>(-11.6, -0.25, -1.5), size: SIMD3<Float>(12.5, 0.25, 5.4), material: subCeilingMat)
-        builder.addBox(center: SIMD3<Float>(10.1, -0.25, -1.5), size: SIMD3<Float>(15.5, 0.25, 5.4), material: subCeilingMat)
+        // 3. Techo Sólido Subterráneo (Y = -2.35m, debajo de la piscina profunda) que sella todo excepto el acceso de la piscina
+        builder.addBox(center: SIMD3<Float>(0, -2.35, -11.0), size: SIMD3<Float>(36.0, 0.25, 13.6), material: subCeilingMat)
+        builder.addBox(center: SIMD3<Float>(0, -2.35, 9.6), size: SIMD3<Float>(36.0, 0.25, 16.8), material: subCeilingMat)
+        builder.addBox(center: SIMD3<Float>(-11.6, -2.35, -1.5), size: SIMD3<Float>(12.5, 0.25, 5.4), material: subCeilingMat)
+        builder.addBox(center: SIMD3<Float>(10.1, -2.35, -1.5), size: SIMD3<Float>(15.5, 0.25, 5.4), material: subCeilingMat)
 
         // 4. Luces en las Paredes Subterráneas (Tiras Neón Cian & Esmeralda)
         // Banda Superior Cian a Y = -4.5m
@@ -2833,11 +3001,18 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         // Sunken Treasure Chest
         builder.addBox(center: SIMD3<Float>(2.8, -8.2, -1.8), size: SIMD3<Float>(1.2, 0.75, 0.85), material: treasureGold)
 
-        builder.addBox(center: SIMD3<Float>(-1.5, -0.72, -1.5), size: SIMD3<Float>(7.8, 0.12, 5.4), material: poolTile)
-        builder.addBox(center: SIMD3<Float>(-1.5, -0.34, -4.14), size: SIMD3<Float>(7.8, 0.68, 0.12), material: poolTile)
-        builder.addBox(center: SIMD3<Float>(-1.5, -0.34, 1.14), size: SIMD3<Float>(7.8, 0.68, 0.12), material: poolTile)
-        builder.addBox(center: SIMD3<Float>(-5.34, -0.34, -1.5), size: SIMD3<Float>(0.12, 0.68, 5.4), material: poolTile)
-        builder.addBox(center: SIMD3<Float>(2.34, -0.34, -1.5), size: SIMD3<Float>(0.12, 0.68, 5.4), material: poolTile)
+        // 🏊‍♂️ Piscina Olímpica Profunda (-2.22m de profundidad real con paredes revestidas e iluminación subacuática)
+        builder.addBox(center: SIMD3<Float>(-1.5, -2.22, -1.5), size: SIMD3<Float>(7.8, 0.14, 5.4), material: poolTile)
+        builder.addBox(center: SIMD3<Float>(-1.5, -1.10, -4.14), size: SIMD3<Float>(7.8, 2.24, 0.12), material: poolTile)
+        builder.addBox(center: SIMD3<Float>(-1.5, -1.10, 1.14), size: SIMD3<Float>(7.8, 2.24, 0.12), material: poolTile)
+        builder.addBox(center: SIMD3<Float>(-5.34, -1.10, -1.5), size: SIMD3<Float>(0.12, 2.24, 5.4), material: poolTile)
+        builder.addBox(center: SIMD3<Float>(2.34, -1.10, -1.5), size: SIMD3<Float>(0.12, 2.24, 5.4), material: poolTile)
+
+        // Tiras LED subacuáticas en las paredes profundas de la piscina (Y = -1.45m)
+        builder.addBox(center: SIMD3<Float>(-1.5, -1.45, -4.06), size: SIMD3<Float>(7.2, 0.05, 0.05), material: subWallNeonCyan)
+        builder.addBox(center: SIMD3<Float>(-1.5, -1.45, 1.06), size: SIMD3<Float>(7.2, 0.05, 0.05), material: subWallNeonCyan)
+        builder.addBox(center: SIMD3<Float>(-5.26, -1.45, -1.5), size: SIMD3<Float>(0.05, 0.05, 4.8), material: subWallNeonCyan)
+        builder.addBox(center: SIMD3<Float>(2.26, -1.45, -1.5), size: SIMD3<Float>(0.05, 0.05, 4.8), material: subWallNeonCyan)
 
         builder.addBox(center: SIMD3<Float>(-1.5, 0.14, -4.38), size: SIMD3<Float>(8.1, 0.28, 0.34), material: coping)
         builder.addBox(center: SIMD3<Float>(-1.5, 0.14, 1.38), size: SIMD3<Float>(8.1, 0.28, 0.34), material: coping)
@@ -2882,11 +3057,12 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             )
         }
 
-        builder.addBox(center: SIMD3<Float>(2.20, 0.54, -2.25), size: SIMD3<Float>(0.10, 1.35, 0.10), material: metal)
-        builder.addBox(center: SIMD3<Float>(2.20, 0.54, -1.55), size: SIMD3<Float>(0.10, 1.35, 0.10), material: metal)
-        for level in 0..<3 {
+        // Escalera metálica de la piscina extendida hasta el fondo (-2.15m)
+        builder.addBox(center: SIMD3<Float>(2.20, -0.35, -2.25), size: SIMD3<Float>(0.10, 3.10, 0.10), material: metal)
+        builder.addBox(center: SIMD3<Float>(2.20, -0.35, -1.55), size: SIMD3<Float>(0.10, 3.10, 0.10), material: metal)
+        for level in 0..<8 {
             builder.addBox(
-                center: SIMD3<Float>(2.20, 0.20 + Float(level) * 0.28, -1.90),
+                center: SIMD3<Float>(2.20, -1.75 + Float(level) * 0.32, -1.90),
                 size: SIMD3<Float>(0.10, 0.08, 0.70),
                 material: metal
             )

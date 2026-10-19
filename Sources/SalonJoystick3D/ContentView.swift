@@ -2660,6 +2660,8 @@ final class ChiptuneAudioEngine {
     private var lightsaberDefeatBuffer: AVAudioPCMBuffer?
     private var slowMoActivationBuffer: AVAudioPCMBuffer?
     private var slowMoDeactivationBuffer: AVAudioPCMBuffer?
+    private var subterraneanPortalBuffer: AVAudioPCMBuffer?
+    private var swimStrokeBuffer: AVAudioPCMBuffer?
     private var nextSplash = 0
     private var nextLanding = 0
     private var nodesAttached = false
@@ -2723,6 +2725,8 @@ final class ChiptuneAudioEngine {
                 lightsaberDefeatBuffer = makeLightsaberDefeatBuffer()
                 slowMoActivationBuffer = makeSlowMotionActivationBuffer()
                 slowMoDeactivationBuffer = makeSlowMotionDeactivationBuffer()
+                subterraneanPortalBuffer = makeSubterraneanPortalBuffer()
+                swimStrokeBuffer = makeSwimStrokeBuffer()
             }
 
             let session = AVAudioSession.sharedInstance()
@@ -2905,6 +2909,30 @@ final class ChiptuneAudioEngine {
         slowMoFXNode.volume = 0.85
         slowMoFXNode.scheduleBuffer(buffer, at: nil)
         slowMoFXNode.play()
+    }
+
+    func playSubterraneanPortalPlungeSound() {
+        audioQueue.async { [weak self] in
+            guard let self, self.started, self.effectsEnabled else { return }
+            if let buffer = self.subterraneanPortalBuffer {
+                self.slowMoFXNode.stop()
+                self.slowMoFXNode.volume = 0.95
+                self.slowMoFXNode.scheduleBuffer(buffer, at: nil)
+                self.slowMoFXNode.play()
+            }
+        }
+    }
+
+    func playSwimStrokeSound(intensity: Float = 0.80) {
+        audioQueue.async { [weak self] in
+            guard let self, self.started, self.waterEnabled else { return }
+            if let buffer = self.swimStrokeBuffer {
+                self.splashNode.stop()
+                self.splashNode.volume = 0.42 + max(0, min(1, intensity)) * 0.46
+                self.splashNode.scheduleBuffer(buffer, at: nil)
+                self.splashNode.play()
+            }
+        }
     }
 
     func playLanding(intensity: Float) {
@@ -3143,6 +3171,75 @@ final class ChiptuneAudioEngine {
             let val = Float(tanh((whoosh + snap) * 1.4) * 0.85)
             channels[0][frame] = val
             channels[1][frame] = val
+        }
+        return buffer
+    }
+
+    // 🌊🌀 Inmersión Abisal al Easter Egg Subterráneo (Vórtice Hidrodinámico + Sub-Bass + Acorde Bioluminiscente)
+    private func makeSubterraneanPortalBuffer() -> AVAudioPCMBuffer? {
+        let duration = 1.45
+        let frameCount = AVAudioFrameCount(format.sampleRate * duration)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
+              let channels = buffer.floatChannelData else {
+            return nil
+        }
+        buffer.frameLength = frameCount
+
+        var lpNoise = 0.0
+        for frame in 0..<Int(frameCount) {
+            let t = Double(frame) / format.sampleRate
+            let progress = t / duration
+
+            // 1. Impacto profundo de inmersión subacuática (190Hz -> 36Hz)
+            let plungeFreq = 36.0 + 154.0 * exp(-t * 4.2)
+            let plungeEnv = min(1.0, t * 70.0) * exp(-t * 2.4)
+            let plungeSub = tanh(sin(2.0 * .pi * plungeFreq * t) * 2.0) * plungeEnv
+
+            // 2. Turbulencia de burbujas presurizadas filtradas
+            let rawNoise = Double.random(in: -1.0...1.0)
+            lpNoise = lpNoise * 0.88 + rawNoise * 0.12
+            let bubbleMod = 0.5 + 0.5 * sin(2.0 * .pi * (16.0 + t * 12.0) * t)
+            let bubbleStream = lpNoise * bubbleMod * exp(-t * 2.1) * 0.85
+
+            // 3. Resonancia de caverna cristalina bioluminiscente (Acorde místico 264Hz + 396Hz + 528Hz)
+            let chimeEnv = min(1.0, max(0.0, (t - 0.06) * 10.0)) * exp(-max(0.0, t - 0.06) * 2.2)
+            let c1 = sin(2.0 * .pi * 264.0 * t) * 0.45
+            let c2 = sin(2.0 * .pi * 396.0 * t) * 0.35
+            let c3L = sin(2.0 * .pi * 528.0 * t) * 0.25
+            let c3R = sin(2.0 * .pi * 531.0 * t) * 0.25
+
+            let left = tanh((plungeSub * 0.85 + bubbleStream * 0.65 + (c1 + c2 + c3L) * chimeEnv * 0.55) * 1.25)
+            let right = tanh((plungeSub * 0.85 + bubbleStream * 0.65 + (c1 + c2 + c3R) * chimeEnv * 0.55) * 1.25)
+            let fadeOut = min(1.0, (1.0 - progress) * 6.0)
+            channels[0][frame] = Float(left * fadeOut * 0.92)
+            channels[1][frame] = Float(right * fadeOut * 0.92)
+        }
+        return buffer
+    }
+
+    // 🏊‍♂️ Brazada Hidrodinámica de Buceo (Impulso suave de agua + estela de burbujas)
+    private func makeSwimStrokeBuffer() -> AVAudioPCMBuffer? {
+        let duration = 0.42
+        let frameCount = AVAudioFrameCount(format.sampleRate * duration)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
+              let channels = buffer.floatChannelData else {
+            return nil
+        }
+        buffer.frameLength = frameCount
+
+        var lowPass = 0.0
+        for frame in 0..<Int(frameCount) {
+            let t = Double(frame) / format.sampleRate
+            let progress = t / duration
+            let env = sin(progress * .pi) * exp(-progress * 1.6)
+            let raw = Double.random(in: -1.0...1.0)
+            lowPass = lowPass * 0.91 + raw * 0.09
+            let sweepFreq = 95.0 + 75.0 * sin(progress * .pi)
+            let body = sin(2.0 * .pi * sweepFreq * t) * 0.42
+            let bubbleRipple = sin(2.0 * .pi * (240.0 + 90.0 * sin(t * 28.0)) * t) * exp(-t * 6.5) * 0.18
+            let sample = Float(tanh((lowPass * 1.3 + body + bubbleRipple) * env * 1.2) * 0.82)
+            channels[0][frame] = sample
+            channels[1][frame] = sample * 0.95
         }
         return buffer
     }
