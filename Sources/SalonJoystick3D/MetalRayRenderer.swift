@@ -790,6 +790,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private var lastFrameTime = CACurrentMediaTime()
     private var elapsedTime: Float = 0
     private var playerWaterWakeCountdown: Float = 0
+    private var wasPlayerInWater: Bool = false
     private var lastSubmittedGlideIntensity: Float = -1
     private var fpsFrameCount = 0
     private var fpsStartTime = CACurrentMediaTime()
@@ -1256,10 +1257,6 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if wasRidingFloat {
             playerPosition += floatDisplacement
         }
-        let previousWaterImmersion = waterImmersion(
-            at: playerPosition,
-            insidePool: isInsidePoolXZ(playerPosition)
-        )
 
         let inputX = max(-1.0, min(1.0, Float(joystick.dx)))
         let inputForward = max(-1.0, min(1.0, -Float(joystick.dy)))
@@ -1271,9 +1268,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             desiredDirection = simd_normalize(desiredDirection)
         }
 
-        let currentlyInPool = isInsidePoolXZ(playerPosition) && playerPosition.y < 0.15 && playerPosition.y > -3.0
-        let isSubterranean = playerPosition.y <= -3.0
-        let currentGroundHeight = isSubterranean ? -8.50 : groundHeight(at: playerPosition, insidePool: currentlyInPool)
+        // 🌊 Subterranean Easter Egg: Salida natural nadando hacia la apertura de la piscina
+        let currentlyInPool = isInsidePoolXZ(playerPosition) && playerPosition.y < 0.15 && playerPosition.y > -1.5
+        let isSubterranean = playerPosition.y <= -1.5
+        let currentGroundHeight = isSubterranean ? -11.0 : groundHeight(at: playerPosition, insidePool: currentlyInPool)
         let currentlyOnFloat = currentlyInPool && isStandingOnFloat(playerPosition)
         let isUnderFire = pendingDamageAccumulator > 0
         let baseSpeed: Float = currentlyInPool && !currentlyOnFloat ? 3.2 : (isSubterranean ? 4.2 : 4.0)
@@ -1336,7 +1334,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             playerPosition = SIMD3<Float>(-2.5, -5.5, -2.5)
             verticalVelocity = -0.5
             isSlidingOnToboggan = false
-            audio.playLaserIgnition()
+            audio.setGlideIntensity(0)
+            audio.setWaterMovementIntensity(0)
+            audio.playLaserReflectionSound()
         }
 
         // 🛡️ 🪨 Tactical Rock Cover System (Pegarse a Cobertura)
@@ -1361,21 +1361,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             let coverPos = rCenter + awayDir * (rock.radii.x + 0.38)
             playerPosition.x = coverPos.x
             playerPosition.z = coverPos.y
-            // 🛡️ Crouch Cover: Agacharse pegado al suelo detrás de la piedra (Y = groundHeight + 0.15m)
-            playerPosition.y = currentGroundHeight + 0.15
+            // 🛡️ Crouch Cover: Agacharse pegado al suelo detrás de la piedra a nivel de suelo
+            playerPosition.y = currentGroundHeight
+            verticalVelocity = 0
             horizontalVelocity *= exp(-dt * 6.0)
         }
 
-        // 🌀 Salida del Easter Egg (Underwater Portal Exit Ring at X=0, Z=0)
-        if playerPosition.y <= -3.0 {
-            let distToExit = simd_distance(SIMD2<Float>(playerPosition.x, playerPosition.z), SIMD2<Float>(0, 0))
-            if distToExit < 1.8 {
-                // Teleport back up smoothly onto the patio pool deck safely out of water!
-                playerPosition = SIMD3<Float>(-1.5, 0.45, 1.8)
-                verticalVelocity = 0.5
-                audio.playWaterDisturbance(intensity: 1.0)
-            }
-        }
+
         if currentlyOnFloat && magnitude > 0.08 {
             floatVelocity -= desiredDirection * (dt * 0.58 * magnitude)
             let playerOffset = SIMD2<Float>(
@@ -1406,14 +1398,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
         }
 
-        let isSubterraneanSubmerged = playerPosition.y <= -3.0 || proposed.y <= -3.0
+        let isSubterraneanSubmerged = playerPosition.y <= -1.5 || proposed.y <= -1.5
         let onTrampolineBoard = playerPosition.x >= 0.7 && playerPosition.x <= 2.1 && playerPosition.z >= -6.9 && playerPosition.z <= -3.7 && playerPosition.y >= 2.7
 
         if jumpQueued {
             jumpQueued = false
             if isSubterraneanSubmerged {
-                verticalVelocity = 3.2
-                audio.playUnderwaterGlug(intensity: 0.85)
+                verticalVelocity = 4.2 // Impulso de nado ascendente
             } else if onTrampolineBoard {
                 verticalVelocity = 4.8
                 horizontalVelocity = SIMD2<Float>(0.0, 5.5)
@@ -1424,11 +1415,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         if isSubterraneanSubmerged {
             // Smooth zero-gravity underwater swimming & viscous fluid drag
-            horizontalVelocity *= exp(-dt * 2.8)
-            verticalVelocity = max(-0.55, verticalVelocity - dt * 1.5)
-            if Float.random(in: 0...1) < dt * 0.95 {
-                audio.playUnderwaterGlug(intensity: 0.45)
-            }
+            horizontalVelocity *= exp(-dt * 2.5)
+            verticalVelocity = max(-0.45, verticalVelocity - dt * 1.0)
         } else if willBeInPool && !willBeOnFloat {
             // Smooth pool fluid physics without surface bobbing glitches
             let depthInWater = max(0, -proposed.y)
@@ -1441,21 +1429,43 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 verticalVelocity -= 6.5 * dt
             }
             horizontalVelocity *= exp(-dt * 2.2)
+        } else if isCoverActive {
+            verticalVelocity = 0
         } else {
             verticalVelocity -= 9.8 * dt
         }
 
         var landingSpeed: Float = 0
         proposed.y += verticalVelocity * dt
-        if proposed.y <= -3.0 || playerPosition.y <= -3.0 {
-            proposed.y = max(-8.50, proposed.y)
+        if proposed.y <= -1.5 || playerPosition.y <= -1.5 {
+            // 🌊 CÁMARA SUBTERRÁNEA GIGANTE (Piso a -11.0m y Techo Sólido con salida exclusiva por la piscina)
+            proposed.y = max(-11.0, proposed.y)
+
+            let insidePoolOpening = proposed.x >= -5.35 && proposed.x <= 2.35 && proposed.z >= -4.20 && proposed.z <= 1.20
+            if insidePoolOpening {
+                // Puede ascender libremente y emerger al agua de la piscina
+                if proposed.y >= -0.35 {
+                    verticalVelocity = max(0.5, verticalVelocity)
+                }
+            } else {
+                // Techo sólido subterráneo: no se puede salir salvo por el rectángulo de la piscina
+                if proposed.y >= -0.45 {
+                    proposed.y = -0.45
+                    verticalVelocity = min(0, verticalVelocity)
+                }
+            }
         } else if isSlidingOnToboggan {
             // Position locked during slide descent to prevent ground clamping
             proposed = playerPosition
         } else if currentlyInPool && !willBeOnFloat {
-            proposed.y = max(-3.20, min(1.5, proposed.y))
+            if proposed.y <= nextGroundHeight && proposed.y > -2.0 {
+                proposed.y = nextGroundHeight
+                verticalVelocity = 0
+            } else {
+                proposed.y = max(-11.0, min(1.5, proposed.y))
+            }
         } else if proposed.y <= nextGroundHeight {
-            if !wasGrounded && verticalVelocity < -1.2 {
+            if !wasGrounded && !isCoverActive && verticalVelocity < -1.2 {
                 landingSpeed = -verticalVelocity
             }
             proposed.y = nextGroundHeight
@@ -1468,18 +1478,18 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             insidePool: willBeInPool
         )
 
-        if currentWaterImmersion > 0 && previousWaterImmersion <= 0 {
+        let isPlayerCurrentlyInWater = willBeInPool && !willBeOnFloat
+        let enteredWaterThisFrame = isPlayerCurrentlyInWater && !wasPlayerInWater
+        if enteredWaterThisFrame {
             let entryIntensity = min(1, max(0.38, -verticalVelocity / 3.8))
             pendingWaterImpulse = SIMD4<Float>(playerPosition.x, playerPosition.z, -1.05, 1)
             audio.playWaterDisturbance(intensity: entryIntensity)
         }
+        wasPlayerInWater = isPlayerCurrentlyInWater
 
-        let enteredWaterThisFrame = currentWaterImmersion > 0 && previousWaterImmersion <= 0
-        if landingSpeed > 0 && !enteredWaterThisFrame && currentWaterImmersion <= 0 {
+        if landingSpeed > 0 && !enteredWaterThisFrame && !isPlayerCurrentlyInWater {
             let impact = min(1, max(0.15, (landingSpeed - 1.0) / 4.2))
-            if currentWaterImmersion <= 0 || willBeOnFloat {
-                audio.playLanding(intensity: impact)
-            }
+            audio.playLanding(intensity: impact)
         }
 
         if cameraMode == .firstPerson {
@@ -1508,7 +1518,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             playerWaterWakeCountdown = 0
         }
         let floatWaterMovement = min(0.72, max(0, (simd_length(floatVelocity) - 0.04) / 0.95))
-        let waterMovementIntensity = max(playerWaterMovement, floatWaterMovement)
+        let waterMovementIntensity = isSubterraneanSubmerged ? 0 : max(playerWaterMovement, floatWaterMovement)
         let waterStateChanged = (waterMovementIntensity > 0.01) !=
             (lastSubmittedWaterMovementIntensity > 0.01)
         if waterStateChanged ||
@@ -1561,7 +1571,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     let closest = origin + forward * proj
                     if simd_distance(center, closest) < 0.70 {
                         dummyAlive[i] = false
-                        audio.playWaterDisturbance(intensity: 0.90)
+                        audio.playLightsaberDefeatSound()
                         onScoreUpdate?(300)
                     }
                 }
@@ -1573,7 +1583,6 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 if proj > 0 && proj < 22.0 {
                     let closest = origin + forward * proj
                     if simd_distance(center, closest) < 0.70 {
-                        audio.playWaterDisturbance(intensity: 0.90)
                         onScoreUpdate?(400)
                         handleNPCElimination(index: i)
                     }
@@ -1619,7 +1628,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             // Wave cleared! Trigger 10-second intermission rest
             isWaveIntermission = true
             intermissionTimeRemaining = 10.0
-            audio.playWaterDisturbance(intensity: 1.0)
+            audio.playLaserReflectionSound()
             onDamageTaken?(-25.0) // Health regen rest reward (+25 HP)
         }
     }
@@ -1633,6 +1642,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             npcRespawnTimers[index] = 9999.0
         }
         npcPositions[index].y = -10
+        audio.playLightsaberDefeatSound()
         recordBotElimination()
     }
 
@@ -1910,7 +1920,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                                 if npcHealths[targetIdx] <= 0 {
                                     botLaserActiveTimers[index] = 0
                                     botLaserCooldownTimers[index] = botCooldown
-                                    audio.playWaterDisturbance(intensity: 1.0)
+                                    audio.playLaserPlayerHitSound()
                                     onScoreUpdate?(500)
                                     handleNPCElimination(index: targetIdx)
                                 }
@@ -1976,13 +1986,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if let closestIndex {
             let damage: Float = 35.0
             npcHealths[closestIndex] = max(0, npcHealths[closestIndex] - damage)
-            audio.playLaserPlayerHitSound()
             onNPCHealthsUpdate?(npcHealths)
 
             if npcHealths[closestIndex] <= 0 {
-                audio.playWaterDisturbance(intensity: 0.85)
                 onScoreUpdate?(250)
                 handleNPCElimination(index: closestIndex)
+            } else {
+                audio.playLaserPlayerHitSound()
             }
         }
 
@@ -2361,7 +2371,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
     private func writeInstanceDescriptors() {
         let isInsidePoolArea = playerPosition.x > -5.35 && playerPosition.x < 2.35 && playerPosition.z > -4.20 && playerPosition.z < 1.20
-        let isSubmerged = isInsidePoolArea && playerPosition.y < 0.40
+        // 🏊‍♂️ Natación e inclinación de nado SOLO en inmersión profunda bajo el agua (reino subterráneo Y <= -2.5m)
+        // En la piscina de la superficie el agua llega a la cintura (Y > -1.0m), manteniéndose erguido.
+        let isDeepSubmerged = playerPosition.y <= -2.5
         let isPlayerDead = self.isPlayerDead
         let isMirrorActive = (heldTool == .mirror && mirrorActiveRemaining > 0)
 
@@ -2369,7 +2381,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if isPlayerDead {
             // ☠️ MORIDO :v Death Animation: Fall flat face down on the floor (+90 deg pitch!)
             pPitch = 1.57
-        } else if isSubmerged {
+        } else if isDeepSubmerged {
             // 🏊‍♂️ Fluid Diving & Swimming Body Pitch: Dynamic tilt tracking view angle (-50 to +50 deg)
             pPitch = max(-0.85, min(0.85, orbitPitch * 1.5))
         } else if isCoverActive {
@@ -2379,7 +2391,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             // 🛷 Toboggan Sitting Pitch: Backwards sit tilt (-35 deg pitch!)
             pPitch = -0.62
         } else {
-            // 🧍 Upright Walking Posture on Land (0 pitch!)
+            // 🧍 Postura erguida caminando en tierra o en la piscina de superficie (0 pitch!)
             pPitch = 0
         }
 
@@ -2399,8 +2411,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let playerASIndex: UInt32
         if isPlayerDead {
             playerASIndex = 1
-        } else if isSubmerged || playerPosition.y <= -3.0 {
-            playerASIndex = 7 // 🏊 Swim Mario
+        } else if isDeepSubmerged {
+            playerASIndex = 7 // 🏊 Swim Mario (solo en inmersión profunda)
         } else if isCoverActive {
             playerASIndex = 6 // 🛡️ GTA Crouch Cover
         } else if isSlidingOnToboggan {
@@ -2740,11 +2752,67 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             builder.addBox(center: stepPos + SIMD3<Float>(0.70, 0.22, 0), size: SIMD3<Float>(0.10, 0.40, 0.32), material: slideCyan)
         }
 
-        // 🌊 💎 Subterranean Underwater World Props (Secret Realm Props & Sunken Treasure!)
+        // 🌊 💎 CÁMARA ACUÁTICA SUBTERRÁNEA COLOSAL (Secret Realm & Water Generators)
+        let subFloorMat = RTMaterial(color: SIMD3<Float>(0.02, 0.06, 0.10), roughness: 0.65, reflectivity: 0.12)
+        let subWallMat = RTMaterial(color: SIMD3<Float>(0.03, 0.08, 0.13), roughness: 0.45, reflectivity: 0.18)
+        let subCeilingMat = RTMaterial(color: SIMD3<Float>(0.02, 0.05, 0.09), roughness: 0.70, reflectivity: 0.10)
+        let subWallNeonCyan = RTMaterial(color: SIMD3<Float>(0.0, 0.95, 1.0), roughness: 0.05, emission: SIMD3<Float>(0.6, 4.8, 7.5), reflectivity: 0.85, kind: 5)
+        let subWallNeonEmerald = RTMaterial(color: SIMD3<Float>(0.0, 1.0, 0.6), roughness: 0.05, emission: SIMD3<Float>(0.4, 6.2, 3.8), reflectivity: 0.85, kind: 5)
         let bioCrystal = RTMaterial(color: SIMD3<Float>(0.10, 0.95, 0.85), roughness: 0.10, emission: SIMD3<Float>(0.20, 2.8, 3.8), reflectivity: 0.60)
         let sunkenObelisk = RTMaterial(color: SIMD3<Float>(0.12, 0.18, 0.22), roughness: 0.65, reflectivity: 0.12)
         let treasureGold = RTMaterial(color: SIMD3<Float>(0.98, 0.82, 0.12), roughness: 0.15, emission: SIMD3<Float>(0.45, 0.35, 0.05), reflectivity: 0.50)
-        let exitPortal = RTMaterial(color: SIMD3<Float>(0.05, 0.55, 0.98), roughness: 0.05, emission: SIMD3<Float>(0.30, 2.5, 6.0), reflectivity: 0.85, kind: 5)
+        let generatorMetal = RTMaterial(color: SIMD3<Float>(0.25, 0.32, 0.38), roughness: 0.22, reflectivity: 0.70)
+        let bubbleMat = RTMaterial(color: SIMD3<Float>(0.75, 0.95, 1.0), roughness: 0.02, emission: SIMD3<Float>(0.15, 0.65, 0.95), reflectivity: 0.85, kind: 5)
+
+        // 1. Piso Abisal Profundo (Y = -11.6m, 36m x 36m)
+        builder.addBox(center: SIMD3<Float>(0, -11.60, 0), size: SIMD3<Float>(36.0, 0.30, 36.0), material: subFloorMat)
+
+        // 2. Cuatro Paredes Subterráneas que cierran herméticamente el cuarto (Y = -11.5m a Y = 0.0m)
+        builder.addBox(center: SIMD3<Float>(0, -5.80, -17.8), size: SIMD3<Float>(36.0, 11.6, 0.4), material: subWallMat)
+        builder.addBox(center: SIMD3<Float>(0, -5.80, 17.8), size: SIMD3<Float>(36.0, 11.6, 0.4), material: subWallMat)
+        builder.addBox(center: SIMD3<Float>(-17.8, -5.80, 0), size: SIMD3<Float>(0.4, 11.6, 36.0), material: subWallMat)
+        builder.addBox(center: SIMD3<Float>(17.8, -5.80, 0), size: SIMD3<Float>(0.4, 11.6, 36.0), material: subWallMat)
+
+        // 3. Techo Sólido Subterráneo que sella todo excepto el acceso de la piscina
+        builder.addBox(center: SIMD3<Float>(0, -0.25, -11.0), size: SIMD3<Float>(36.0, 0.25, 13.6), material: subCeilingMat)
+        builder.addBox(center: SIMD3<Float>(0, -0.25, 9.6), size: SIMD3<Float>(36.0, 0.25, 16.8), material: subCeilingMat)
+        builder.addBox(center: SIMD3<Float>(-11.6, -0.25, -1.5), size: SIMD3<Float>(12.5, 0.25, 5.4), material: subCeilingMat)
+        builder.addBox(center: SIMD3<Float>(10.1, -0.25, -1.5), size: SIMD3<Float>(15.5, 0.25, 5.4), material: subCeilingMat)
+
+        // 4. Luces en las Paredes Subterráneas (Tiras Neón Cian & Esmeralda)
+        // Banda Superior Cian a Y = -4.5m
+        builder.addBox(center: SIMD3<Float>(0, -4.50, -17.58), size: SIMD3<Float>(35.0, 0.15, 0.08), material: subWallNeonCyan)
+        builder.addBox(center: SIMD3<Float>(0, -4.50, 17.58), size: SIMD3<Float>(35.0, 0.15, 0.08), material: subWallNeonCyan)
+        builder.addBox(center: SIMD3<Float>(-17.58, -4.50, 0), size: SIMD3<Float>(0.08, 0.15, 35.0), material: subWallNeonCyan)
+        builder.addBox(center: SIMD3<Float>(17.58, -4.50, 0), size: SIMD3<Float>(0.08, 0.15, 35.0), material: subWallNeonCyan)
+
+        // Banda Inferior Esmeralda a Y = -9.0m
+        builder.addBox(center: SIMD3<Float>(0, -9.00, -17.58), size: SIMD3<Float>(35.0, 0.15, 0.08), material: subWallNeonEmerald)
+        builder.addBox(center: SIMD3<Float>(0, -9.00, 17.58), size: SIMD3<Float>(35.0, 0.15, 0.08), material: subWallNeonEmerald)
+        builder.addBox(center: SIMD3<Float>(-17.58, -9.00, 0), size: SIMD3<Float>(0.08, 0.15, 35.0), material: subWallNeonEmerald)
+        builder.addBox(center: SIMD3<Float>(17.58, -9.00, 0), size: SIMD3<Float>(0.08, 0.15, 35.0), material: subWallNeonEmerald)
+
+        // 5. 🌊 Generadores de Agua & Turbinas de Fondo con Columnas de Burbujas
+        let generatorLocs: [SIMD2<Float>] = [
+            SIMD2<Float>(-10.5, -10.5),
+            SIMD2<Float>(10.5, -10.5),
+            SIMD2<Float>(-10.5, 10.5),
+            SIMD2<Float>(10.5, 10.5)
+        ]
+        for loc in generatorLocs {
+            // Base de la turbina
+            builder.addBox(center: SIMD3<Float>(loc.x, -11.0, loc.y), size: SIMD3<Float>(2.4, 0.8, 2.4), material: generatorMetal)
+            // Núcleo brillante emisor
+            builder.addBox(center: SIMD3<Float>(loc.x, -10.55, loc.y), size: SIMD3<Float>(1.6, 0.20, 1.6), material: subWallNeonCyan)
+            // Columna de burbujas ascendentes
+            let bubbleHeights: [Float] = [-9.8, -8.2, -6.6, -5.0, -3.4, -1.8]
+            for (idx, bY) in bubbleHeights.enumerated() {
+                let jitterX = sin(Float(idx) * 1.7) * 0.28
+                let jitterZ = cos(Float(idx) * 2.1) * 0.28
+                let bRadius: Float = idx % 2 == 0 ? 0.22 : 0.30
+                builder.addSphere(center: SIMD3<Float>(loc.x + jitterX, bY, loc.y + jitterZ), radii: SIMD3<Float>(repeating: bRadius), material: bubbleMat, segments: 8, rings: 5)
+            }
+        }
 
         // Sunken Ancient Obelisks & Pillars
         builder.addBox(center: SIMD3<Float>(-4.2, -6.0, -3.8), size: SIMD3<Float>(0.85, 5.0, 0.85), material: sunkenObelisk)
@@ -2764,9 +2832,6 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         // Sunken Treasure Chest
         builder.addBox(center: SIMD3<Float>(2.8, -8.2, -1.8), size: SIMD3<Float>(1.2, 0.75, 0.85), material: treasureGold)
-
-        // 🌀 Central Glowing Blue Teleport Exit Portal Ring (Salida del Easter Egg)
-        builder.addTorus(center: SIMD3<Float>(0, -8.35, 0), majorRadius: 1.45, minorRadius: 0.18, material: exitPortal, majorSegments: 16, minorSegments: 8)
 
         builder.addBox(center: SIMD3<Float>(-1.5, -0.72, -1.5), size: SIMD3<Float>(7.8, 0.12, 5.4), material: poolTile)
         builder.addBox(center: SIMD3<Float>(-1.5, -0.34, -4.14), size: SIMD3<Float>(7.8, 0.68, 0.12), material: poolTile)
