@@ -202,13 +202,13 @@ scene.add(coverGroup);
 const poolGroup = new THREE.Group();
 poolGroup.visible = false;
 
-// Terraza / Deck de la piscina
+// Terraza / Deck de la piscina (Suelo exterior de resort con contraste elegante)
 const deckMat = new THREE.MeshStandardMaterial({
-  color: 0x1f2b38,
-  roughness: 0.7,
-  metalness: 0.1
+  color: 0x334155, // Piedra pizarra moderna con contraste frente al agua
+  roughness: 0.65,
+  metalness: 0.15
 });
-const poolDeck = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), deckMat);
+const poolDeck = new THREE.Mesh(new THREE.PlaneGeometry(28, 28), deckMat);
 poolDeck.rotation.x = -Math.PI / 2;
 poolDeck.position.y = 0.0;
 poolDeck.receiveShadow = true;
@@ -291,29 +291,212 @@ copingEast.position.set(3.35, 0.07, 0);
 poolGroup.add(copingNorth, copingSouth, copingWest, copingEast);
 
 // Luces Subacuáticas de la Piscina (Efecto Resort)
-const underwaterLight1 = new THREE.PointLight(0x00f0ff, 4.0, 5);
+const underwaterLight1 = new THREE.PointLight(0x00f0ff, 1.5, 6);
 underwaterLight1.position.set(-1.8, -0.7, 0);
-const underwaterLight2 = new THREE.PointLight(0x00f0ff, 4.0, 5);
+const underwaterLight2 = new THREE.PointLight(0x00f0ff, 1.5, 6);
 underwaterLight2.position.set(1.8, -0.7, 0);
 poolGroup.add(underwaterLight1, underwaterLight2);
 
-// Flotador inflable naranja
-const floatMesh = new THREE.Mesh(
-  new THREE.TorusGeometry(0.48, 0.14, 16, 28),
-  new THREE.MeshStandardMaterial({ color: 0xff5500, roughness: 0.15 })
-);
-floatMesh.rotation.x = Math.PI / 2;
-floatMesh.position.set(1.0, -0.08, 0.2);
-poolGroup.add(floatMesh);
+// ----------------------------------------------------
+// PROPS DE REALISMO ACUÁTICO
+// ----------------------------------------------------
+// Materiales de Props
+const chromeMat = new THREE.MeshStandardMaterial({
+  color: 0xf8fafc,
+  metalness: 0.96,
+  roughness: 0.08
+});
+const blackRubberMat = new THREE.MeshStandardMaterial({
+  color: 0x18181b,
+  roughness: 0.8
+});
 
-// Superficie de Agua Cristalina
+// 1. ESCALERA DE PISCINA DE ACERO INOXIDABLE (Referencia clave de inmersión)
+const ladderGroup = new THREE.Group();
+ladderGroup.position.set(-1.6, 0.07, -2.15);
+
+// Pasamanos izquierdo y derecho curvados
+function createLadderRail(xOffset) {
+  const railGroup = new THREE.Group();
+  // Barra vertical en la pared (sumergida hasta -0.85m)
+  const lowerPipe = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.95, 16), chromeMat);
+  lowerPipe.position.set(xOffset, -0.475, 0.06);
+  // Arco superior de agarre que sale hacia el coping
+  const upperPipe = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.45, 16), chromeMat);
+  upperPipe.position.set(xOffset, 0.22, 0.06);
+  const topCurve = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.022, 12, 16, Math.PI), chromeMat);
+  topCurve.rotation.y = Math.PI / 2;
+  topCurve.position.set(xOffset, 0.44, -0.06);
+  const backPost = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.44, 16), chromeMat);
+  backPost.position.set(xOffset, 0.22, -0.18);
+  const baseFlange = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.02, 16), chromeMat);
+  baseFlange.position.set(xOffset, 0.01, -0.18);
+  const bumper = new THREE.Mesh(new THREE.SphereGeometry(0.028, 12, 12), blackRubberMat);
+  bumper.position.set(xOffset, -0.95, 0.06);
+
+  railGroup.add(lowerPipe, upperPipe, topCurve, backPost, baseFlange, bumper);
+  return railGroup;
+}
+ladderGroup.add(createLadderRail(-0.24));
+ladderGroup.add(createLadderRail(0.24));
+
+// 3 Peldaños cromados (1 sobre el agua, 2 sumergidos con distorsión acuática)
+const stepRungs = [];
+[-0.04, -0.34, -0.66].forEach(yPos => {
+  const rung = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.025, 0.08), chromeMat);
+  rung.position.set(0, yPos, 0.06);
+  ladderGroup.add(rung);
+  stepRungs.push(rung);
+});
+poolGroup.add(ladderGroup);
+
+// 2. PELOTA DE PLAYA INFLABLE MULTICOLOR
+const ballCanvas = document.createElement('canvas');
+ballCanvas.width = 256;
+ballCanvas.height = 128;
+const bCtx = ballCanvas.getContext('2d');
+const colors = ['#ef4444', '#ffffff', '#3b82f6', '#ffffff', '#eab308', '#22c55e'];
+const sliceW = 256 / colors.length;
+colors.forEach((col, idx) => {
+  bCtx.fillStyle = col;
+  bCtx.fillRect(idx * sliceW, 0, sliceW, 128);
+});
+const ballTexture = new THREE.CanvasTexture(ballCanvas);
+const beachBallMesh = new THREE.Mesh(
+  new THREE.SphereGeometry(0.26, 24, 24),
+  new THREE.MeshStandardMaterial({ map: ballTexture, roughness: 0.18, metalness: 0.05 })
+);
+beachBallMesh.position.set(-1.2, -0.06, -0.6);
+beachBallMesh.castShadow = true;
+poolGroup.add(beachBallMesh);
+
+// 3. FLOTADOR SALVAVIDAS CON CINCHAS BLANCAS
+const lifeBuoyGroup = new THREE.Group();
+const buoyTorus = new THREE.Mesh(
+  new THREE.TorusGeometry(0.46, 0.13, 16, 32),
+  new THREE.MeshStandardMaterial({ color: 0xff4500, roughness: 0.20 })
+);
+buoyTorus.rotation.x = Math.PI / 2;
+lifeBuoyGroup.add(buoyTorus);
+// 4 Cinchas blancas de agarre
+const strapMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.4 });
+for (let a = 0; a < 4; a++) {
+  const strap = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.015, 8, 16), strapMat);
+  strap.rotation.y = (a * Math.PI) / 2;
+  strap.position.set(Math.cos((a * Math.PI) / 2) * 0.46, 0, Math.sin((a * Math.PI) / 2) * 0.46);
+  lifeBuoyGroup.add(strap);
+}
+lifeBuoyGroup.position.set(1.1, -0.07, 0.3);
+poolGroup.add(lifeBuoyGroup);
+const floatMesh = lifeBuoyGroup; // Alias para compatibilidad de animación
+
+// 4. LÍNEA DE BOYAS DE CARRIL DE NATACIÓN (Separador flotante)
+const laneBuoysGroup = new THREE.Group();
+const buoyMatRed = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.25 });
+const buoyMatWhite = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.25 });
+const buoysList = [];
+const buoyCount = 14;
+for (let b = 0; b < buoyCount; b++) {
+  const bx = -2.8 + (b / (buoyCount - 1)) * 5.6;
+  const buoy = new THREE.Mesh(
+    new THREE.SphereGeometry(0.085, 16, 16),
+    b % 2 === 0 ? buoyMatRed : buoyMatWhite
+  );
+  buoy.scale.set(1.3, 0.85, 0.85);
+  buoy.position.set(bx, -0.06, 1.1);
+  laneBuoysGroup.add(buoy);
+  buoysList.push(buoy);
+}
+// Cable central de las boyas
+const laneCable = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.012, 0.012, 5.6, 8),
+  new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.8 })
+);
+laneCable.rotation.z = Math.PI / 2;
+laneCable.position.set(0, -0.06, 1.1);
+laneBuoysGroup.add(laneCable);
+poolGroup.add(laneBuoysGroup);
+
+// 5. MOBILIARIO DE RESORT: TUMBONA Y SOMBRILLA AL BORDE
+const loungeGroup = new THREE.Group();
+loungeGroup.position.set(2.4, 0.07, -2.8);
+loungeGroup.rotation.y = Math.PI / 4;
+
+// Estructura de la tumbona
+const loungerFrame = new THREE.Mesh(
+  new THREE.BoxGeometry(0.70, 0.12, 1.70),
+  new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.4 })
+);
+loungerFrame.position.set(0, 0.06, 0);
+// Respaldo inclinado
+const backrest = new THREE.Mesh(
+  new THREE.BoxGeometry(0.68, 0.08, 0.65),
+  new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.4 })
+);
+backrest.rotation.x = -Math.PI / 6;
+backrest.position.set(0, 0.24, -0.55);
+// Toalla azul turquesa doblada
+const towel = new THREE.Mesh(
+  new THREE.BoxGeometry(0.55, 0.04, 0.95),
+  new THREE.MeshStandardMaterial({ color: 0x06b6d4, roughness: 0.85 })
+);
+towel.position.set(0, 0.13, 0.20);
+loungeGroup.add(loungerFrame, backrest, towel);
+poolGroup.add(loungeGroup);
+
+// Sombrilla de Terraza (Parasol)
+const parasolGroup = new THREE.Group();
+parasolGroup.position.set(3.4, 0.07, -2.7);
+const umbrellaPole = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.03, 0.03, 2.2, 12),
+  new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.7 })
+);
+umbrellaPole.position.y = 1.1;
+const umbrellaCanopy = new THREE.Mesh(
+  new THREE.ConeGeometry(1.2, 0.45, 8),
+  new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.5 })
+);
+umbrellaCanopy.position.y = 2.15;
+parasolGroup.add(umbrellaPole, umbrellaCanopy);
+poolGroup.add(parasolGroup);
+
+// 6. BOQUILLAS DE HIDROMASAJE & BURBUJAS SUBACUÁTICAS ASCENDENTES
+const bubbleMat = new THREE.MeshStandardMaterial({
+  color: 0xe0f2fe,
+  roughness: 0.05,
+  metalness: 0.1,
+  transparent: true,
+  opacity: 0.65
+});
+const bubblesList = [];
+for (let i = 0; i < 28; i++) {
+  const bMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(0.016 + Math.random() * 0.016, 8, 8),
+    bubbleMat
+  );
+  bMesh.position.set(
+    -3.1 + Math.random() * 0.5,
+    -1.2 + Math.random() * 1.1,
+    -1.0 + (Math.random() - 0.5) * 1.6
+  );
+  bMesh.userData = {
+    speedY: 0.008 + Math.random() * 0.012,
+    baseX: bMesh.position.x,
+    baseZ: bMesh.position.z,
+    wobblePhase: Math.random() * Math.PI * 2
+  };
+  poolGroup.add(bMesh);
+  bubblesList.push(bMesh);
+}
+
+// 7. SUPERFICIE DE AGUA CRISTALINA CON SHADER ULTRA-REALISTA
 const waterGeometry = new THREE.PlaneGeometry(6.4, 4.4, 56, 42);
 const waterMaterial = new THREE.MeshStandardMaterial({
   color: 0x06b6d4, // Cyan turquesa caribeño
-  roughness: 0.08,
-  metalness: 0.12,
+  roughness: 0.06,
+  metalness: 0.18,
   transparent: true,
-  opacity: 0.65, // Deja ver los azulejos y luces del fondo
+  opacity: 0.68, // Permite ver peldaños de escalera y azulejos sumergidos
   flatShading: true
 });
 const waterSurface = new THREE.Mesh(waterGeometry, waterMaterial);
@@ -321,7 +504,290 @@ waterSurface.rotation.x = -Math.PI / 2;
 waterSurface.position.y = -0.06;
 poolGroup.add(waterSurface);
 
+// Borde de Espuma Perimetral (Menisco blanco donde el agua toca el borde)
+const foamMat = new THREE.MeshBasicMaterial({
+  color: 0xffffff,
+  transparent: true,
+  opacity: 0.40,
+  wireframe: false
+});
+const foamBorderNorth = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 0.08), foamMat);
+foamBorderNorth.rotation.x = -Math.PI / 2;
+foamBorderNorth.position.set(0, -0.055, -2.16);
+const foamBorderSouth = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 0.08), foamMat);
+foamBorderSouth.rotation.x = -Math.PI / 2;
+foamBorderSouth.position.set(0, -0.055, 2.16);
+const foamBorderWest = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 4.4), foamMat);
+foamBorderWest.rotation.x = -Math.PI / 2;
+foamBorderWest.position.set(-3.16, -0.055, 0);
+const foamBorderEast = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 4.4), foamMat);
+foamBorderEast.rotation.x = -Math.PI / 2;
+foamBorderEast.position.set(3.16, -0.055, 0);
+poolGroup.add(foamBorderNorth, foamBorderSouth, foamBorderWest, foamBorderEast);
+
 scene.add(poolGroup);
+
+// ----------------------------------------------------
+// 5.5 SLIME IMP 3D PROCEDURAL (PERSONAJE & COSMÉTICOS FREEMIUM)
+// ----------------------------------------------------
+const slimeImpGroup = new THREE.Group();
+slimeImpGroup.visible = false;
+
+// Material de Slime Orgánico Verde Lima (Referencia exacta de la imagen)
+const slimeMat = new THREE.MeshStandardMaterial({
+  color: 0x4ade80, // Verde lima vivo
+  roughness: 0.28,
+  metalness: 0.08,
+  flatShading: false
+});
+const slimeDarkMat = new THREE.MeshStandardMaterial({
+  color: 0x15803d, // Verde oscuro para hueco de orejas y pliegues
+  roughness: 0.45
+});
+const teethMat = new THREE.MeshStandardMaterial({
+  color: 0xfef9c3, // Colmillos afilados marfil
+  roughness: 0.15
+});
+const mouthInteriorMat = new THREE.MeshBasicMaterial({ color: 0x052e16 });
+const tongueMat = new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.35 });
+
+// 1. CUERPO PERIFORME (Torso + Barriga regordeta)
+const slimeBodyGroup = new THREE.Group();
+
+// Barriga inferior esférica prominente
+const bellyMesh = new THREE.Mesh(new THREE.SphereGeometry(0.38, 32, 28), slimeMat);
+bellyMesh.scale.set(1.15, 1.05, 1.10);
+bellyMesh.position.set(0, 0.36, 0.04);
+bellyMesh.castShadow = true;
+
+// Cabeza / Torso superior fusionado
+const headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.34, 32, 28), slimeMat);
+headMesh.scale.set(1.02, 1.18, 0.94);
+headMesh.position.set(0, 0.64, 0.0);
+headMesh.castShadow = true;
+
+// Manchas sutiles de piel de slime (Puntos claros de brillo)
+const speckleMat = new THREE.MeshBasicMaterial({ color: 0x86efac });
+for (let s = 0; s < 12; s++) {
+  const spk = new THREE.Mesh(new THREE.SphereGeometry(0.012 + Math.random() * 0.012, 8, 8), speckleMat);
+  const ang = (s / 12) * Math.PI * 2;
+  spk.position.set(Math.cos(ang) * 0.35, 0.30 + Math.random() * 0.40, Math.sin(ang) * 0.32);
+  slimeBodyGroup.add(spk);
+}
+slimeBodyGroup.add(bellyMesh, headMesh);
+slimeImpGroup.add(slimeBodyGroup);
+
+// 2. OREJAS DE DUENDE PUNTIAGUDAS (Goblin Ears)
+const earsGroup = new THREE.Group();
+function createGoblinEar(isLeft) {
+  const ear = new THREE.Group();
+  const sign = isLeft ? -1 : 1;
+  const outerCone = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.42, 16), slimeMat);
+  outerCone.scale.set(1.0, 1.0, 0.55);
+  outerCone.rotation.z = sign * 0.42;
+  outerCone.rotation.x = -0.12;
+  outerCone.position.set(sign * 0.24, 0.94, -0.02);
+
+  // Hueco interior oscuro de la oreja
+  const innerCone = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.32, 16), slimeDarkMat);
+  innerCone.scale.set(0.9, 0.9, 0.50);
+  innerCone.rotation.z = sign * 0.42;
+  innerCone.rotation.x = -0.10;
+  innerCone.position.set(sign * 0.23, 0.94, 0.02);
+
+  ear.add(outerCone, innerCone);
+  return ear;
+}
+const leftEar = createGoblinEar(true);
+const rightEar = createGoblinEar(false);
+earsGroup.add(leftEar, rightEar);
+slimeImpGroup.add(earsGroup);
+
+// 3. BOCA PICARA Y DIENTES AFILADOS
+const mouthGroup = new THREE.Group();
+mouthGroup.position.set(0, 0.53, 0.25);
+
+// Cavidad de la boca abierta
+const mouthCavity = new THREE.Mesh(new THREE.SphereGeometry(0.16, 20, 16), mouthInteriorMat);
+mouthCavity.scale.set(1.35, 0.75, 0.50);
+mouthGroup.add(mouthCavity);
+
+// Lengua de slime
+const tongue = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 14), tongueMat);
+tongue.scale.set(1.2, 0.4, 1.0);
+tongue.position.set(0, -0.04, 0.06);
+mouthGroup.add(tongue);
+
+// 4 Colmillos afilados (2 superiores hacia abajo, 2 inferiores hacia arriba)
+const fangs = [
+  { x: -0.09, y: 0.05, z: 0.06, rx: Math.PI },   // Superior izquierdo
+  { x: 0.09, y: 0.05, z: 0.06, rx: Math.PI },    // Superior derecho
+  { x: -0.12, y: -0.06, z: 0.06, rx: 0 },         // Inferior izquierdo
+  { x: 0.12, y: -0.06, z: 0.06, rx: 0 }           // Inferior derecho
+];
+fangs.forEach(f => {
+  const fangMesh = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.06, 12), teethMat);
+  fangMesh.position.set(f.x, f.y, f.z);
+  fangMesh.rotation.x = f.rx;
+  mouthGroup.add(fangMesh);
+});
+slimeImpGroup.add(mouthGroup);
+
+// 4. OJOS SALTONES (Visibles si se quitan las gafas)
+const eyesGroup = new THREE.Group();
+const eyeWhiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.1 });
+const pupilMat = new THREE.MeshBasicMaterial({ color: 0x052e16 });
+[-0.14, 0.14].forEach(x => {
+  const eyeBall = new THREE.Mesh(new THREE.SphereGeometry(0.075, 16, 16), eyeWhiteMat);
+  eyeBall.position.set(x, 0.68, 0.24);
+  const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.035, 12, 12), pupilMat);
+  pupil.position.set(x, 0.68, 0.30);
+  eyesGroup.add(eyeBall, pupil);
+});
+slimeImpGroup.add(eyesGroup);
+
+// 5. GAFAS CAT-EYE FUTURISTAS (El rasgo estrella de la imagen)
+const glassesGroup = new THREE.Group();
+glassesGroup.position.set(0, 0.68, 0.28);
+
+const frameMat = new THREE.MeshStandardMaterial({
+  color: 0x0c281a, // Verde oscuro casi negro brillante
+  roughness: 0.12,
+  metalness: 0.50
+});
+const lensMat = new THREE.MeshStandardMaterial({
+  color: 0x166534, // Lente verde joya reflectante
+  roughness: 0.05,
+  metalness: 0.85
+});
+
+// Montura izquierda y derecha anguladas hacia arriba
+function createCatEyeFrame(isLeft) {
+  const sign = isLeft ? -1 : 1;
+  const wing = new THREE.Group();
+  // Aro exterior triangular
+  const rim = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.11, 0.04), frameMat);
+  rim.rotation.z = sign * -0.22;
+  rim.position.set(sign * 0.14, 0.02, 0);
+
+  // Cristal de la lente
+  const lens = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.08, 0.025), lensMat);
+  lens.rotation.z = sign * -0.22;
+  lens.position.set(sign * 0.14, 0.02, 0.015);
+
+  wing.add(rim, lens);
+  return wing;
+}
+const leftGlass = createCatEyeFrame(true);
+const rightGlass = createCatEyeFrame(false);
+// Puente nasal
+const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.03, 0.03), frameMat);
+bridge.position.set(0, 0.01, 0.01);
+glassesGroup.add(leftGlass, rightGlass, bridge);
+slimeImpGroup.add(glassesGroup);
+
+// 6. BRAZOS REGORDETES Y 3 GARRAS/DEDOS
+const armsGroup = new THREE.Group();
+function createSlimeArm(isLeft) {
+  const arm = new THREE.Group();
+  const sign = isLeft ? -1 : 1;
+  // Hombro y brazo curvado hacia abajo
+  const bicep = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.07, 0.32, 16), slimeMat);
+  bicep.position.set(sign * 0.44, 0.45, 0.02);
+  bicep.rotation.z = sign * -0.45;
+  bicep.rotation.x = 0.25;
+
+  // Manita con 3 dedos puntiagudos
+  const hand = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12), slimeMat);
+  hand.position.set(sign * 0.52, 0.32, 0.10);
+  arm.add(bicep, hand);
+
+  for (let c = -1; c <= 1; c++) {
+    const claw = new THREE.Mesh(new THREE.ConeGeometry(0.022, 0.06, 8), slimeMat);
+    claw.position.set(sign * 0.52 + c * 0.025, 0.26, 0.14);
+    claw.rotation.x = Math.PI / 3;
+    arm.add(claw);
+  }
+  return arm;
+}
+const leftArm = createSlimeArm(true);
+const rightArm = createSlimeArm(false);
+armsGroup.add(leftArm, rightArm);
+slimeImpGroup.add(armsGroup);
+
+// 7. PATITAS CORTAS Y PIES CON 2 DEDOS
+const legsGroup = new THREE.Group();
+[-0.15, 0.15].forEach(x => {
+  const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.20, 16), slimeMat);
+  leg.position.set(x, 0.10, 0);
+
+  // Pie con 2 dedos redondeados
+  const foot = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.06, 0.16), slimeMat);
+  foot.position.set(x, 0.03, 0.04);
+  legsGroup.add(leg, foot);
+});
+slimeImpGroup.add(legsGroup);
+
+// 8. ACCESORIOS MONETIZABLES (Sombreros y Ropa Freemium)
+const accessoriesGroup = new THREE.Group();
+
+// A. Gorra deportiva (Hacia atrás)
+const capGroup = new THREE.Group();
+capGroup.position.set(0, 0.88, -0.04);
+const capDome = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 16), new THREE.MeshStandardMaterial({ color: 0xef4444 }));
+capDome.scale.set(1.0, 0.5, 1.0);
+const capVisor = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.02, 0.20), new THREE.MeshStandardMaterial({ color: 0xb91c1c }));
+capVisor.position.set(0, -0.04, -0.22);
+capVisor.rotation.x = 0.15;
+capGroup.add(capDome, capVisor);
+capGroup.visible = false;
+
+// B. Corona Real Dorada
+const crownGroup = new THREE.Group();
+crownGroup.position.set(0, 0.94, 0);
+const crownBase = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.18, 0.16, 0.14, 8),
+  new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.9, roughness: 0.2 })
+);
+crownGroup.add(crownBase);
+crownGroup.visible = false;
+
+// C. Chaleco Táctico SWAT
+const vestGroup = new THREE.Group();
+vestGroup.position.set(0, 0.44, 0.06);
+const vestFront = new THREE.Mesh(
+  new THREE.BoxGeometry(0.56, 0.36, 0.42),
+  new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6 })
+);
+vestGroup.add(vestFront);
+vestGroup.visible = false;
+
+// D. Flotador Patito
+const duckFloatGroup = new THREE.Group();
+duckFloatGroup.position.set(0, 0.32, 0);
+const duckTorus = new THREE.Mesh(
+  new THREE.TorusGeometry(0.48, 0.12, 16, 32),
+  new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.2 })
+);
+duckTorus.rotation.x = Math.PI / 2;
+const duckHead = new THREE.Mesh(
+  new THREE.SphereGeometry(0.12, 16, 16),
+  new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.2 })
+);
+duckHead.position.set(0, 0.16, 0.48);
+const duckBeak = new THREE.Mesh(
+  new THREE.ConeGeometry(0.06, 0.12, 12),
+  new THREE.MeshStandardMaterial({ color: 0xf97316 })
+);
+duckBeak.rotation.x = Math.PI / 2;
+duckBeak.position.set(0, 0.14, 0.60);
+duckFloatGroup.add(duckTorus, duckHead, duckBeak);
+duckFloatGroup.visible = false;
+
+accessoriesGroup.add(capGroup, crownGroup, vestGroup, duckFloatGroup);
+slimeImpGroup.add(accessoriesGroup);
+
+scene.add(slimeImpGroup);
 
 // ----------------------------------------------------
 // 6. CONTROLADORES DE CÁMARA & ANIMACIONES
@@ -343,17 +809,26 @@ function setCameraView(type) {
     camera.position.set(-1.8, 0.75, 0.85);
     controls.target.set(0, 0.45, 0.35);
   } else if (type === 'pool-resort') {
-    camera.position.set(-3.8, 2.4, 3.6);
-    controls.target.set(0, -0.4, 0);
+    camera.position.set(-4.2, 3.2, 3.8);
+    controls.target.set(0.2, -0.3, -0.2);
   } else if (type === 'pool-waterline') {
-    camera.position.set(-2.8, 0.25, 1.8);
-    controls.target.set(0, -0.1, 0);
+    camera.position.set(-2.6, 0.15, 1.6);
+    controls.target.set(0, -0.15, -0.2);
   } else if (type === 'pool-underwater') {
     camera.position.set(0, -0.6, 1.8);
     controls.target.set(0, -0.7, 0);
   } else if (type === 'pool-top') {
-    camera.position.set(0, 5.2, 0.01);
+    camera.position.set(0, 6.2, 0.01);
     controls.target.set(0, 0, 0);
+  } else if (type === 'slime-front') {
+    camera.position.set(0, 0.62, 1.55);
+    controls.target.set(0, 0.52, 0);
+  } else if (type === 'slime-face') {
+    camera.position.set(0, 0.66, 0.95);
+    controls.target.set(0, 0.62, 0);
+  } else if (type === 'slime-angle') {
+    camera.position.set(-1.0, 0.80, 1.25);
+    controls.target.set(0, 0.52, 0);
   }
   controls.update();
 }
@@ -366,6 +841,12 @@ function updateCameraButtons(tab) {
       <button class="cam-btn" onclick="setCameraView('pool-waterline')">🌊 A ras de Agua</button>
       <button class="cam-btn" onclick="setCameraView('pool-underwater')">🤿 Bajo el Agua</button>
       <button class="cam-btn" onclick="setCameraView('pool-top')">🦅 Vista Aérea</button>
+    `;
+  } else if (tab === 'tab-character') {
+    bar.innerHTML = `
+      <button class="cam-btn" onclick="setCameraView('slime-front')">👾 Frontal Slime</button>
+      <button class="cam-btn" onclick="setCameraView('slime-face')">🕶️ Gafas & Rostro</button>
+      <button class="cam-btn" onclick="setCameraView('slime-angle')">📐 Perspectiva 3D</button>
     `;
   } else {
     bar.innerHTML = `
@@ -445,9 +926,9 @@ function updateWater() {
   document.getElementById('val-waterWaves').textContent = waves.toFixed(3);
   document.getElementById('val-waterSpeed').textContent = speed.toFixed(1) + 'x';
 
-  waterMaterial.opacity = 0.25 + (clarity * 0.55);
-  waterMaterial.metalness = reflect * 0.25;
-  waterMaterial.roughness = 0.04 + (1.0 - reflect) * 0.15;
+  waterMaterial.opacity = 0.38 + (1.0 - clarity) * 0.30;
+  waterMaterial.metalness = reflect * 0.30;
+  waterMaterial.roughness = 0.04 + (1.0 - reflect) * 0.20;
 }
 
 function applyWaterPreset(preset) {
@@ -478,17 +959,30 @@ function applyWaterPreset(preset) {
 function switchTab(tabId) {
   const btnCover = document.getElementById('btn-tab-cover');
   const btnWater = document.getElementById('btn-tab-water');
+  const btnChar = document.getElementById('btn-tab-character');
   const panelCover = document.getElementById('tab-cover');
   const panelWater = document.getElementById('tab-water');
+  const panelChar = document.getElementById('tab-character');
 
   if (tabId === 'tab-water') {
     btnCover.classList.remove('active');
     btnWater.classList.add('active');
+    if (btnChar) btnChar.classList.remove('active');
     panelCover.classList.remove('active');
     panelWater.classList.add('active');
+    if (panelChar) panelChar.classList.remove('active');
+
+    // Cambiar a iluminación y atmósfera equilibrada de resort soleado
+    scene.background = new THREE.Color(0x38bdf8); // Cielo azul caribeño
+    sunLight.intensity = 1.3;
+    sunLight.color.setHex(0xfff7ed);
+    sunLight.position.set(6, 10, 8);
+    ambientLight.color.setHex(0x7dd3fc);
+    ambientLight.intensity = 0.7;
 
     // Ocultar personaje y cobertura, mostrar piscina 3D viva
     coverGroup.visible = false;
+    slimeImpGroup.visible = false;
     patioFloor.visible = false;
     gridHelper.visible = false;
     poolGroup.visible = true;
@@ -496,14 +990,50 @@ function switchTab(tabId) {
     // Actualizar botones de cámara para piscina
     updateCameraButtons('tab-water');
     setCameraView('pool-resort');
+  } else if (tabId === 'tab-character') {
+    btnCover.classList.remove('active');
+    btnWater.classList.remove('active');
+    if (btnChar) btnChar.classList.add('active');
+    panelCover.classList.remove('active');
+    panelWater.classList.remove('active');
+    if (panelChar) panelChar.classList.add('active');
+
+    // Atmósfera de estudio de personajes 3D estilo Pixar / Nintendo
+    scene.background = new THREE.Color(0x0b1329);
+    sunLight.intensity = 2.4;
+    sunLight.color.setHex(0xffffff);
+    sunLight.position.set(3, 7, 5);
+    ambientLight.color.setHex(0x94a3b8);
+    ambientLight.intensity = 1.4;
+
+    // Ocultar piscina y cobertura, mostrar Slime Imp 3D
+    coverGroup.visible = false;
+    poolGroup.visible = false;
+    patioFloor.visible = true;
+    gridHelper.visible = true;
+    slimeImpGroup.visible = true;
+
+    updateCameraButtons('tab-character');
+    setCameraView('slime-front');
   } else {
     btnWater.classList.remove('active');
     btnCover.classList.add('active');
+    if (btnChar) btnChar.classList.remove('active');
     panelWater.classList.remove('active');
     panelCover.classList.add('active');
+    if (panelChar) panelChar.classList.remove('active');
+
+    // Restaurar atmósfera nocturna del taller de cinemática
+    scene.background = new THREE.Color(0x070a0f);
+    sunLight.intensity = 2.2;
+    sunLight.color.setHex(0xfff7e6);
+    sunLight.position.set(4, 8, 5);
+    ambientLight.color.setHex(0x334455);
+    ambientLight.intensity = 1.6;
 
     // Mostrar personaje y cobertura
     coverGroup.visible = true;
+    slimeImpGroup.visible = false;
     patioFloor.visible = true;
     gridHelper.visible = true;
     poolGroup.visible = false;
@@ -511,6 +1041,122 @@ function switchTab(tabId) {
     // Actualizar botones de cámara para cobertura
     updateCameraButtons('tab-cover');
     setCameraView('side');
+  }
+}
+
+// ----------------------------------------------------
+// CONTROLADORES DE PERSONALIZACIÓN SLIME IMP (FREEMIUM)
+// ----------------------------------------------------
+let currentSlimeCustom = {
+  skin: 'classic',
+  glasses: 'cateye',
+  hat: 'none',
+  outfit: 'none',
+  chubby: 1.15,
+  ears: 1.0,
+  smile: 1.0
+};
+
+function setSlimeSkin(skin) {
+  currentSlimeCustom.skin = skin;
+  if (skin === 'classic') {
+    slimeMat.color.setHex(0x4ade80); // Verde lima vivo
+    slimeDarkMat.color.setHex(0x15803d);
+    tongueMat.color.setHex(0x22c55e);
+    slimeMat.metalness = 0.08;
+    slimeMat.roughness = 0.28;
+  } else if (skin === 'toxic') {
+    slimeMat.color.setHex(0xa855f7); // Neón púrpura veneno
+    slimeDarkMat.color.setHex(0x6b21a8);
+    tongueMat.color.setHex(0xec4899);
+    slimeMat.metalness = 0.15;
+    slimeMat.roughness = 0.22;
+  } else if (skin === 'magma') {
+    slimeMat.color.setHex(0xf97316); // Naranja fuego
+    slimeDarkMat.color.setHex(0x9a3412);
+    tongueMat.color.setHex(0xeab308);
+    slimeMat.metalness = 0.20;
+    slimeMat.roughness = 0.25;
+  } else if (skin === 'gold') {
+    slimeMat.color.setHex(0xfacc15); // Oro VIP pulido
+    slimeDarkMat.color.setHex(0xa16207);
+    tongueMat.color.setHex(0xf59e0b);
+    slimeMat.metalness = 0.88;
+    slimeMat.roughness = 0.18;
+  }
+}
+
+function setSlimeGlasses(type) {
+  currentSlimeCustom.glasses = type;
+  if (type === 'none') {
+    glassesGroup.visible = false;
+  } else if (type === 'cateye') {
+    glassesGroup.visible = true;
+    frameMat.color.setHex(0x0c281a);
+    lensMat.color.setHex(0x166534);
+    lensMat.metalness = 0.85;
+  } else if (type === 'cyber') {
+    glassesGroup.visible = true;
+    frameMat.color.setHex(0x00e5ff);
+    lensMat.color.setHex(0xff007f);
+    lensMat.metalness = 0.95;
+  } else if (type === 'retro') {
+    glassesGroup.visible = true;
+    frameMat.color.setHex(0xfacc15);
+    lensMat.color.setHex(0x0284c7);
+    lensMat.metalness = 0.60;
+  }
+}
+
+function setSlimeHat(hat) {
+  currentSlimeCustom.hat = hat;
+  capGroup.visible = (hat === 'cap');
+  crownGroup.visible = (hat === 'crown');
+}
+
+function setSlimeOutfit(outfit) {
+  currentSlimeCustom.outfit = outfit;
+  vestGroup.visible = (outfit === 'vest');
+  duckFloatGroup.visible = (outfit === 'float');
+}
+
+function updateSlimeMorph() {
+  const chubby = parseFloat(document.getElementById('slimeChubby').value);
+  const ears = parseFloat(document.getElementById('slimeEars').value);
+  const smile = parseFloat(document.getElementById('slimeSmile').value);
+
+  document.getElementById('val-slimeChubby').textContent = chubby.toFixed(2) + 'x';
+  document.getElementById('val-slimeEars').textContent = ears.toFixed(2) + 'x';
+  document.getElementById('val-slimeSmile').textContent = smile.toFixed(2) + 'x';
+
+  currentSlimeCustom.chubby = chubby;
+  currentSlimeCustom.ears = ears;
+  currentSlimeCustom.smile = smile;
+
+  bellyMesh.scale.set(1.15 * chubby, 1.05 * chubby, 1.10 * chubby);
+  earsGroup.scale.set(ears, ears, ears);
+  mouthGroup.scale.set(smile, smile, smile);
+}
+
+async function exportCharacterPreset() {
+  const payload = {
+    ...currentSlimeCustom,
+    timestamp: new Date().toISOString()
+  };
+
+  try {
+    const res = await fetch('/api/presets/save-character', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    const badge = document.getElementById('status-character');
+    badge.textContent = '✅ ' + (data.message || 'Configuración guardada en presets/');
+    badge.style.display = 'block';
+    setTimeout(() => { badge.style.display = 'none'; }, 4000);
+  } catch (err) {
+    alert('Error al guardar personaje: ' + err.message);
   }
 }
 
@@ -567,7 +1213,7 @@ async function saveWaterSettings() {
 }
 
 // ----------------------------------------------------
-// 7. BUCLE DE RENDER & ANIMACIÓN ONDULATORIA
+// 7. BUCLE DE RENDER & ANIMACIÓN ONDULATORIA Y FÍSICAS DE FLOTACIÓN
 // ----------------------------------------------------
 const posAttr = waterGeometry.attributes.position;
 const originalPositions = posAttr.array.slice();
@@ -576,11 +1222,12 @@ function animate() {
   requestAnimationFrame(animate);
   controls.update();
 
-  // Animación ondulatoria del agua viva
+  // Animación ondulatoria del agua viva y físicas acuáticas
   if (poolGroup.visible) {
     const time = performance.now() * 0.002 * parseFloat(document.getElementById('waterSpeed').value);
     const waveAmp = parseFloat(document.getElementById('waterWaves').value) * 1.5;
 
+    // 1. Deformación vertex de la superficie del agua
     for (let i = 0; i < posAttr.count; i++) {
       const u = originalPositions[i * 3];
       const v = originalPositions[i * 3 + 1];
@@ -589,9 +1236,41 @@ function animate() {
     }
     posAttr.needsUpdate = true;
 
-    // Balanceo suave del flotador
-    floatMesh.position.y = -0.08 + Math.sin(time * 1.2) * 0.025;
-    floatMesh.rotation.z = Math.sin(time * 0.8) * 0.05;
+    // 2. Flotador salvavidas: cabeceo y balanceo sobre olas
+    lifeBuoyGroup.position.y = -0.07 + Math.sin(time * 1.2) * 0.025;
+    lifeBuoyGroup.rotation.z = Math.sin(time * 0.8) * 0.05;
+
+    // 3. Pelota de playa: flotabilidad y rotación en deriva
+    beachBallMesh.position.y = -0.05 + Math.sin(time * 1.4 + 1.2) * 0.028;
+    beachBallMesh.rotation.y += 0.006;
+    beachBallMesh.rotation.x = Math.sin(time * 0.6) * 0.08;
+
+    // 4. Boyas de carril: oscilación individual según posición X
+    buoysList.forEach(buoy => {
+      buoy.position.y = -0.06 + Math.sin(buoy.position.x * 2.5 + time) * waveAmp;
+    });
+
+    // 5. Burbujas subacuáticas ascendentes
+    bubblesList.forEach(b => {
+      b.position.y += b.userData.speedY;
+      b.position.x = b.userData.baseX + Math.sin(time * 3.2 + b.userData.wobblePhase) * 0.025;
+      if (b.position.y > -0.05) {
+        b.position.y = -1.25;
+      }
+    });
+  }
+
+  // 6. Animación viva de respiración del Slime Imp (Squash & Stretch orgánico)
+  if (slimeImpGroup.visible) {
+    const time = performance.now() * 0.003;
+    const breath = Math.sin(time);
+    slimeBodyGroup.scale.y = 1.0 + breath * 0.025;
+    slimeBodyGroup.scale.x = 1.0 - breath * 0.012;
+    slimeBodyGroup.scale.z = 1.0 - breath * 0.012;
+    leftEar.rotation.z = -0.42 + Math.sin(time * 0.8) * 0.04;
+    rightEar.rotation.z = 0.42 - Math.sin(time * 0.8) * 0.04;
+    leftArm.rotation.x = 0.25 + Math.sin(time) * 0.03;
+    rightArm.rotation.x = 0.25 - Math.sin(time) * 0.03;
   }
 
   renderer.render(scene, camera);

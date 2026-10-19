@@ -343,8 +343,9 @@
     </div>
 
     <div class="tabs">
-      <button id="btn-tab-cover" class="tab-btn active" onclick="switchTab('tab-cover')">🪨 Rigging Cobertura</button>
-      <button id="btn-tab-water" class="tab-btn" onclick="switchTab('tab-water')">💧 Piscina & Agua</button>
+      <button id="btn-tab-cover" class="tab-btn active" onclick="switchTab('tab-cover')">🪨 Rigging</button>
+      <button id="btn-tab-water" class="tab-btn" onclick="switchTab('tab-water')">💧 Piscina</button>
+      <button id="btn-tab-character" class="tab-btn" onclick="switchTab('tab-character')">👾 Slime Imp</button>
     </div>
 
     <!-- Pestaña 1: Rigging y Cobertura GTA -->
@@ -463,6 +464,73 @@
         💾 Sincronizar Shader de Agua
       </button>
       <div id="status-water" class="status-badge">✅ Configuración de agua guardada</div>
+    </div>
+
+    <!-- Pestaña 3: Diseñador de Slime Imp & Cosméticos Freemium -->
+    <div id="tab-character" class="panel">
+      <div class="control-group">
+        <h3>🎨 Skin & Tono de Slime</h3>
+        <div class="preset-grid">
+          <button class="preset-btn" onclick="setSlimeSkin('classic')">🟢 Clásico Ácido</button>
+          <button class="preset-btn" onclick="setSlimeSkin('toxic')">🟣 Veneno Flúor</button>
+          <button class="preset-btn" onclick="setSlimeSkin('magma')">🔥 Magma Lava</button>
+          <button class="preset-btn" onclick="setSlimeSkin('gold')">👑 Oro VIP</button>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <h3>🕶️ Gafas & Accesorios Oculares</h3>
+        <div class="preset-grid">
+          <button class="preset-btn" onclick="setSlimeGlasses('cateye')">🕶️ Cat-Eye Verde</button>
+          <button class="preset-btn" onclick="setSlimeGlasses('cyber')">🥽 Visor Cyberpunk</button>
+          <button class="preset-btn" onclick="setSlimeGlasses('retro')">👓 Retro Neon</button>
+          <button class="preset-btn" onclick="setSlimeGlasses('none')">👁️ Ojos al Descubierto</button>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <h3>🎩 Sombreros & Tocados (Monetización)</h3>
+        <div class="preset-grid">
+          <button class="preset-btn" onclick="setSlimeHat('none')">🚫 Ninguno</button>
+          <button class="preset-btn" onclick="setSlimeHat('cap')">🧢 Gorra Táctica</button>
+          <button class="preset-btn" onclick="setSlimeHat('crown')">👑 Corona Real</button>
+          <button class="preset-btn" onclick="setSlimeHat('beanie')">🧶 Gorro Urbano</button>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <h3>🥋 Atuendo / Ropa Freemium</h3>
+        <div class="preset-grid">
+          <button class="preset-btn" onclick="setSlimeOutfit('none')">🟢 Slime Puro</button>
+          <button class="preset-btn" onclick="setSlimeOutfit('vest')">🦺 Chaleco Táctico</button>
+          <button class="preset-btn" onclick="setSlimeOutfit('cape')">🦸 Capa de Héroe</button>
+          <button class="preset-btn" onclick="setSlimeOutfit('float')">🦆 Flotador Patito</button>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <h3>🧬 Proporciones Corporales</h3>
+        
+        <div class="slider-row">
+          <div class="slider-label"><span>Gordura de Barriga</span><span class="slider-val" id="val-slimeChubby">1.15x</span></div>
+          <input type="range" id="slimeChubby" min="0.8" max="1.5" step="0.05" value="1.15" oninput="updateSlimeMorph()">
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-label"><span>Tamaño de Orejas de Duende</span><span class="slider-val" id="val-slimeEars">1.0x</span></div>
+          <input type="range" id="slimeEars" min="0.5" max="1.6" step="0.05" value="1.0" oninput="updateSlimeMorph()">
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-label"><span>Apertura de Sonrisa</span><span class="slider-val" id="val-slimeSmile">1.0x</span></div>
+          <input type="range" id="slimeSmile" min="0.5" max="1.4" step="0.05" value="1.0" oninput="updateSlimeMorph()">
+        </div>
+      </div>
+
+      <button class="btn-action" onclick="exportCharacterPreset()">
+        💾 Exportar Personaje a Swift / JSON
+      </button>
+      <div id="status-character" class="status-badge">✅ Personaje guardado en presets/character_customization.json</div>
     </div>
   </div>
 

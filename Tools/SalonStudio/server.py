@@ -14,6 +14,35 @@ class StudioHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=BASE_DIR, **kwargs)
 
+    def do_GET(self):
+        if self.path == "/api/presets/water":
+            p_file = os.path.join(BASE_DIR, "presets", "water_shaders.json")
+            if os.path.exists(p_file):
+                with open(p_file, "r", encoding="utf-8") as f:
+                    self._send_json(json.load(f))
+            else:
+                self._send_json({"error": "No water presets found"})
+        elif self.path == "/api/presets/cover":
+            p_file = os.path.join(BASE_DIR, "presets", "cover_poses.json")
+            if os.path.exists(p_file):
+                with open(p_file, "r", encoding="utf-8") as f:
+                    self._send_json(json.load(f))
+            else:
+                self._send_json({"error": "No cover poses found"})
+        elif self.path == "/api/export-all":
+            water_p = os.path.join(BASE_DIR, "presets", "water_shaders.json")
+            cover_p = os.path.join(BASE_DIR, "presets", "cover_poses.json")
+            export_data = {"version": "1.0.0", "engine": "SalonStudio-Universal"}
+            if os.path.exists(water_p):
+                with open(water_p, "r", encoding="utf-8") as f:
+                    export_data["water"] = json.load(f)
+            if os.path.exists(cover_p):
+                with open(cover_p, "r", encoding="utf-8") as f:
+                    export_data["cover"] = json.load(f)
+            self._send_json(export_data)
+        else:
+            super().do_GET()
+
     def do_POST(self):
         if self.path == "/api/save-cover":
             length = int(self.headers.get('content-length', 0))

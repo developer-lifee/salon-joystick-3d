@@ -1,0 +1,58 @@
+{
+  "version": "1.0.0",
+  "engineCompatibility": ["Apple-Metal", "Godot-4", "ThreeJS", "Unity-URP", "Unreal-5"],
+  "presets": {
+    "caribe": {
+      "name": "Turquesa Caribeño Resort",
+      "hexColor": "#06b6d4",
+      "rgb": [0.024, 0.714, 0.831],
+      "clarity": 0.92,
+      "reflectivity": 0.95,
+      "waveAmplitude": 0.030,
+      "waveFrequency": 2.5,
+      "flowSpeed": 1.2,
+      "causticsIntensity": 0.85,
+      "subsurfaceScatter": 0.40,
+      "underwaterFogDensity": 0.08
+    },
+    "cyberpunk": {
+      "name": "Neón Nocturno Synthwave",
+      "hexColor": "#a855f7",
+      "rgb": [0.658, 0.333, 0.968],
+      "clarity": 0.75,
+      "reflectivity": 0.98,
+      "waveAmplitude": 0.045,
+      "waveFrequency": 3.0,
+      "flowSpeed": 1.8,
+      "causticsIntensity": 0.90,
+      "subsurfaceScatter": 0.60,
+      "underwaterFogDensity": 0.12
+    },
+    "emerald": {
+      "name": "Laguna Esmeralda Profunda",
+      "hexColor": "#10b981",
+      "rgb": [0.063, 0.725, 0.505],
+      "clarity": 0.82,
+      "reflectivity": 0.88,
+      "waveAmplitude": 0.025,
+      "waveFrequency": 2.2,
+      "flowSpeed": 1.0,
+      "causticsIntensity": 0.70,
+      "subsurfaceScatter": 0.35,
+      "underwaterFogDensity": 0.10
+    },
+    "crystal": {
+      "name": "Olímpica Cristalina Ultra-Pura",
+      "hexColor": "#38bdf8",
+      "rgb": [0.220, 0.741, 0.972],
+      "clarity": 0.96,
+      "reflectivity": 0.95,
+      "waveAmplitude": 0.018,
+      "waveFrequency": 2.0,
+      "flowSpeed": 0.8,
+      "causticsIntensity": 0.95,
+      "subsurfaceScatter": 0.20,
+      "underwaterFogDensity": 0.04
+    }
+  }
+}

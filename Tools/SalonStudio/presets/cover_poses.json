@@ -1,0 +1,39 @@
+{
+  "version": "1.0.0",
+  "engineCompatibility": ["Apple-Metal", "Godot-4", "ThreeJS", "Unity-URP", "Unreal-5"],
+  "poses": {
+    "gta_low_cover_kneel": {
+      "name": "Cobertura Baja Táctica (Rodilla en Tierra)",
+      "crouchY": 0.45,
+      "legSpread": 0.14,
+      "kneeFrontAngle": 65.0,
+      "kneeKneelAngle": 85.0,
+      "spineTilt": 18.0,
+      "rockRadius": 0.55,
+      "rockDist": 0.40,
+      "description": "Postura realista inspirada en GTA V y Gears of War donde la rodilla izquierda flexiona hacia el frente y la derecha se hinca en el suelo pegada a la roca."
+    },
+    "stealth_crouch_walk": {
+      "name": "Sigilo Acecho Agachado",
+      "crouchY": 0.52,
+      "legSpread": 0.18,
+      "kneeFrontAngle": 48.0,
+      "kneeKneelAngle": 52.0,
+      "spineTilt": 12.0,
+      "rockRadius": 0.45,
+      "rockDist": 0.60,
+      "description": "Desplazamiento táctico en cuclillas para sigilo y reducción de hitbox."
+    },
+    "deep_hide": {
+      "name": "Ocultamiento Profundo",
+      "crouchY": 0.35,
+      "legSpread": 0.22,
+      "kneeFrontAngle": 85.0,
+      "kneeKneelAngle": 105.0,
+      "spineTilt": 28.0,
+      "rockRadius": 0.70,
+      "rockDist": 0.25,
+      "description": "Compactación máxima contra cobertura ante fuego de artillería o francotiradores."
+    }
+  }
+}
