@@ -1137,49 +1137,46 @@ kernel void raytracePatio(
         accumulated += float3(9.5f, 0.08f, 0.02f) * (botBeam * 0.95f);
     }
 
-    // 🌊 Clean Clear Pool Water & Underwater Pool Floor Grid
+    // 🌊 Complete Aquatic Realm: Surface Pool & Subterranean Ocean Chamber
     float3 cameraPos = uniforms.cameraPosition.xyz;
     bool isCameraInPoolXZ = (cameraPos.x > -5.35f && cameraPos.x < 2.35f && cameraPos.z > -4.20f && cameraPos.z < 1.20f);
-    if (isCameraInPoolXZ && cameraPos.y < 0.38f) {
+    bool isSubterranean = (cameraPos.y < -0.45f);
+    bool isUnderwater = (isCameraInPoolXZ && cameraPos.y < 0.38f) || isSubterranean;
+
+    if (isUnderwater) {
         float simT = uniforms.waterSimulation.x * 2.5f;
 
-        // 1. Pool Floor Tile Rendering (Floor at y = -3.5)
-        if (primaryDirection.y < -0.01f) {
-            float tFloor = (-3.5f - cameraPos.y) / primaryDirection.y;
-            if (tFloor > 0.01f && tFloor < firstSurfaceDistance) {
-                float3 pFloor = cameraPos + primaryDirection * tFloor;
-                if (pFloor.x > -5.35f && pFloor.x < 2.35f && pFloor.z > -4.20f && pFloor.z < 1.20f) {
-                    float2 tileUV = pFloor.xz * 1.5f;
-                    float2 grid = fract(tileUV);
-                    float grout = step(0.04f, grid.x) * step(0.04f, grid.y);
-                    float3 poolTileColor = mix(float3(0.05f, 0.35f, 0.55f), float3(0.18f, 0.75f, 0.92f), grout);
-                    
-                    // Wave caustics reflection on floor
-                    float caustic = saturate(sin(pFloor.x * 1.8f + simT) * cos(pFloor.z * 1.8f + simT * 1.2f) * 0.5f + 0.5f);
-                    poolTileColor += float3(0.15f, 0.45f, 0.65f) * caustic * 0.45f;
-                    
-                    float fogFactor = saturate(tFloor * 0.08f);
-                    float3 waterColor = mix(poolTileColor, float3(0.02f, 0.25f, 0.45f), fogFactor);
-                    accumulated = mix(accumulated, waterColor, 0.85f);
+        // 1. Underwater Volumetric Absorption & Abyssal Aquatic Tint
+        float depth = max(0.0f, -cameraPos.y);
+        float depthFactor = saturate(depth / 10.0f);
+        float3 deepWaterTint = mix(float3(0.015f, 0.35f, 0.55f), float3(0.005f, 0.12f, 0.28f), depthFactor);
+
+        // 2. Dynamic aquatic caustics dancing on surfaces
+        float3 worldHit = cameraPos + primaryDirection * firstSurfaceDistance;
+        float causticPattern = saturate(
+            sin(worldHit.x * 1.5f + simT) *
+            cos(worldHit.z * 1.5f + simT * 0.9f) *
+            sin((worldHit.x + worldHit.z) * 0.8f + simT * 1.3f) * 0.5f + 0.5f
+        );
+        float distFade = saturate(1.0f - firstSurfaceDistance * 0.045f);
+        accumulated += float3(0.08f, 0.52f, 0.72f) * causticPattern * distFade * 0.50f;
+
+        // 3. Volumetric distance fog in water (distant architecture fades into mystical blue abyss)
+        float fogAmount = saturate(firstSurfaceDistance * 0.038f);
+        accumulated = mix(accumulated, deepWaterTint, fogAmount * 0.72f);
+
+        // 4. Shimmering Pool Skylight looking up towards the pool surface
+        if (primaryDirection.y > 0.05f) {
+            float distToSurface = max(0.1f, (0.45f - cameraPos.y) / max(0.01f, primaryDirection.y));
+            if (distToSurface < firstSurfaceDistance) {
+                float2 surfXZ = cameraPos.xz + primaryDirection.xz * distToSurface;
+                if (surfXZ.x > -5.35f && surfXZ.x < 2.35f && surfXZ.y > -4.20f && surfXZ.y < 1.20f) {
+                    float wSurf = sin(surfXZ.x * 1.2f + simT) * cos(surfXZ.y * 1.2f + simT * 1.2f);
+                    float3 surfaceGlow = mix(float3(0.35f, 0.85f, 1.0f), float3(1.0f, 1.0f, 1.0f), saturate(wSurf * 0.5f + 0.5f));
+                    accumulated += surfaceGlow * 0.75f;
                 }
             }
         }
-
-        // 2. Shimmering Surface Water Ceiling (Looking up)
-        if (primaryDirection.y > 0.05f) {
-            float distToSurface = max(0.1f, (0.48f - cameraPos.y) / max(0.01f, primaryDirection.y));
-            if (distToSurface < firstSurfaceDistance) {
-                float2 surfXZ = cameraPos.xz + primaryDirection.xz * distToSurface;
-                float wSurf = sin(surfXZ.x * 0.85f + simT) * cos(surfXZ.y * 0.85f + simT * 1.2f);
-                float3 surfaceLight = mix(float3(0.15f, 0.72f, 0.95f), float3(0.85f, 0.98f, 1.0f), saturate(wSurf * 0.5f + 0.5f));
-                accumulated += surfaceLight * 0.45f;
-            }
-        }
-
-        // 3. Clear Underwater Tint Filter
-        float depthFactor = saturate((cameraPos.y + 3.5f) / 4.0f);
-        float3 waterTint = mix(float3(0.01f, 0.12f, 0.25f), float3(0.05f, 0.45f, 0.70f), depthFactor);
-        accumulated = mix(accumulated, waterTint, 0.35f);
     }
 
     output.write(half4(half3(toneMap(clamp(accumulated, 0.0f, 96.0f))), half(1.0f)), tid);
