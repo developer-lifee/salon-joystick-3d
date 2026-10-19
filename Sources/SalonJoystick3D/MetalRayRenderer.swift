@@ -505,57 +505,70 @@ private struct RTMeshBuilder {
 
         switch pose {
         case .cover:
-            // 🛡️ GTA Tactical Crouch Cover (Centro de gravedad bajo, rodilla hincada, codos en guardia)
+            // 🛡️ GTA Tactical Crouch Cover (Centro de gravedad bajo, rodilla hincada a tierra, rodilla frontal flexionada, codos en guardia)
+            let bootMat = isJellyGremlin ? clawMat : armor
+
             if isJellyGremlin {
                 addJellyGremlinHeadAndTorso(
-                    bellyCenter: origin + SIMD3<Float>(0, 0.48, 0.04),
-                    headCenter: origin + SIMD3<Float>(0, 0.92, 0.10),
+                    bellyCenter: origin + SIMD3<Float>(0, 0.44, 0.04),
+                    headCenter: origin + SIMD3<Float>(0, 0.88, 0.10),
                     jellyMat: suit
                 )
             } else {
-                let torsoO = origin + SIMD3<Float>(0, 0.50, 0.06)
-                addSphere(center: torsoO, radii: SIMD3<Float>(0.32, 0.44, 0.26), material: suit)
-                addBox(center: origin + SIMD3<Float>(0, 0.54, 0.20), size: SIMD3<Float>(0.42, 0.38, 0.12), material: armor)
-                addSphere(center: origin + SIMD3<Float>(0, 0.57, 0.26), radii: SIMD3<Float>(repeating: 0.08), material: coreEmissive)
-                addBox(center: origin + SIMD3<Float>(0, 0.54, -0.16), size: SIMD3<Float>(0.28, 0.48, 0.18), material: scubaTankMat)
-                addSphere(center: origin + SIMD3<Float>(0, 0.80, -0.16), radii: SIMD3<Float>(repeating: 0.08), material: armor)
-                addSphere(center: origin + SIMD3<Float>(0, 1.05, 0.12), radii: SIMD3<Float>(repeating: 0.30), material: suit)
-                addBox(center: origin + SIMD3<Float>(0, 1.07, 0.32), size: SIMD3<Float>(0.36, 0.17, 0.14), material: visor)
+                let torsoO = origin + SIMD3<Float>(0, 0.48, 0.04)
+                addSphere(center: torsoO, radii: SIMD3<Float>(0.32, 0.42, 0.26), material: suit)
+                addBox(center: origin + SIMD3<Float>(0, 0.52, 0.16), size: SIMD3<Float>(0.42, 0.36, 0.12), material: armor)
+                addSphere(center: origin + SIMD3<Float>(0, 0.54, 0.22), radii: SIMD3<Float>(repeating: 0.08), material: coreEmissive)
+                addBox(center: origin + SIMD3<Float>(0, 0.50, -0.16), size: SIMD3<Float>(0.28, 0.46, 0.18), material: scubaTankMat)
+                addSphere(center: origin + SIMD3<Float>(0, 0.74, -0.16), radii: SIMD3<Float>(repeating: 0.08), material: armor)
+                addSphere(center: origin + SIMD3<Float>(0, 0.98, 0.10), radii: SIMD3<Float>(repeating: 0.30), material: suit)
+                addBox(center: origin + SIMD3<Float>(0, 1.00, 0.28), size: SIMD3<Float>(0.36, 0.17, 0.14), material: visor)
                 if eyes {
-                    addSphere(center: origin + SIMD3<Float>(-0.10, 1.09, 0.38), radii: SIMD3<Float>(repeating: 0.038), material: dark, segments: 7, rings: 4)
-                    addSphere(center: origin + SIMD3<Float>( 0.10, 1.09, 0.38), radii: SIMD3<Float>(repeating: 0.038), material: dark, segments: 7, rings: 4)
+                    addSphere(center: origin + SIMD3<Float>(-0.10, 1.02, 0.35), radii: SIMD3<Float>(repeating: 0.038), material: dark, segments: 7, rings: 4)
+                    addSphere(center: origin + SIMD3<Float>( 0.10, 1.02, 0.35), radii: SIMD3<Float>(repeating: 0.038), material: dark, segments: 7, rings: 4)
                 }
             }
 
-            // 🦾 Codos en guardia táctica cubriendo pecho/cabeza
-            addSphere(center: origin + SIMD3<Float>(-0.38, 0.74, 0.08), radii: SIMD3<Float>(repeating: 0.10), material: armor)
-            addSphere(center: origin + SIMD3<Float>( 0.38, 0.74, 0.08), radii: SIMD3<Float>(repeating: 0.10), material: armor)
-            addBox(center: origin + SIMD3<Float>(-0.34, 0.62, 0.16), size: SIMD3<Float>(0.13, 0.24, 0.14), material: suit)
-            addBox(center: origin + SIMD3<Float>( 0.34, 0.62, 0.16), size: SIMD3<Float>(0.13, 0.24, 0.14), material: suit)
+            // 🦾 Codos en guardia táctica cubriendo pecho/cabeza apoyados hacia la roca
+            addSphere(center: origin + SIMD3<Float>(-0.36, 0.68, 0.08), radii: SIMD3<Float>(repeating: 0.10), material: armor)
+            addSphere(center: origin + SIMD3<Float>( 0.36, 0.68, 0.08), radii: SIMD3<Float>(repeating: 0.10), material: armor)
+            addBox(center: origin + SIMD3<Float>(-0.32, 0.56, 0.16), size: SIMD3<Float>(0.13, 0.24, 0.14), material: suit)
+            addBox(center: origin + SIMD3<Float>( 0.32, 0.56, 0.16), size: SIMD3<Float>(0.13, 0.24, 0.14), material: suit)
             // Codos articulados flexionados a 90º
-            addSphere(center: origin + SIMD3<Float>(-0.30, 0.48, 0.22), radii: SIMD3<Float>(repeating: 0.095), material: armor)
-            addSphere(center: origin + SIMD3<Float>( 0.30, 0.48, 0.22), radii: SIMD3<Float>(repeating: 0.095), material: armor)
-            // Antebrazos cruzados al frente en guardia
-            addBox(center: origin + SIMD3<Float>(-0.16, 0.50, 0.28), size: SIMD3<Float>(0.24, 0.12, 0.14), material: suit)
-            addBox(center: origin + SIMD3<Float>( 0.16, 0.50, 0.28), size: SIMD3<Float>(0.24, 0.12, 0.14), material: suit)
+            addSphere(center: origin + SIMD3<Float>(-0.28, 0.44, 0.22), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+            addSphere(center: origin + SIMD3<Float>( 0.28, 0.44, 0.22), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+            // Antebrazos en guardia
+            addBox(center: origin + SIMD3<Float>(-0.16, 0.46, 0.28), size: SIMD3<Float>(0.24, 0.12, 0.14), material: suit)
+            addBox(center: origin + SIMD3<Float>( 0.16, 0.46, 0.28), size: SIMD3<Float>(0.24, 0.12, 0.14), material: suit)
             if holdsTool {
-                addBox(center: origin + SIMD3<Float>(0.26, 0.50, 0.36), size: SIMD3<Float>(0.12, 0.14, 0.38), material: toolMat)
+                addBox(center: origin + SIMD3<Float>(0.24, 0.46, 0.36), size: SIMD3<Float>(0.12, 0.14, 0.38), material: toolMat)
             }
 
-            // 🦵 Piernas agachadas: derecha hincada en suelo, izquierda flexionada al pecho
-            // Cadera
-            addSphere(center: origin + SIMD3<Float>(-0.16, 0.34, 0.04), radii: SIMD3<Float>(repeating: 0.10), material: armor)
-            addSphere(center: origin + SIMD3<Float>( 0.16, 0.34, -0.04), radii: SIMD3<Float>(repeating: 0.10), material: armor)
-            // Pierna Izq (alzada hacia el pecho, rodilla alta)
-            addBox(center: origin + SIMD3<Float>(-0.16, 0.28, 0.16), size: SIMD3<Float>(0.15, 0.24, 0.16), material: suit)
-            addSphere(center: origin + SIMD3<Float>(-0.16, 0.32, 0.28), radii: SIMD3<Float>(repeating: 0.095), material: armor)
-            addBox(center: origin + SIMD3<Float>(-0.16, 0.16, 0.28), size: SIMD3<Float>(0.14, 0.22, 0.15), material: suit)
-            addBox(center: origin + SIMD3<Float>(-0.16, 0.03, 0.42), size: SIMD3<Float>(0.17, 0.05, 0.36), material: flipperMat)
-            // Pierna Der (rodilla apoyada en tierra)
-            addBox(center: origin + SIMD3<Float>(0.16, 0.20, -0.10), size: SIMD3<Float>(0.15, 0.24, 0.16), material: suit)
-            addSphere(center: origin + SIMD3<Float>(0.16, 0.09, -0.16), radii: SIMD3<Float>(repeating: 0.095), material: armor)
-            addBox(center: origin + SIMD3<Float>(0.16, 0.06, -0.04), size: SIMD3<Float>(0.14, 0.12, 0.22), material: suit)
-            addBox(center: origin + SIMD3<Float>(0.16, 0.03, 0.12), size: SIMD3<Float>(0.17, 0.05, 0.36), material: flipperMat)
+            // 🦵 Articulación de piernas y rodillas (Fiel a SalonStudio 3D)
+            // Pelvis central
+            addSphere(center: origin + SIMD3<Float>(0, 0.42, 0.02), radii: SIMD3<Float>(0.18, 0.12, 0.16), material: armor)
+            addSphere(center: origin + SIMD3<Float>(-0.14, 0.42, 0.04), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+            addSphere(center: origin + SIMD3<Float>( 0.14, 0.42, -0.04), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+
+            // Pierna Izq (Rodilla alzada adelante hacia la roca)
+            // Muslo inclinado hacia adelante
+            addBox(center: origin + SIMD3<Float>(-0.14, 0.34, 0.14), size: SIMD3<Float>(0.14, 0.20, 0.16), material: suit)
+            // Rótula / Rodilla Izquierda (Marcador verde visible)
+            addSphere(center: origin + SIMD3<Float>(-0.14, 0.26, 0.24), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+            // Canilla vertical al piso
+            addBox(center: origin + SIMD3<Float>(-0.14, 0.14, 0.24), size: SIMD3<Float>(0.13, 0.22, 0.14), material: suit)
+            // Bota táctica plana en el suelo (y = 0.03)
+            addBox(center: origin + SIMD3<Float>(-0.14, 0.03, 0.30), size: SIMD3<Float>(0.15, 0.06, 0.24), material: bootMat)
+
+            // Pierna Der (Rodilla hincada tocando el suelo a ras de piso)
+            // Muslo inclinado hacia atrás y abajo
+            addBox(center: origin + SIMD3<Float>(0.14, 0.25, -0.10), size: SIMD3<Float>(0.14, 0.24, 0.16), material: suit)
+            // Rótula / Rodilla Derecha apoyada firmemente en el suelo (y = 0.08)
+            addSphere(center: origin + SIMD3<Float>(0.14, 0.08, -0.18), radii: SIMD3<Float>(repeating: 0.095), material: armor)
+            // Canilla horizontal a lo largo del suelo
+            addBox(center: origin + SIMD3<Float>(0.14, 0.06, -0.05), size: SIMD3<Float>(0.13, 0.10, 0.22), material: suit)
+            // Bota táctica derecha apoyada en tierra
+            addBox(center: origin + SIMD3<Float>(0.14, 0.03, 0.08), size: SIMD3<Float>(0.15, 0.06, 0.22), material: bootMat)
 
         case .swim:
             // 🏊 Mario Buceo: Brazos arqueados en braza y patada alterna de aletas
@@ -847,6 +860,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private var cameraYaw: Float = 0
     private var orbitPitch: Float = 0.36
     private var firstPersonPitch: Float = 0
+    private var manualCameraTimer: Float = 0
     private var playerPosition = SIMD3<Float>(3.8, 0, 3.8)
     private var horizontalVelocity = SIMD2<Float>.zero
     private var verticalVelocity: Float = 0
@@ -878,6 +892,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         SIMD3<Float>(0, 1.1, 14.5)
     ]
     private var botTeleportReactionTimers = [Float](repeating: 0, count: 5)
+    private var npcPushVelocities = [SIMD2<Float>](repeating: .zero, count: 5)
+    private var characterBumpAudioCooldown: Float = 0
     private var lastObservedPlayerPosForTeleportCheck = SIMD3<Float>(3.8, 0, 3.8)
     private let npcSpawnPositions = [
         SIMD3<Float>(-13.5, 0, -13.5),
@@ -1174,6 +1190,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
     func rotateCamera(deltaX: Float, deltaY: Float) {
         cameraYaw += deltaX * 0.0075
+        manualCameraTimer = 1.0
         if cameraMode == .firstPerson {
             firstPersonPitch = max(-1.35, min(1.35, firstPersonPitch - deltaY * 0.0045))
         } else {
@@ -1360,6 +1377,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private var swimStrokeTimer: Float = 0
 
     private func updateSimulation(dt: Float, rawDt: Float) {
+        manualCameraTimer = max(0, manualCameraTimer - rawDt)
         updateToolTimers(dt: dt)
         updateNPCSimulation(dt: dt, rawDt: rawDt)
         flushDamageReport(rawDt: rawDt)
@@ -1381,14 +1399,14 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             desiredDirection = simd_normalize(desiredDirection)
         }
 
-        // 🌊 Subterranean Easter Egg & Piscina Profunda (-2.15m): Salida natural nadando hacia la apertura de la piscina
-        let currentlyInPool = isInsidePoolXZ(playerPosition) && playerPosition.y < 0.15 && playerPosition.y > -2.55
-        let isSubterranean = playerPosition.y <= -2.55
+        // 🌊 Subterranean Easter Egg & Piscina Ultra Profunda (-4.50m): Salida natural nadando hacia la apertura de la piscina
+        let currentlyInPool = isInsidePoolXZ(playerPosition) && playerPosition.y < -0.15 && playerPosition.y > -4.75
+        let isSubterranean = playerPosition.y <= -4.75
         let currentGroundHeight = isSubterranean ? -11.0 : groundHeight(at: playerPosition, insidePool: currentlyInPool)
         let currentlyOnFloat = currentlyInPool && isStandingOnFloat(playerPosition)
         let isUnderFire = pendingDamageAccumulator > 0
-        let isDivingInPool = currentlyInPool && !currentlyOnFloat && playerPosition.y <= -0.80
-        let baseSpeed: Float = isDivingInPool ? 3.8 : (currentlyInPool && !currentlyOnFloat ? 3.2 : (isSubterranean ? 4.4 : 4.0))
+        let isDivingInPool = currentlyInPool && !currentlyOnFloat && playerPosition.y <= -0.65
+        let baseSpeed: Float = isDivingInPool ? 4.2 : (currentlyInPool && !currentlyOnFloat ? 3.6 : (isSubterranean ? 4.6 : 4.0))
         let movementSpeed: Float = isUnderFire ? baseSpeed * 1.30 : baseSpeed // ⚡ Escape Evasion Boost (+30% speed under fire!)
         let targetVelocity = desiredDirection * (magnitude > 0.08 ? movementSpeed * magnitude : 0)
         let response = 1 - exp(-dt * (magnitude > 0.08 ? 16 : 22))
@@ -1479,6 +1497,14 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             playerPosition.y = currentGroundHeight
             verticalVelocity = 0
             horizontalVelocity *= exp(-dt * 6.0)
+
+            // Orientación firme hacia la roca: el frente del personaje (+Z) y codos se pegan a la roca
+            let rockDir = -awayDir
+            let targetCoverYaw = atan2(rockDir.x, rockDir.y)
+            var diff = targetCoverYaw - playerYaw
+            while diff > Float.pi { diff -= 2 * Float.pi }
+            while diff < -Float.pi { diff += 2 * Float.pi }
+            playerYaw += diff * min(1.0, dt * 14.0)
         }
 
 
@@ -1500,19 +1526,23 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         proposed.z = max(-17.0, min(17.0, proposed.z))
         resolveFloatCollision(position: &proposed)
         resolveRockCollisions(position: &proposed)
-        let willBeInPool = isInsidePoolXZ(proposed) && proposed.y < 0.15 && proposed.y > -2.55
+        resolveCharacterCollisions(playerPos: &proposed, dt: dt)
+        resolveRockCollisions(position: &proposed)
+        proposed.x = max(-17.0, min(17.0, proposed.x))
+        proposed.z = max(-17.0, min(17.0, proposed.z))
+        let willBeInPool = isInsidePoolXZ(proposed) && proposed.y < 0.15 && proposed.y > -4.75
         let nextGroundHeight = groundHeight(at: proposed, insidePool: willBeInPool)
         let willBeOnFloat = willBeInPool && nextGroundHeight > -0.1
         let wasGrounded = playerPosition.y <= currentGroundHeight + 0.05 || (currentlyInPool && playerPosition.y <= 0.1)
 
-        // Smooth Auto-Step Up for Stairs & Ramps (step height up to 0.45m)
-        if (!currentlyInPool || playerPosition.y >= -0.25) && nextGroundHeight > currentGroundHeight && (nextGroundHeight - currentGroundHeight) <= 0.45 {
-            if playerPosition.y <= currentGroundHeight + 0.15 {
+        // Smooth Auto-Step Up for Pool Edge, Stairs & Ramps (step height up to 0.50m)
+        if (!currentlyInPool || playerPosition.y >= -0.40) && nextGroundHeight > currentGroundHeight && (nextGroundHeight - currentGroundHeight) <= 0.50 {
+            if playerPosition.y <= currentGroundHeight + 0.25 {
                 proposed.y = nextGroundHeight
             }
         }
 
-        let isSubterraneanSubmerged = playerPosition.y <= -2.55 || proposed.y <= -2.55
+        let isSubterraneanSubmerged = playerPosition.y <= -4.75 || proposed.y <= -4.75
         let onTrampolineBoard = playerPosition.x >= 0.7 && playerPosition.x <= 2.1 && playerPosition.z >= -6.9 && playerPosition.z <= -3.7 && playerPosition.y >= 2.7
         // Ángulo vertical de mirada para control de buceo 3D: negativo = mirando hacia el fondo, positivo = mirando hacia arriba
         let divePitch: Float = cameraMode == .firstPerson ? firstPersonPitch : -(orbitPitch - 0.36)
@@ -1520,19 +1550,23 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if jumpQueued {
             jumpQueued = false
             if isSubterraneanSubmerged {
-                verticalVelocity = 4.4 // Impulso de brazada submarina
-                audio.playSwimStrokeSound(intensity: 0.90)
+                verticalVelocity = 4.6 // Impulso de brazada / aletazo submarino
+                audio.playSwimStrokeSound(intensity: 0.95)
             } else if willBeInPool && !willBeOnFloat {
-                if proposed.y <= -0.65 {
-                    // En inmersión dentro de la piscina: brazada de buceo hacia arriba o en dirección de mirada
-                    verticalVelocity = divePitch < -0.22 ? -2.8 : 4.0
-                    audio.playSwimStrokeSound(intensity: 0.85)
-                } else if divePitch < -0.18 {
-                    // Mirando hacia abajo en la piscina: zambullida hacia el fondo (-2.15m)
-                    verticalVelocity = -3.4
-                    audio.playSwimStrokeSound(intensity: 0.88)
+                if proposed.y <= -0.55 {
+                    // En inmersión profunda: brazada / patada de delfín con propulsión según dirección de la mirada
+                    let kickUp: Float = divePitch < -0.25 ? -3.6 : 4.4
+                    verticalVelocity = kickUp
+                    audio.playSwimStrokeSound(intensity: 0.92)
+                    pendingWaterImpulse = SIMD4<Float>(playerPosition.x, playerPosition.z, -0.75, 1)
+                } else if divePitch < -0.15 {
+                    // Mirando hacia el fondo de la piscina: zambullida vertical veloz hacia el fondo (-4.5m)
+                    verticalVelocity = -4.0
+                    audio.playSwimStrokeSound(intensity: 0.90)
                 } else {
-                    verticalVelocity = 4.2
+                    // En superficie: impulso para salir del agua y subir al borde de la piscina
+                    verticalVelocity = 4.8
+                    audio.playWaterDisturbance(intensity: 0.85)
                 }
             } else if onTrampolineBoard {
                 verticalVelocity = 4.8
@@ -1544,55 +1578,60 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         if isSubterraneanSubmerged {
             // 🤿 Modo Buceo 3D Subterráneo: propulsión vertical fluida siguiendo el ángulo de cámara + brazadas rítmicas
-            if magnitude > 0.10 {
-                let targetVerticalSwim = sin(divePitch) * movementSpeed * magnitude * 0.85
-                verticalVelocity += (targetVerticalSwim - verticalVelocity) * min(1.0, dt * 4.5)
+            if magnitude > 0.08 {
+                let targetVerticalSwim = sin(divePitch) * movementSpeed * magnitude * 0.95
+                verticalVelocity += (targetVerticalSwim - verticalVelocity) * min(1.0, dt * 5.5)
                 swimStrokeTimer -= dt
                 if swimStrokeTimer <= 0 {
-                    audio.playSwimStrokeSound(intensity: 0.62 * magnitude)
-                    swimStrokeTimer = 0.54
+                    audio.playSwimStrokeSound(intensity: 0.65 * magnitude)
+                    swimStrokeTimer = 0.48
                 }
             } else {
-                verticalVelocity = max(-0.38, verticalVelocity - dt * 0.75)
-                swimStrokeTimer = min(swimStrokeTimer, 0.15)
+                verticalVelocity = max(-0.35, verticalVelocity - dt * 0.50)
+                swimStrokeTimer = min(swimStrokeTimer, 0.12)
             }
-            horizontalVelocity *= exp(-dt * 2.2)
+            horizontalVelocity *= exp(-dt * 2.0)
         } else if willBeInPool && !willBeOnFloat {
-            // 🤿 Piscina Profunda (-2.15m) con Modo Buceo Activo
-            let wantsToDive = magnitude > 0.12 && divePitch < -0.16
-            let wantsToAscend = magnitude > 0.12 && divePitch > 0.18
-            if wantsToDive || proposed.y <= -0.78 {
-                if magnitude > 0.12 && abs(divePitch) > 0.12 {
-                    let targetDiveVel = sin(divePitch) * movementSpeed * magnitude * 0.95
-                    verticalVelocity += (targetDiveVel - verticalVelocity) * min(1.0, dt * 5.5)
-                } else {
-                    // Flotabilidad suave y gradual cuando se deja de bucear en el fondo de la piscina
-                    verticalVelocity += 1.35 * dt
-                    verticalVelocity *= exp(-dt * 2.8)
+            // 🤿 Piscina Ultra Profunda (-4.50m) con Modo Buceo Fluido 3D
+            let isSwimming = magnitude > 0.08
+            let isDeepUnderwater = proposed.y < -0.45
+
+            if isSwimming {
+                // 3D Hydrodynamic Swimming: nadar libremente según inclinación de cámara (Pitch)
+                // Pitch negativo = mira hacia el fondo -> desciende a explorar las profundidades
+                // Pitch positivo = mira hacia la superficie -> asciende a respirar
+                let targetVerticalSwim = sin(divePitch) * movementSpeed * magnitude * 1.15
+                verticalVelocity += (targetVerticalSwim - verticalVelocity) * min(1.0, dt * 6.0)
+
+                swimStrokeTimer -= dt
+                if swimStrokeTimer <= 0 {
+                    let strokeIntensity = isDeepUnderwater ? 0.70 * magnitude : 0.48 * magnitude
+                    audio.playSwimStrokeSound(intensity: strokeIntensity)
+                    swimStrokeTimer = 0.48
                 }
-                if magnitude > 0.15 {
-                    swimStrokeTimer -= dt
-                    if swimStrokeTimer <= 0 {
-                        audio.playSwimStrokeSound(intensity: 0.58 * magnitude)
-                        swimStrokeTimer = 0.54
-                    }
-                }
-            } else if wantsToAscend && proposed.y < -0.35 {
-                verticalVelocity += 4.5 * dt
-                verticalVelocity *= exp(-dt * 3.0)
             } else {
-                // Flotación estable a nivel del pecho/hombros cerca de la superficie (-0.38m)
-                let depthInWater = max(0, -proposed.y)
-                let targetY: Float = -0.38
-                if depthInWater > 0 {
-                    let diff = targetY - proposed.y
-                    verticalVelocity += diff * 10.5 * dt
-                    verticalVelocity *= exp(-dt * 3.5)
+                if isDeepUnderwater {
+                    // Flotabilidad casi neutra con ligerísima sustentación (+0.35m/s2) para suspensión fluida
+                    verticalVelocity += 0.35 * dt
+                    verticalVelocity *= exp(-dt * 2.5)
                 } else {
-                    verticalVelocity -= 6.5 * dt
+                    // Flotación equilibrada a nivel del pecho en la superficie (-0.22m)
+                    let targetY: Float = -0.22
+                    let diff = targetY - proposed.y
+                    verticalVelocity += diff * 11.0 * dt
+                    verticalVelocity *= exp(-dt * 3.8)
                 }
+                swimStrokeTimer = min(swimStrokeTimer, 0.12)
             }
-            horizontalVelocity *= exp(-dt * 2.2)
+            horizontalVelocity *= exp(-dt * 2.0)
+
+            // 🌀 Vórtice / Portal Abisal en el fondo de la piscina (-4.50m): absorción hacia el Easter Egg
+            let overAbyssPortal = proposed.x >= -2.8 && proposed.x <= -0.2 && proposed.z >= -2.5 && proposed.z <= -0.5
+            if proposed.y <= -4.32 && overAbyssPortal && (divePitch < -0.12 || verticalVelocity < -0.4) {
+                playerPosition = SIMD3<Float>(-1.5, -5.8, -1.5)
+                verticalVelocity = -1.2
+                audio.playSubterraneanPortalPlungeSound()
+            }
         } else if isCoverActive {
             verticalVelocity = 0
         } else {
@@ -1601,20 +1640,20 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         var landingSpeed: Float = 0
         proposed.y += verticalVelocity * dt
-        if proposed.y <= -2.55 || playerPosition.y <= -2.55 {
-            // 🌊 CÁMARA SUBTERRÁNEA GIGANTE (Piso a -11.0m y Techo Sólido con salida exclusiva por la piscina)
+        if proposed.y <= -4.75 || playerPosition.y <= -4.75 {
+            // 🌊 CÁMARA SUBTERRÁNEA GIGANTE (Piso a -11.0m y Techo Sólido con salida por la piscina)
             proposed.y = max(-11.0, proposed.y)
 
             let insidePoolOpening = proposed.x >= -5.35 && proposed.x <= 2.35 && proposed.z >= -4.20 && proposed.z <= 1.20
             if insidePoolOpening {
                 // Puede ascender libremente desde la cámara subterránea hacia la piscina profunda
-                if proposed.y >= -2.10 {
-                    verticalVelocity = max(0.8, verticalVelocity)
+                if proposed.y >= -4.40 {
+                    verticalVelocity = max(1.2, verticalVelocity)
                 }
             } else {
                 // Techo sólido subterráneo (bajo el nivel de la piscina profunda): salida exclusiva por el hueco de la piscina
-                if proposed.y >= -2.60 {
-                    proposed.y = -2.60
+                if proposed.y >= -4.78 {
+                    proposed.y = -4.78
                     verticalVelocity = min(0, verticalVelocity)
                 }
             }
@@ -1622,7 +1661,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             // Position locked during slide descent to prevent ground clamping
             proposed = playerPosition
         } else if currentlyInPool && !willBeOnFloat {
-            if proposed.y <= nextGroundHeight && proposed.y > -2.50 {
+            if proposed.y <= nextGroundHeight && proposed.y > -4.70 {
                 proposed.y = nextGroundHeight
                 verticalVelocity = max(0, verticalVelocity)
             } else {
@@ -1953,42 +1992,64 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 moveDirection = simd_normalize(rawDirection * (1.0 - blend) + strongestAvoidance * blend)
             }
 
-            if distance > 0.65 {
-                var proposedX = npcPositions[index].x + moveDirection.x * speed * dt
-                var proposedZ = npcPositions[index].z + moveDirection.y * speed * dt
+            let stepFactor: Float = distance > 0.92 ? 1.0 : 0.0
+            var proposedX = npcPositions[index].x + (moveDirection.x * speed * stepFactor + npcPushVelocities[index].x) * dt
+            var proposedZ = npcPositions[index].z + (moveDirection.y * speed * stepFactor + npcPushVelocities[index].y) * dt
+            npcPushVelocities[index] *= exp(-dt * 7.5)
 
-                // Outer Patio Wall Colliders (Expanded 34m x 34m Arena)
-                proposedX = max(-17.0, min(17.0, proposedX))
-                proposedZ = max(-17.0, min(17.0, proposedZ))
+            // Outer Patio Wall Colliders (Expanded 34m x 34m Arena)
+            proposedX = max(-17.0, min(17.0, proposedX))
+            proposedZ = max(-17.0, min(17.0, proposedZ))
 
-                // Solid Pool Coping Wall Colliders for NPCs
-                let isInsidePool = proposedX >= -5.0 && proposedX <= 5.0 && proposedZ >= -5.0 && proposedZ <= 5.0
-                let wasInsidePool = npcPositions[index].x >= -5.0 && npcPositions[index].x <= 5.0 && npcPositions[index].z >= -5.0 && npcPositions[index].z <= 5.0
-                if !wasInsidePool && isInsidePool && npcPositions[index].y < 0.2 {
-                    // Push NPC back outside pool rim
-                    proposedX = npcPositions[index].x
-                    proposedZ = npcPositions[index].z
-                }
-
-                // Player Body Solid Push-Back Collider
-                let toPlayer = SIMD2<Float>(proposedX - playerPosition.x, proposedZ - playerPosition.z)
-                let playerDist = simd_length(toPlayer)
-                if playerDist < 0.62 {
-                    let pushDir = playerDist > 0.001 ? toPlayer / playerDist : SIMD2<Float>(1, 0)
-                    proposedX = playerPosition.x + pushDir.x * 0.62
-                    proposedZ = playerPosition.z + pushDir.y * 0.62
-                }
-
-                // Apply Scenario Rock Collisions to NPCs (Same rules as player!)
-                var npcPos = SIMD3<Float>(proposedX, npcPositions[index].y, proposedZ)
-                resolveRockCollisions(position: &npcPos)
-                proposedX = npcPos.x
-                proposedZ = npcPos.z
-
-                npcPositions[index].x = proposedX
-                npcPositions[index].z = proposedZ
+            // Solid Pool Coping Wall Colliders for NPCs
+            let isInsidePool = proposedX >= -5.60 && proposedX <= 2.60 && proposedZ >= -4.45 && proposedZ <= 1.45
+            let wasInsidePool = npcPositions[index].x >= -5.60 && npcPositions[index].x <= 2.60 && npcPositions[index].z >= -4.45 && npcPositions[index].z <= 1.45
+            if !wasInsidePool && isInsidePool && npcPositions[index].y < 0.2 {
+                proposedX = npcPositions[index].x
+                proposedZ = npcPositions[index].z
+                npcPushVelocities[index] *= -0.35
             }
-            npcYaws[index] = atan2(moveDirection.x, moveDirection.y)
+
+            // 🤝 Colisión Bot contra Bot (evita que los personajes rivales se apilen o atraviesen entre sí)
+            let minBotSeparation: Float = 0.88
+            for otherIdx in npcPositions.indices where otherIdx != index && npcHealths[otherIdx] > 0 && npcRespawnTimers[otherIdx] <= 0 {
+                let toSelf = SIMD2<Float>(proposedX - npcPositions[otherIdx].x, proposedZ - npcPositions[otherIdx].z)
+                let botDist = simd_length(toSelf)
+                if botDist < minBotSeparation {
+                    let sepDir = botDist > 0.001 ? toSelf / botDist : SIMD2<Float>(cos(Float(index)), sin(Float(index)))
+                    let overlap = minBotSeparation - botDist
+                    proposedX += sepDir.x * (overlap * 0.55)
+                    proposedZ += sepDir.y * (overlap * 0.55)
+                    npcPositions[otherIdx].x -= sepDir.x * (overlap * 0.45)
+                    npcPositions[otherIdx].z -= sepDir.y * (overlap * 0.45)
+                    npcPushVelocities[otherIdx] -= sepDir * 1.4
+                }
+            }
+
+            // 🤜🤛 Colisión Sólida y Empuje Mutuo con el Jugador (sin atravesarse nunca)
+            let minPlayerBotSeparation: Float = 0.92
+            if abs(playerPosition.y - npcPositions[index].y) < 1.55 {
+                let toBot = SIMD2<Float>(proposedX - playerPosition.x, proposedZ - playerPosition.z)
+                let playerDist = simd_length(toBot)
+                if playerDist < minPlayerBotSeparation {
+                    let pushDir = playerDist > 0.001 ? toBot / playerDist : -moveDirection
+                    let overlap = minPlayerBotSeparation - playerDist
+                    // El bot se mantiene fuera del radio físico y empuja suavemente al jugador
+                    proposedX = playerPosition.x + pushDir.x * minPlayerBotSeparation
+                    proposedZ = playerPosition.z + pushDir.y * minPlayerBotSeparation
+                    horizontalVelocity -= pushDir * min(3.2, overlap * 9.5 + 0.65)
+                }
+            }
+
+            // Apply Scenario Rock Collisions to NPCs (Same rules as player!)
+            var npcPos = SIMD3<Float>(proposedX, npcPositions[index].y, proposedZ)
+            resolveRockCollisions(position: &npcPos)
+            proposedX = max(-17.0, min(17.0, npcPos.x))
+            proposedZ = max(-17.0, min(17.0, npcPos.z))
+
+            npcPositions[index].x = proposedX
+            npcPositions[index].z = proposedZ
+            npcYaws[index] = atan2(rawDirection.x, rawDirection.y)
 
             // Smooth human-like aim tracking & dispersion
             let actualPlayerCenter = playerPosition + SIMD3<Float>(0, 1.10, 0)
@@ -2230,7 +2291,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if distance < 0.84 && position.y >= floatTop - 0.10 {
             return floatTop
         }
-        return -2.15
+        return -4.50 // 🏊‍♂️ Piscina ultra profunda (-4.5m)
     }
 
     private func isStandingOnFloat(_ position: SIMD3<Float>) -> Bool {
@@ -2390,14 +2451,93 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
     }
 
+    private func resolveCharacterCollisions(playerPos: inout SIMD3<Float>, dt: Float) {
+        if characterBumpAudioCooldown > 0 {
+            characterBumpAudioCooldown = max(0, characterBumpAudioCooldown - dt)
+        }
+        guard !isWaveIntermission else { return }
+
+        let minSeparation: Float = 0.92 // Radio combinado de cápsulas jugador (0.46m) + rival (0.46m)
+
+        for index in npcPositions.indices {
+            guard npcHealths[index] > 0, npcRespawnTimers[index] <= 0 else { continue }
+            // Verificar solapamiento vertical (altura de personaje ~1.55m)
+            guard abs(playerPos.y - npcPositions[index].y) < 1.55 else { continue }
+
+            let player2D = SIMD2<Float>(playerPos.x, playerPos.z)
+            let npc2D = SIMD2<Float>(npcPositions[index].x, npcPositions[index].z)
+            var offset = player2D - npc2D
+            let dist = simd_length(offset)
+            guard dist < minSeparation else { continue }
+
+            // Vector normal apuntando desde el NPC hacia el jugador
+            let normal: SIMD2<Float>
+            if dist > 0.0001 {
+                normal = offset / dist
+            } else {
+                normal = simd_length_squared(horizontalVelocity) > 0.0001
+                    ? -simd_normalize(horizontalVelocity)
+                    : SIMD2<Float>(1, 0)
+            }
+
+            let overlap = minSeparation - dist
+            let inwardSpeed = max(0, -simd_dot(horizontalVelocity, normal))
+
+            // 1. Empujar físicamente al personaje rival hacia atrás (-normal)
+            var pushedNPC = npcPositions[index]
+            let npcPushShare: Float = inwardSpeed > 0.15 ? 0.68 : 0.45
+            pushedNPC.x -= normal.x * (overlap * npcPushShare)
+            pushedNPC.z -= normal.y * (overlap * npcPushShare)
+
+            // Respetar bordes de la piscina, rocas y muros para el NPC empujado
+            let wasInsidePool = npcPositions[index].x >= -5.60 && npcPositions[index].x <= 2.60 && npcPositions[index].z >= -4.45 && npcPositions[index].z <= 1.45
+            let isInsidePool = pushedNPC.x >= -5.60 && pushedNPC.x <= 2.60 && pushedNPC.z >= -4.45 && pushedNPC.z <= 1.45
+            if !wasInsidePool && isInsidePool && pushedNPC.y < 0.2 {
+                pushedNPC.x = npcPositions[index].x
+                pushedNPC.z = npcPositions[index].z
+            }
+            resolveRockCollisions(position: &pushedNPC)
+            pushedNPC.x = max(-17.0, min(17.0, pushedNPC.x))
+            pushedNPC.z = max(-17.0, min(17.0, pushedNPC.z))
+            npcPositions[index] = pushedNPC
+
+            // Transferir impulso de empuje (empujón físico) al rival
+            if inwardSpeed > 0.05 {
+                let shoveStrength = min(5.2, max(1.8, inwardSpeed * 1.15))
+                npcPushVelocities[index] -= normal * shoveStrength
+            }
+
+            // 2. Separar sólidamente al jugador respecto a la posición final del NPC (incluso si el NPC está acorralado contra una roca/pared)
+            let finalNPC2D = SIMD2<Float>(npcPositions[index].x, npcPositions[index].z)
+            let postOffset = SIMD2<Float>(playerPos.x, playerPos.z) - finalNPC2D
+            let postDist = simd_length(postOffset)
+            if postDist < minSeparation {
+                let postNormal = postDist > 0.0001 ? postOffset / postDist : normal
+                let correctedPlayer = finalNPC2D + postNormal * minSeparation
+                playerPos.x = correctedPlayer.x
+                playerPos.z = correctedPlayer.y
+            }
+
+            // 3. Respuesta de velocidad en el jugador (deslizamiento lateral + freno de impacto cuerpo a cuerpo)
+            if inwardSpeed > 0 {
+                horizontalVelocity += normal * (inwardSpeed * 0.78)
+                if inwardSpeed > 1.6 && characterBumpAudioCooldown <= 0 {
+                    characterBumpAudioCooldown = 0.28
+                    let bumpIntensity = min(0.75, max(0.22, inwardSpeed / 4.5))
+                    audio.playLanding(intensity: bumpIntensity)
+                }
+            }
+        }
+    }
+
     private func writeUniforms(texture: MTLTexture, dt: Float) {
-        let currentlyInPool = isInsidePoolXZ(playerPosition) && playerPosition.y > -2.55
+        let currentlyInPool = isInsidePoolXZ(playerPosition) && playerPosition.y > -4.75
         let targetOffsetY: Float
         if isCoverActive {
             targetOffsetY = (cameraMode == .firstPerson ? 0.70 : 0.60)
         } else if currentlyInPool && cameraMode == .thirdPerson {
-            targetOffsetY = max(1.15, 1.10 - max(-0.8, playerPosition.y) * 0.35)
-        } else if playerPosition.y <= -2.55 {
+            targetOffsetY = max(0.50, 1.10 - max(-4.0, playerPosition.y) * 0.12)
+        } else if playerPosition.y <= -4.75 {
             targetOffsetY = (cameraMode == .firstPerson ? 1.25 : 0.85)
         } else {
             targetOffsetY = (cameraMode == .firstPerson ? 1.56 : 1.10)
@@ -2427,15 +2567,15 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             fieldOfView = 72
         } else {
             // ☁️ 🐢 Super Mario 64 Lakitu Cloud Camera (Elevated trailing over right shoulder with organic cloud lag!)
-            let isSubterraneanTarget = playerPosition.y <= -2.55
+            let isSubterraneanTarget = playerPosition.y <= -4.75
             let distance: Float = 4.6
             let shoulderOffset: Float = 0.45
-            let heightOffset: Float = isSubterraneanTarget ? 1.15 : 1.75
+            let heightOffset: Float = isSubterraneanTarget ? 1.10 : (currentlyInPool ? 0.85 : 1.75)
 
             let horizontalDist = cos(orbitPitch) * distance
             let lakituTargetY = isSubterraneanTarget ?
-                max(-7.8, min(-3.1, smoothedCameraTarget.y + heightOffset + sin(orbitPitch) * distance)) :
-                max(0.42, smoothedCameraTarget.y + heightOffset + sin(orbitPitch) * distance)
+                max(-10.2, min(-4.85, smoothedCameraTarget.y + heightOffset + sin(orbitPitch) * distance)) :
+                (currentlyInPool ? max(-4.20, smoothedCameraTarget.y + heightOffset + sin(orbitPitch) * distance) : max(0.42, smoothedCameraTarget.y + heightOffset + sin(orbitPitch) * distance))
 
             let idealLakituPos = SIMD3<Float>(
                 smoothedCameraTarget.x + sin(cameraYaw) * horizontalDist,
@@ -2470,7 +2610,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let toolOrigin: SIMD3<Float>
         var toolDirection: SIMD3<Float>
         if cameraMode == .firstPerson {
-            let forwardOffset: Float = cameraPosition.y <= -2.55 ? 0.32 : 0.10
+            let forwardOffset: Float = cameraPosition.y <= -4.75 ? 0.32 : 0.10
             toolOrigin = cameraPosition + right * 0.18 - up * 0.16 + cameraForward * forwardOffset
             toolDirection = cameraForward
         } else {
@@ -2486,7 +2626,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         default: renderTool = heldTool
         }
 
-        if cameraPosition.y <= -2.55 && heldTool == .laser {
+        let isUnderwaterShooting = (cameraPosition.y <= -4.75 || (currentlyInPool && cameraPosition.y < 0.38))
+        if isUnderwaterShooting && heldTool == .laser {
             let waterNormal = SIMD3<Float>(0, 1, 0)
             let eta: Float = 1.0 / 1.33 // Snell's Law underwater refraction index!
             let cosI = max(-1.0, min(1.0, -simd_dot(waterNormal, toolDirection)))
@@ -2497,9 +2638,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
         }
 
-        let isSubterraneanIlluminated = cameraPosition.y <= -2.55
-        let activeLightPos = isSubterraneanIlluminated ? SIMD4<Float>(0.0, -5.2, 0.0, 1) : SIMD4<Float>(-7.55, 2.72, 6.65, 1)
-        let activeLightColor = isSubterraneanIlluminated ? SIMD4<Float>(0.10, 0.95, 0.98, 48.0) : SIMD4<Float>(1.0, 0.66, 0.24, lightStates.effectiveIntensity(.post) * 46)
+        let isSubterraneanIlluminated = cameraPosition.y <= -4.75
+        let isPoolSubmerged = currentlyInPool && cameraPosition.y < 0.20
+        let activeLightPos = isSubterraneanIlluminated ? SIMD4<Float>(0.0, -5.2, 0.0, 1) : (isPoolSubmerged ? SIMD4<Float>(-1.5, -3.5, -1.5, 1) : SIMD4<Float>(-7.55, 2.72, 6.65, 1))
+        let activeLightColor = isSubterraneanIlluminated ? SIMD4<Float>(0.10, 0.95, 0.98, 48.0) : (isPoolSubmerged ? SIMD4<Float>(0.08, 0.85, 0.95, 38.0) : SIMD4<Float>(1.0, 0.66, 0.24, lightStates.effectiveIntensity(.post) * 46))
 
         var uniforms = RTUniforms(
             viewport: SIMD4<Float>(Float(texture.width), Float(texture.height), elapsedTime, rayBouncesEnabled ? 1 : 0),
@@ -2547,8 +2689,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             // 🏊‍♂️ Fluid Diving & Swimming Body Pitch: Dynamic tilt tracking view angle (-50 to +50 deg)
             pPitch = max(-0.85, min(0.85, (orbitPitch - 0.36) * 1.6))
         } else if isCoverActive {
-            // 🛡️ GTA Crouch Cover Pitch: Forward crouch tilt (+25 deg pitch!)
-            pPitch = 0.44
+            // 🛡️ En cobertura la malla ya está perfectamente articulada agachada a ras de suelo; pitch 0 para mantener pies y rodilla en tierra
+            pPitch = 0
         } else if isSlidingOnToboggan {
             // 🛷 Toboggan Sitting Pitch: Backwards sit tilt (-35 deg pitch!)
             pPitch = -0.62
@@ -2935,30 +3077,30 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         // 1. Piso Abisal Profundo (Y = -11.6m, 36m x 36m)
         builder.addBox(center: SIMD3<Float>(0, -11.60, 0), size: SIMD3<Float>(36.0, 0.30, 36.0), material: subFloorMat)
 
-        // 2. Cuatro Paredes Subterráneas que cierran herméticamente el cuarto (Y = -11.5m a Y = 0.0m)
-        builder.addBox(center: SIMD3<Float>(0, -5.80, -17.8), size: SIMD3<Float>(36.0, 11.6, 0.4), material: subWallMat)
-        builder.addBox(center: SIMD3<Float>(0, -5.80, 17.8), size: SIMD3<Float>(36.0, 11.6, 0.4), material: subWallMat)
-        builder.addBox(center: SIMD3<Float>(-17.8, -5.80, 0), size: SIMD3<Float>(0.4, 11.6, 36.0), material: subWallMat)
-        builder.addBox(center: SIMD3<Float>(17.8, -5.80, 0), size: SIMD3<Float>(0.4, 11.6, 36.0), material: subWallMat)
+        // 2. Cuatro Paredes Subterráneas que cierran herméticamente el cuarto (Y = -11.5m a Y = -4.7m)
+        builder.addBox(center: SIMD3<Float>(0, -7.85, -17.8), size: SIMD3<Float>(36.0, 6.30, 0.4), material: subWallMat)
+        builder.addBox(center: SIMD3<Float>(0, -7.85, 17.8), size: SIMD3<Float>(36.0, 6.30, 0.4), material: subWallMat)
+        builder.addBox(center: SIMD3<Float>(-17.8, -7.85, 0), size: SIMD3<Float>(0.4, 6.30, 36.0), material: subWallMat)
+        builder.addBox(center: SIMD3<Float>(17.8, -7.85, 0), size: SIMD3<Float>(0.4, 6.30, 36.0), material: subWallMat)
 
-        // 3. Techo Sólido Subterráneo (Y = -2.35m, debajo de la piscina profunda) que sella todo excepto el acceso de la piscina
-        builder.addBox(center: SIMD3<Float>(0, -2.35, -11.0), size: SIMD3<Float>(36.0, 0.25, 13.6), material: subCeilingMat)
-        builder.addBox(center: SIMD3<Float>(0, -2.35, 9.6), size: SIMD3<Float>(36.0, 0.25, 16.8), material: subCeilingMat)
-        builder.addBox(center: SIMD3<Float>(-11.6, -2.35, -1.5), size: SIMD3<Float>(12.5, 0.25, 5.4), material: subCeilingMat)
-        builder.addBox(center: SIMD3<Float>(10.1, -2.35, -1.5), size: SIMD3<Float>(15.5, 0.25, 5.4), material: subCeilingMat)
+        // 3. Techo Sólido Subterráneo (Y = -4.70m, debajo de la piscina ultra profunda) que sella todo excepto el acceso de la piscina
+        builder.addBox(center: SIMD3<Float>(0, -4.70, -11.0), size: SIMD3<Float>(36.0, 0.25, 13.6), material: subCeilingMat)
+        builder.addBox(center: SIMD3<Float>(0, -4.70, 9.6), size: SIMD3<Float>(36.0, 0.25, 16.8), material: subCeilingMat)
+        builder.addBox(center: SIMD3<Float>(-11.6, -4.70, -1.5), size: SIMD3<Float>(12.5, 0.25, 5.4), material: subCeilingMat)
+        builder.addBox(center: SIMD3<Float>(10.1, -4.70, -1.5), size: SIMD3<Float>(15.5, 0.25, 5.4), material: subCeilingMat)
 
         // 4. Luces en las Paredes Subterráneas (Tiras Neón Cian & Esmeralda)
-        // Banda Superior Cian a Y = -4.5m
-        builder.addBox(center: SIMD3<Float>(0, -4.50, -17.58), size: SIMD3<Float>(35.0, 0.15, 0.08), material: subWallNeonCyan)
-        builder.addBox(center: SIMD3<Float>(0, -4.50, 17.58), size: SIMD3<Float>(35.0, 0.15, 0.08), material: subWallNeonCyan)
-        builder.addBox(center: SIMD3<Float>(-17.58, -4.50, 0), size: SIMD3<Float>(0.08, 0.15, 35.0), material: subWallNeonCyan)
-        builder.addBox(center: SIMD3<Float>(17.58, -4.50, 0), size: SIMD3<Float>(0.08, 0.15, 35.0), material: subWallNeonCyan)
+        // Banda Superior Cian a Y = -6.0m
+        builder.addBox(center: SIMD3<Float>(0, -6.00, -17.58), size: SIMD3<Float>(35.0, 0.15, 0.08), material: subWallNeonCyan)
+        builder.addBox(center: SIMD3<Float>(0, -6.00, 17.58), size: SIMD3<Float>(35.0, 0.15, 0.08), material: subWallNeonCyan)
+        builder.addBox(center: SIMD3<Float>(-17.58, -6.00, 0), size: SIMD3<Float>(0.08, 0.15, 35.0), material: subWallNeonCyan)
+        builder.addBox(center: SIMD3<Float>(17.58, -6.00, 0), size: SIMD3<Float>(0.08, 0.15, 35.0), material: subWallNeonCyan)
 
-        // Banda Inferior Esmeralda a Y = -9.0m
-        builder.addBox(center: SIMD3<Float>(0, -9.00, -17.58), size: SIMD3<Float>(35.0, 0.15, 0.08), material: subWallNeonEmerald)
-        builder.addBox(center: SIMD3<Float>(0, -9.00, 17.58), size: SIMD3<Float>(35.0, 0.15, 0.08), material: subWallNeonEmerald)
-        builder.addBox(center: SIMD3<Float>(-17.58, -9.00, 0), size: SIMD3<Float>(0.08, 0.15, 35.0), material: subWallNeonEmerald)
-        builder.addBox(center: SIMD3<Float>(17.58, -9.00, 0), size: SIMD3<Float>(0.08, 0.15, 35.0), material: subWallNeonEmerald)
+        // Banda Inferior Esmeralda a Y = -9.6m
+        builder.addBox(center: SIMD3<Float>(0, -9.60, -17.58), size: SIMD3<Float>(35.0, 0.15, 0.08), material: subWallNeonEmerald)
+        builder.addBox(center: SIMD3<Float>(0, -9.60, 17.58), size: SIMD3<Float>(35.0, 0.15, 0.08), material: subWallNeonEmerald)
+        builder.addBox(center: SIMD3<Float>(-17.58, -9.60, 0), size: SIMD3<Float>(0.08, 0.15, 35.0), material: subWallNeonEmerald)
+        builder.addBox(center: SIMD3<Float>(17.58, -9.60, 0), size: SIMD3<Float>(0.08, 0.15, 35.0), material: subWallNeonEmerald)
 
         // 5. 🌊 Generadores de Agua & Turbinas de Fondo con Columnas de Burbujas
         let generatorLocs: [SIMD2<Float>] = [
@@ -2973,7 +3115,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             // Núcleo brillante emisor
             builder.addBox(center: SIMD3<Float>(loc.x, -10.55, loc.y), size: SIMD3<Float>(1.6, 0.20, 1.6), material: subWallNeonCyan)
             // Columna de burbujas ascendentes
-            let bubbleHeights: [Float] = [-9.8, -8.2, -6.6, -5.0, -3.4, -1.8]
+            let bubbleHeights: [Float] = [-9.8, -8.6, -7.4, -6.2, -5.2]
             for (idx, bY) in bubbleHeights.enumerated() {
                 let jitterX = sin(Float(idx) * 1.7) * 0.28
                 let jitterZ = cos(Float(idx) * 2.1) * 0.28
@@ -2983,36 +3125,51 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
 
         // Sunken Ancient Obelisks & Pillars
-        builder.addBox(center: SIMD3<Float>(-4.2, -6.0, -3.8), size: SIMD3<Float>(0.85, 5.0, 0.85), material: sunkenObelisk)
-        builder.addBox(center: SIMD3<Float>(3.8, -6.0, 2.8), size: SIMD3<Float>(0.85, 5.0, 0.85), material: sunkenObelisk)
-        builder.addBox(center: SIMD3<Float>(-3.2, -6.5, 3.2), size: SIMD3<Float>(0.75, 4.0, 0.75), material: sunkenObelisk)
+        builder.addBox(center: SIMD3<Float>(-4.2, -7.5, -3.8), size: SIMD3<Float>(0.85, 5.0, 0.85), material: sunkenObelisk)
+        builder.addBox(center: SIMD3<Float>(3.8, -7.5, 2.8), size: SIMD3<Float>(0.85, 5.0, 0.85), material: sunkenObelisk)
+        builder.addBox(center: SIMD3<Float>(-3.2, -8.0, 3.2), size: SIMD3<Float>(0.75, 4.0, 0.75), material: sunkenObelisk)
 
         // Glowing Bioluminescent Crystals & Subterranean Illuminating Lamps
         let subLampEmitter = RTMaterial(color: SIMD3<Float>(0.10, 0.90, 0.98), roughness: 0.05, emission: SIMD3<Float>(0.85, 3.8, 5.5), reflectivity: 0.75)
-        builder.addSphere(center: SIMD3<Float>(-8.0, -5.5, -8.0), radii: SIMD3<Float>(repeating: 0.65), material: subLampEmitter, segments: 10, rings: 6)
-        builder.addSphere(center: SIMD3<Float>(8.0, -5.5, -8.0), radii: SIMD3<Float>(repeating: 0.65), material: subLampEmitter, segments: 10, rings: 6)
-        builder.addSphere(center: SIMD3<Float>(-8.0, -5.5, 8.0), radii: SIMD3<Float>(repeating: 0.65), material: subLampEmitter, segments: 10, rings: 6)
-        builder.addSphere(center: SIMD3<Float>(8.0, -5.5, 8.0), radii: SIMD3<Float>(repeating: 0.65), material: subLampEmitter, segments: 10, rings: 6)
+        builder.addSphere(center: SIMD3<Float>(-8.0, -7.0, -8.0), radii: SIMD3<Float>(repeating: 0.65), material: subLampEmitter, segments: 10, rings: 6)
+        builder.addSphere(center: SIMD3<Float>(8.0, -7.0, -8.0), radii: SIMD3<Float>(repeating: 0.65), material: subLampEmitter, segments: 10, rings: 6)
+        builder.addSphere(center: SIMD3<Float>(-8.0, -7.0, 8.0), radii: SIMD3<Float>(repeating: 0.65), material: subLampEmitter, segments: 10, rings: 6)
+        builder.addSphere(center: SIMD3<Float>(8.0, -7.0, 8.0), radii: SIMD3<Float>(repeating: 0.65), material: subLampEmitter, segments: 10, rings: 6)
 
-        builder.addSphere(center: SIMD3<Float>(-3.8, -8.1, -3.2), radii: SIMD3<Float>(repeating: 0.45), material: bioCrystal, segments: 8, rings: 5)
-        builder.addSphere(center: SIMD3<Float>(3.5, -8.1, 2.2), radii: SIMD3<Float>(repeating: 0.45), material: bioCrystal, segments: 8, rings: 5)
-        builder.addSphere(center: SIMD3<Float>(1.8, -8.1, -4.2), radii: SIMD3<Float>(repeating: 0.40), material: bioCrystal, segments: 8, rings: 5)
+        builder.addSphere(center: SIMD3<Float>(-3.8, -9.2, -3.2), radii: SIMD3<Float>(repeating: 0.45), material: bioCrystal, segments: 8, rings: 5)
+        builder.addSphere(center: SIMD3<Float>(3.5, -9.2, 2.2), radii: SIMD3<Float>(repeating: 0.45), material: bioCrystal, segments: 8, rings: 5)
+        builder.addSphere(center: SIMD3<Float>(1.8, -9.2, -4.2), radii: SIMD3<Float>(repeating: 0.40), material: bioCrystal, segments: 8, rings: 5)
 
         // Sunken Treasure Chest
-        builder.addBox(center: SIMD3<Float>(2.8, -8.2, -1.8), size: SIMD3<Float>(1.2, 0.75, 0.85), material: treasureGold)
+        builder.addBox(center: SIMD3<Float>(2.8, -9.5, -1.8), size: SIMD3<Float>(1.2, 0.75, 0.85), material: treasureGold)
 
-        // 🏊‍♂️ Piscina Olímpica Profunda (-2.22m de profundidad real con paredes revestidas e iluminación subacuática)
-        builder.addBox(center: SIMD3<Float>(-1.5, -2.22, -1.5), size: SIMD3<Float>(7.8, 0.14, 5.4), material: poolTile)
-        builder.addBox(center: SIMD3<Float>(-1.5, -1.10, -4.14), size: SIMD3<Float>(7.8, 2.24, 0.12), material: poolTile)
-        builder.addBox(center: SIMD3<Float>(-1.5, -1.10, 1.14), size: SIMD3<Float>(7.8, 2.24, 0.12), material: poolTile)
-        builder.addBox(center: SIMD3<Float>(-5.34, -1.10, -1.5), size: SIMD3<Float>(0.12, 2.24, 5.4), material: poolTile)
-        builder.addBox(center: SIMD3<Float>(2.34, -1.10, -1.5), size: SIMD3<Float>(0.12, 2.24, 5.4), material: poolTile)
+        // 🏊‍♂️ Piscina Olímpica Ultra Profunda (-4.50m de profundidad real con revestimiento cerámico e iluminación subacuática)
+        // Piso profundo con apertura y marco del portal abisal en el centro
+        builder.addBox(center: SIMD3<Float>(-1.5, -4.56, -3.4), size: SIMD3<Float>(7.8, 0.14, 1.6), material: poolTile)
+        builder.addBox(center: SIMD3<Float>(-1.5, -4.56, 0.4), size: SIMD3<Float>(7.8, 0.14, 1.6), material: poolTile)
+        builder.addBox(center: SIMD3<Float>(-4.2, -4.56, -1.5), size: SIMD3<Float>(2.4, 0.14, 2.2), material: poolTile)
+        builder.addBox(center: SIMD3<Float>(1.2, -4.56, -1.5), size: SIMD3<Float>(2.4, 0.14, 2.2), material: poolTile)
+        // Portal abisal brillante en el fondo de la piscina (Vórtice al Easter Egg)
+        builder.addBox(center: SIMD3<Float>(-1.5, -4.54, -1.5), size: SIMD3<Float>(2.6, 0.06, 2.2), material: subWallNeonCyan)
 
-        // Tiras LED subacuáticas en las paredes profundas de la piscina (Y = -1.45m)
-        builder.addBox(center: SIMD3<Float>(-1.5, -1.45, -4.06), size: SIMD3<Float>(7.2, 0.05, 0.05), material: subWallNeonCyan)
-        builder.addBox(center: SIMD3<Float>(-1.5, -1.45, 1.06), size: SIMD3<Float>(7.2, 0.05, 0.05), material: subWallNeonCyan)
-        builder.addBox(center: SIMD3<Float>(-5.26, -1.45, -1.5), size: SIMD3<Float>(0.05, 0.05, 4.8), material: subWallNeonCyan)
-        builder.addBox(center: SIMD3<Float>(2.26, -1.45, -1.5), size: SIMD3<Float>(0.05, 0.05, 4.8), material: subWallNeonCyan)
+        // Paredes cerámicas de la piscina profunda (4.6m de alto)
+        builder.addBox(center: SIMD3<Float>(-1.5, -2.25, -4.14), size: SIMD3<Float>(7.8, 4.60, 0.12), material: poolTile)
+        builder.addBox(center: SIMD3<Float>(-1.5, -2.25, 1.14), size: SIMD3<Float>(7.8, 4.60, 0.12), material: poolTile)
+        builder.addBox(center: SIMD3<Float>(-5.34, -2.25, -1.5), size: SIMD3<Float>(0.12, 4.60, 5.4), material: poolTile)
+        builder.addBox(center: SIMD3<Float>(2.34, -2.25, -1.5), size: SIMD3<Float>(0.12, 4.60, 5.4), material: poolTile)
+
+        // Tiras LED subacuáticas de doble nivel en la piscina profunda:
+        // Nivel Medio (Cian a Y = -1.80m)
+        builder.addBox(center: SIMD3<Float>(-1.5, -1.80, -4.06), size: SIMD3<Float>(7.2, 0.06, 0.06), material: subWallNeonCyan)
+        builder.addBox(center: SIMD3<Float>(-1.5, -1.80, 1.06), size: SIMD3<Float>(7.2, 0.06, 0.06), material: subWallNeonCyan)
+        builder.addBox(center: SIMD3<Float>(-5.26, -1.80, -1.5), size: SIMD3<Float>(0.06, 0.06, 4.8), material: subWallNeonCyan)
+        builder.addBox(center: SIMD3<Float>(2.26, -1.80, -1.5), size: SIMD3<Float>(0.06, 0.06, 4.8), material: subWallNeonCyan)
+
+        // Nivel Profundo (Esmeralda a Y = -3.80m)
+        builder.addBox(center: SIMD3<Float>(-1.5, -3.80, -4.06), size: SIMD3<Float>(7.2, 0.06, 0.06), material: subWallNeonEmerald)
+        builder.addBox(center: SIMD3<Float>(-1.5, -3.80, 1.06), size: SIMD3<Float>(7.2, 0.06, 0.06), material: subWallNeonEmerald)
+        builder.addBox(center: SIMD3<Float>(-5.26, -3.80, -1.5), size: SIMD3<Float>(0.06, 0.06, 4.8), material: subWallNeonEmerald)
+        builder.addBox(center: SIMD3<Float>(2.26, -3.80, -1.5), size: SIMD3<Float>(0.06, 0.06, 4.8), material: subWallNeonEmerald)
 
         builder.addBox(center: SIMD3<Float>(-1.5, 0.14, -4.38), size: SIMD3<Float>(8.1, 0.28, 0.34), material: coping)
         builder.addBox(center: SIMD3<Float>(-1.5, 0.14, 1.38), size: SIMD3<Float>(8.1, 0.28, 0.34), material: coping)
@@ -3057,12 +3214,12 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             )
         }
 
-        // Escalera metálica de la piscina extendida hasta el fondo (-2.15m)
-        builder.addBox(center: SIMD3<Float>(2.20, -0.35, -2.25), size: SIMD3<Float>(0.10, 3.10, 0.10), material: metal)
-        builder.addBox(center: SIMD3<Float>(2.20, -0.35, -1.55), size: SIMD3<Float>(0.10, 3.10, 0.10), material: metal)
-        for level in 0..<8 {
+        // Escalera metálica de la piscina extendida hasta el fondo (-4.50m)
+        builder.addBox(center: SIMD3<Float>(2.20, -2.05, -2.25), size: SIMD3<Float>(0.10, 4.90, 0.10), material: metal)
+        builder.addBox(center: SIMD3<Float>(2.20, -2.05, -1.55), size: SIMD3<Float>(0.10, 4.90, 0.10), material: metal)
+        for level in 0..<14 {
             builder.addBox(
-                center: SIMD3<Float>(2.20, -1.75 + Float(level) * 0.32, -1.90),
+                center: SIMD3<Float>(2.20, -4.30 + Float(level) * 0.33, -1.90),
                 size: SIMD3<Float>(0.10, 0.08, 0.70),
                 material: metal
             )

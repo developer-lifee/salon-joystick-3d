@@ -555,16 +555,16 @@ const tongueMat = new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0
 const slimeBodyGroup = new THREE.Group();
 
 // Barriga inferior esférica prominente
-const bellyMesh = new THREE.Mesh(new THREE.SphereGeometry(0.38, 32, 28), slimeMat);
-bellyMesh.scale.set(1.15, 1.05, 1.10);
-bellyMesh.position.set(0, 0.36, 0.04);
+const bellyMesh = new THREE.Mesh(new THREE.SphereGeometry(0.36, 32, 28), slimeMat);
+bellyMesh.scale.set(1.12, 1.0, 1.02);
+bellyMesh.position.set(0, 0.34, 0.02);
 bellyMesh.castShadow = true;
 
-// Cabeza / Torso superior fusionado
-const headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.34, 32, 28), slimeMat);
-headMesh.scale.set(1.02, 1.18, 0.94);
-headMesh.position.set(0, 0.64, 0.0);
-headMesh.castShadow = true;
+// Cabeza / Torso superior fusionado (ligeramente inclinado para albergar la cara)
+const slimeHeadMesh = new THREE.Mesh(new THREE.SphereGeometry(0.35, 32, 28), slimeMat);
+slimeHeadMesh.scale.set(1.04, 1.15, 1.02);
+slimeHeadMesh.position.set(0, 0.65, 0.04);
+slimeHeadMesh.castShadow = true;
 
 // Manchas sutiles de piel de slime (Puntos claros de brillo)
 const speckleMat = new THREE.MeshBasicMaterial({ color: 0x86efac });
@@ -574,59 +574,59 @@ for (let s = 0; s < 12; s++) {
   spk.position.set(Math.cos(ang) * 0.35, 0.30 + Math.random() * 0.40, Math.sin(ang) * 0.32);
   slimeBodyGroup.add(spk);
 }
-slimeBodyGroup.add(bellyMesh, headMesh);
+slimeBodyGroup.add(bellyMesh, slimeHeadMesh);
 slimeImpGroup.add(slimeBodyGroup);
 
-// 2. OREJAS DE DUENDE PUNTIAGUDAS (Goblin Ears)
+// 2. OREJAS DE DUENDE PUNTIAGUDAS (Goblin Ears - Grandes y expresivas)
 const earsGroup = new THREE.Group();
 function createGoblinEar(isLeft) {
   const ear = new THREE.Group();
   const sign = isLeft ? -1 : 1;
-  const outerCone = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.42, 16), slimeMat);
-  outerCone.scale.set(1.0, 1.0, 0.55);
-  outerCone.rotation.z = sign * 0.42;
-  outerCone.rotation.x = -0.12;
-  outerCone.position.set(sign * 0.24, 0.94, -0.02);
+  const outerCone = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.52, 16), slimeMat);
+  outerCone.scale.set(1.0, 1.0, 0.50);
+  outerCone.rotation.z = sign * 0.38;
+  outerCone.rotation.x = -0.15;
+  outerCone.position.set(sign * 0.28, 1.02, -0.02);
 
   // Hueco interior oscuro de la oreja
-  const innerCone = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.32, 16), slimeDarkMat);
-  innerCone.scale.set(0.9, 0.9, 0.50);
-  innerCone.rotation.z = sign * 0.42;
-  innerCone.rotation.x = -0.10;
-  innerCone.position.set(sign * 0.23, 0.94, 0.02);
+  const innerCone = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.40, 16), slimeDarkMat);
+  innerCone.scale.set(0.9, 0.9, 0.45);
+  innerCone.rotation.z = sign * 0.38;
+  innerCone.rotation.x = -0.12;
+  innerCone.position.set(sign * 0.27, 1.02, 0.02);
 
   ear.add(outerCone, innerCone);
   return ear;
 }
-const leftEar = createGoblinEar(true);
-const rightEar = createGoblinEar(false);
-earsGroup.add(leftEar, rightEar);
+const slimeLeftEar = createGoblinEar(true);
+const slimeRightEar = createGoblinEar(false);
+earsGroup.add(slimeLeftEar, slimeRightEar);
 slimeImpGroup.add(earsGroup);
 
-// 3. BOCA PICARA Y DIENTES AFILADOS
+// 3. BOCA PICARA Y DIENTES AFILADOS (En el frontal de la cara)
 const mouthGroup = new THREE.Group();
-mouthGroup.position.set(0, 0.53, 0.25);
+mouthGroup.position.set(0, 0.57, 0.37);
 
 // Cavidad de la boca abierta
-const mouthCavity = new THREE.Mesh(new THREE.SphereGeometry(0.16, 20, 16), mouthInteriorMat);
-mouthCavity.scale.set(1.35, 0.75, 0.50);
+const mouthCavity = new THREE.Mesh(new THREE.SphereGeometry(0.18, 24, 18), mouthInteriorMat);
+mouthCavity.scale.set(1.4, 0.85, 0.40);
 mouthGroup.add(mouthCavity);
 
 // Lengua de slime
-const tongue = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 14), tongueMat);
-tongue.scale.set(1.2, 0.4, 1.0);
-tongue.position.set(0, -0.04, 0.06);
+const tongue = new THREE.Mesh(new THREE.SphereGeometry(0.10, 16, 14), tongueMat);
+tongue.scale.set(1.2, 0.4, 0.9);
+tongue.position.set(0, -0.05, 0.08);
 mouthGroup.add(tongue);
 
-// 4 Colmillos afilados (2 superiores hacia abajo, 2 inferiores hacia arriba)
+// 4 Colmillos afilados marfil (2 superiores, 2 inferiores)
 const fangs = [
-  { x: -0.09, y: 0.05, z: 0.06, rx: Math.PI },   // Superior izquierdo
-  { x: 0.09, y: 0.05, z: 0.06, rx: Math.PI },    // Superior derecho
-  { x: -0.12, y: -0.06, z: 0.06, rx: 0 },         // Inferior izquierdo
-  { x: 0.12, y: -0.06, z: 0.06, rx: 0 }           // Inferior derecho
+  { x: -0.10, y: 0.06, z: 0.08, rx: Math.PI },   // Superior izquierdo
+  { x: 0.10, y: 0.06, z: 0.08, rx: Math.PI },    // Superior derecho
+  { x: -0.13, y: -0.07, z: 0.08, rx: 0 },        // Inferior izquierdo
+  { x: 0.13, y: -0.07, z: 0.08, rx: 0 }          // Inferior derecho
 ];
 fangs.forEach(f => {
-  const fangMesh = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.06, 12), teethMat);
+  const fangMesh = new THREE.Mesh(new THREE.ConeGeometry(0.028, 0.07, 12), teethMat);
   fangMesh.position.set(f.x, f.y, f.z);
   fangMesh.rotation.x = f.rx;
   mouthGroup.add(fangMesh);
@@ -638,42 +638,42 @@ const eyesGroup = new THREE.Group();
 const eyeWhiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.1 });
 const pupilMat = new THREE.MeshBasicMaterial({ color: 0x052e16 });
 [-0.14, 0.14].forEach(x => {
-  const eyeBall = new THREE.Mesh(new THREE.SphereGeometry(0.075, 16, 16), eyeWhiteMat);
-  eyeBall.position.set(x, 0.68, 0.24);
-  const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.035, 12, 12), pupilMat);
-  pupil.position.set(x, 0.68, 0.30);
+  const eyeBall = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 16), eyeWhiteMat);
+  eyeBall.position.set(x, 0.72, 0.32);
+  const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.038, 12, 12), pupilMat);
+  pupil.position.set(x, 0.72, 0.38);
   eyesGroup.add(eyeBall, pupil);
 });
 slimeImpGroup.add(eyesGroup);
 
-// 5. GAFAS CAT-EYE FUTURISTAS (El rasgo estrella de la imagen)
+// 5. GAFAS CAT-EYE FUTURISTAS (Puntas hacia arriba como en la foto)
 const glassesGroup = new THREE.Group();
-glassesGroup.position.set(0, 0.68, 0.28);
+glassesGroup.position.set(0, 0.73, 0.38);
 
 const frameMat = new THREE.MeshStandardMaterial({
-  color: 0x0c281a, // Verde oscuro casi negro brillante
-  roughness: 0.12,
-  metalness: 0.50
+  color: 0x0b2618, // Verde oscuro casi negro brillante
+  roughness: 0.15,
+  metalness: 0.40
 });
 const lensMat = new THREE.MeshStandardMaterial({
   color: 0x166534, // Lente verde joya reflectante
-  roughness: 0.05,
-  metalness: 0.85
+  roughness: 0.08,
+  metalness: 0.80
 });
 
-// Montura izquierda y derecha anguladas hacia arriba
+// Montura izquierda y derecha anguladas hacia arriba en diagonal (Cat-Eye)
 function createCatEyeFrame(isLeft) {
   const sign = isLeft ? -1 : 1;
   const wing = new THREE.Group();
-  // Aro exterior triangular
-  const rim = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.11, 0.04), frameMat);
-  rim.rotation.z = sign * -0.22;
-  rim.position.set(sign * 0.14, 0.02, 0);
+  // Aro exterior triangular orientado hacia las orejas
+  const rim = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.11, 0.04), frameMat);
+  rim.rotation.z = sign * 0.32; // Apunta hacia arriba hacia la oreja
+  rim.position.set(sign * 0.15, 0.03, 0);
 
   // Cristal de la lente
-  const lens = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.08, 0.025), lensMat);
-  lens.rotation.z = sign * -0.22;
-  lens.position.set(sign * 0.14, 0.02, 0.015);
+  const lens = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.08, 0.025), lensMat);
+  lens.rotation.z = sign * 0.32;
+  lens.position.set(sign * 0.15, 0.03, 0.015);
 
   wing.add(rim, lens);
   return wing;
@@ -681,7 +681,7 @@ function createCatEyeFrame(isLeft) {
 const leftGlass = createCatEyeFrame(true);
 const rightGlass = createCatEyeFrame(false);
 // Puente nasal
-const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.03, 0.03), frameMat);
+const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.03, 0.03), frameMat);
 bridge.position.set(0, 0.01, 0.01);
 glassesGroup.add(leftGlass, rightGlass, bridge);
 slimeImpGroup.add(glassesGroup);
@@ -691,28 +691,28 @@ const armsGroup = new THREE.Group();
 function createSlimeArm(isLeft) {
   const arm = new THREE.Group();
   const sign = isLeft ? -1 : 1;
-  // Hombro y brazo curvado hacia abajo
-  const bicep = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.07, 0.32, 16), slimeMat);
-  bicep.position.set(sign * 0.44, 0.45, 0.02);
-  bicep.rotation.z = sign * -0.45;
-  bicep.rotation.x = 0.25;
+  // Hombro y brazo cayendo naturalmente hacia los costados
+  const bicep = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.07, 0.30, 16), slimeMat);
+  bicep.position.set(sign * 0.38, 0.40, 0.04);
+  bicep.rotation.z = sign * 0.35; // Caída hacia abajo
+  bicep.rotation.x = 0.15;
 
   // Manita con 3 dedos puntiagudos
-  const hand = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12), slimeMat);
-  hand.position.set(sign * 0.52, 0.32, 0.10);
+  const hand = new THREE.Mesh(new THREE.SphereGeometry(0.065, 12, 12), slimeMat);
+  hand.position.set(sign * 0.44, 0.22, 0.12);
   arm.add(bicep, hand);
 
   for (let c = -1; c <= 1; c++) {
-    const claw = new THREE.Mesh(new THREE.ConeGeometry(0.022, 0.06, 8), slimeMat);
-    claw.position.set(sign * 0.52 + c * 0.025, 0.26, 0.14);
-    claw.rotation.x = Math.PI / 3;
+    const claw = new THREE.Mesh(new THREE.ConeGeometry(0.020, 0.055, 8), slimeMat);
+    claw.position.set(sign * 0.44 + c * 0.022, 0.16, 0.15);
+    claw.rotation.x = Math.PI / 4;
     arm.add(claw);
   }
   return arm;
 }
-const leftArm = createSlimeArm(true);
-const rightArm = createSlimeArm(false);
-armsGroup.add(leftArm, rightArm);
+const slimeLeftArm = createSlimeArm(true);
+const slimeRightArm = createSlimeArm(false);
+armsGroup.add(slimeLeftArm, slimeRightArm);
 slimeImpGroup.add(armsGroup);
 
 // 7. PATITAS CORTAS Y PIES CON 2 DEDOS
@@ -821,13 +821,13 @@ function setCameraView(type) {
     camera.position.set(0, 6.2, 0.01);
     controls.target.set(0, 0, 0);
   } else if (type === 'slime-front') {
-    camera.position.set(0, 0.62, 1.55);
+    camera.position.set(0, 0.70, 2.2);
     controls.target.set(0, 0.52, 0);
   } else if (type === 'slime-face') {
-    camera.position.set(0, 0.66, 0.95);
+    camera.position.set(0, 0.68, 1.2);
     controls.target.set(0, 0.62, 0);
   } else if (type === 'slime-angle') {
-    camera.position.set(-1.0, 0.80, 1.25);
+    camera.position.set(-1.2, 0.90, 1.8);
     controls.target.set(0, 0.52, 0);
   }
   controls.update();
@@ -1000,11 +1000,11 @@ function switchTab(tabId) {
 
     // Atmósfera de estudio de personajes 3D estilo Pixar / Nintendo
     scene.background = new THREE.Color(0x0b1329);
-    sunLight.intensity = 2.4;
+    sunLight.intensity = 1.4;
     sunLight.color.setHex(0xffffff);
     sunLight.position.set(3, 7, 5);
     ambientLight.color.setHex(0x94a3b8);
-    ambientLight.intensity = 1.4;
+    ambientLight.intensity = 0.9;
 
     // Ocultar piscina y cobertura, mostrar Slime Imp 3D
     coverGroup.visible = false;
@@ -1266,11 +1266,10 @@ function animate() {
     const breath = Math.sin(time);
     slimeBodyGroup.scale.y = 1.0 + breath * 0.025;
     slimeBodyGroup.scale.x = 1.0 - breath * 0.012;
-    slimeBodyGroup.scale.z = 1.0 - breath * 0.012;
-    leftEar.rotation.z = -0.42 + Math.sin(time * 0.8) * 0.04;
-    rightEar.rotation.z = 0.42 - Math.sin(time * 0.8) * 0.04;
-    leftArm.rotation.x = 0.25 + Math.sin(time) * 0.03;
-    rightArm.rotation.x = 0.25 - Math.sin(time) * 0.03;
+    slimeLeftEar.rotation.z = -0.42 + Math.sin(time * 0.8) * 0.04;
+    slimeRightEar.rotation.z = 0.42 - Math.sin(time * 0.8) * 0.04;
+    slimeLeftArm.rotation.x = 0.25 + Math.sin(time) * 0.03;
+    slimeRightArm.rotation.x = 0.25 - Math.sin(time) * 0.03;
   }
 
   renderer.render(scene, camera);

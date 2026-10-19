@@ -3175,9 +3175,9 @@ final class ChiptuneAudioEngine {
         return buffer
     }
 
-    // 🌊🌀 Inmersión Abisal al Easter Egg Subterráneo (Vórtice Hidrodinámico + Sub-Bass + Acorde Bioluminiscente)
+    // 🎨🌊 Entrada al Easter Egg estilo Super Mario 64: "Painting Water Ripple" + Plop Cavitación + Arpegio Mágico de Campanas
     private func makeSubterraneanPortalBuffer() -> AVAudioPCMBuffer? {
-        let duration = 1.45
+        let duration = 1.35
         let frameCount = AVAudioFrameCount(format.sampleRate * duration)
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
               let channels = buffer.floatChannelData else {
@@ -3185,41 +3185,63 @@ final class ChiptuneAudioEngine {
         }
         buffer.frameLength = frameCount
 
+        // Notas del arpegio ascendente mágico (Super Mario 64 style pentatónico brillante: C5, E5, G5, B5, D6, G6)
+        let chimeFreqs: [Double] = [523.25, 659.25, 783.99, 987.77, 1174.66, 1567.98]
+        let noteSpacing = 0.046 // 46ms entre notas del arpegio rápido ascendente
+
         var lpNoise = 0.0
         for frame in 0..<Int(frameCount) {
             let t = Double(frame) / format.sampleRate
             let progress = t / duration
 
-            // 1. Impacto profundo de inmersión subacuática (190Hz -> 36Hz)
-            let plungeFreq = 36.0 + 154.0 * exp(-t * 4.2)
-            let plungeEnv = min(1.0, t * 70.0) * exp(-t * 2.4)
-            let plungeSub = tanh(sin(2.0 * .pi * plungeFreq * t) * 2.0) * plungeEnv
+            // 1. "Bloop / Plop" de inmersión en el lienzo líquido (Frecuencia cayendo 740Hz -> 140Hz)
+            let plungeFreq = 140.0 + 600.0 * exp(-t * 22.0)
+            let plungeEnv = min(1.0, t * 80.0) * exp(-t * 8.5)
+            let plungeBody = sin(2.0 * .pi * plungeFreq * t) * plungeEnv * 0.75
 
-            // 2. Turbulencia de burbujas presurizadas filtradas
+            // 2. Ondulación / Vibrato acuático del lienzo de la pintura (18Hz ripple modulation)
+            let ripplePhase = sin(2.0 * .pi * 18.0 * t) * exp(-t * 2.8) * 0.35
+
+            // 3. Arpegio Mágico Crystalline Chimes (Nintendo 64 Water Portal Harps / Shimmer)
+            var chimeLeft = 0.0
+            var chimeRight = 0.0
+            for (idx, baseFreq) in chimeFreqs.enumerated() {
+                let noteStart = Double(idx) * noteSpacing
+                if t >= noteStart {
+                    let noteT = t - noteStart
+                    let noteEnv = min(1.0, noteT * 90.0) * exp(-noteT * 4.2)
+                    // Frecuencia con ligera modulación de onda de agua
+                    let modFreq = baseFreq * (1.0 + ripplePhase * 0.04)
+                    // Tono fundamental cristalino + 2do y 3er armónicos suaves
+                    let tone = (sin(2.0 * .pi * modFreq * noteT) +
+                                sin(2.0 * .pi * modFreq * 2.0 * noteT) * 0.32 +
+                                sin(2.0 * .pi * modFreq * 3.0 * noteT) * 0.12) * noteEnv
+
+                    // Panning estéreo progresivo (viaja de izquierda a derecha al ascender)
+                    let pan = Double(idx) / Double(chimeFreqs.count - 1)
+                    chimeLeft += tone * (1.0 - pan * 0.65)
+                    chimeRight += tone * (0.35 + pan * 0.65)
+                }
+            }
+
+            // 4. Salpicadura suave y efervescencia de gotas al cruzar el portal
             let rawNoise = Double.random(in: -1.0...1.0)
-            lpNoise = lpNoise * 0.88 + rawNoise * 0.12
-            let bubbleMod = 0.5 + 0.5 * sin(2.0 * .pi * (16.0 + t * 12.0) * t)
-            let bubbleStream = lpNoise * bubbleMod * exp(-t * 2.1) * 0.85
+            lpNoise = lpNoise * 0.82 + rawNoise * 0.18
+            let sparkleDrop = lpNoise * exp(-t * 6.0) * 0.22
 
-            // 3. Resonancia de caverna cristalina bioluminiscente (Acorde místico 264Hz + 396Hz + 528Hz)
-            let chimeEnv = min(1.0, max(0.0, (t - 0.06) * 10.0)) * exp(-max(0.0, t - 0.06) * 2.2)
-            let c1 = sin(2.0 * .pi * 264.0 * t) * 0.45
-            let c2 = sin(2.0 * .pi * 396.0 * t) * 0.35
-            let c3L = sin(2.0 * .pi * 528.0 * t) * 0.25
-            let c3R = sin(2.0 * .pi * 531.0 * t) * 0.25
+            let fadeOut = min(1.0, (1.0 - progress) * 7.5)
+            let sampleL = Float(tanh((plungeBody * 0.80 + chimeLeft * 0.55 + sparkleDrop) * 1.3) * fadeOut * 0.92)
+            let sampleR = Float(tanh((plungeBody * 0.80 + chimeRight * 0.55 + sparkleDrop) * 1.3) * fadeOut * 0.92)
 
-            let left = tanh((plungeSub * 0.85 + bubbleStream * 0.65 + (c1 + c2 + c3L) * chimeEnv * 0.55) * 1.25)
-            let right = tanh((plungeSub * 0.85 + bubbleStream * 0.65 + (c1 + c2 + c3R) * chimeEnv * 0.55) * 1.25)
-            let fadeOut = min(1.0, (1.0 - progress) * 6.0)
-            channels[0][frame] = Float(left * fadeOut * 0.92)
-            channels[1][frame] = Float(right * fadeOut * 0.92)
+            channels[0][frame] = sampleL
+            channels[1][frame] = sampleR
         }
         return buffer
     }
 
     // 🏊‍♂️ Brazada Hidrodinámica de Buceo (Impulso suave de agua + estela de burbujas)
     private func makeSwimStrokeBuffer() -> AVAudioPCMBuffer? {
-        let duration = 0.42
+        let duration = 0.38
         let frameCount = AVAudioFrameCount(format.sampleRate * duration)
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
               let channels = buffer.floatChannelData else {
@@ -3231,15 +3253,17 @@ final class ChiptuneAudioEngine {
         for frame in 0..<Int(frameCount) {
             let t = Double(frame) / format.sampleRate
             let progress = t / duration
-            let env = sin(progress * .pi) * exp(-progress * 1.6)
+            let env = sin(progress * .pi) * exp(-progress * 1.8)
             let raw = Double.random(in: -1.0...1.0)
-            lowPass = lowPass * 0.91 + raw * 0.09
-            let sweepFreq = 95.0 + 75.0 * sin(progress * .pi)
-            let body = sin(2.0 * .pi * sweepFreq * t) * 0.42
-            let bubbleRipple = sin(2.0 * .pi * (240.0 + 90.0 * sin(t * 28.0)) * t) * exp(-t * 6.5) * 0.18
-            let sample = Float(tanh((lowPass * 1.3 + body + bubbleRipple) * env * 1.2) * 0.82)
+            lowPass = lowPass * 0.88 + raw * 0.12
+
+            let sweepFreq = 110.0 + 65.0 * sin(progress * .pi)
+            let body = sin(2.0 * .pi * sweepFreq * t) * 0.52
+            let bubble = sin(2.0 * .pi * (320.0 + 80.0 * sin(t * 32.0)) * t) * exp(-t * 7.5) * 0.16
+            let sample = Float(tanh((lowPass * 1.1 + body + bubble) * env * 1.25) * 0.85)
+
             channels[0][frame] = sample
-            channels[1][frame] = sample * 0.95
+            channels[1][frame] = sample * 0.96
         }
         return buffer
     }
@@ -3313,8 +3337,9 @@ final class ChiptuneAudioEngine {
         return buffer
     }
 
+    // 💦 Chapuzón Realista y Orgánico (Impacto de agua + burbuja de cavitación "ker-plunk" + estela de gotas)
     private func makeSplashBuffer(variant: Int) -> AVAudioPCMBuffer? {
-        let duration = 0.32
+        let duration = 0.46
         let frameCount = AVAudioFrameCount(format.sampleRate * duration)
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
               let channels = buffer.floatChannelData else {
@@ -3324,20 +3349,43 @@ final class ChiptuneAudioEngine {
 
         var seed = UInt32(0x94D0_49BB) &+ UInt32(variant * 1049)
         var lowPass = 0.0
+        var midBand = 0.0
+
+        let baseCavityFreq = variant == 0 ? 175.0 : 225.0
+
         for frame in 0..<Int(frameCount) {
+            let t = Double(frame) / format.sampleRate
+            let progress = t / duration
+
             seed = seed &* 1_664_525 &+ 1_013_904_223
-            let noise = Double(seed & 0xFFFF) / 32_767.5 - 1.0
-            lowPass = lowPass * 0.72 + noise * 0.28
-            let time = Double(frame) / format.sampleRate
-            let attack = min(1.0, time / 0.007)
-            let slapEnvelope = attack * exp(-time * (10.0 + Double(variant)))
-            let trailEnvelope = attack * exp(-time * 5.5)
-            let highPass = noise - lowPass
-            let slap = highPass * 0.42 * slapEnvelope
-            let body = lowPass * 0.31 * trailEnvelope
-            let sample = Float(slap + body)
+            let rawNoise = Double(seed & 0xFFFF) / 32_767.5 - 1.0
+
+            // 1. Slap inicial de superficie (transitorio cortante pero acuoso en los primeros 12ms)
+            let slapAttack = min(1.0, t / 0.003)
+            let slapDecay = exp(-t * 62.0)
+            let slap = rawNoise * slapAttack * slapDecay * 0.52
+
+            // 2. Cavitación / Resonancia líquida ("ker-plunk" / burbuja profunda)
+            let cavityFreq = baseCavityFreq * (1.0 + 0.85 * exp(-t * 22.0))
+            let cavityEnv = min(1.0, t * 110.0) * exp(-t * 9.2)
+            let cavityTone = sin(2.0 * .pi * cavityFreq * t) * cavityEnv * 0.68
+
+            // 3. Efervescencia y turbulencia de agua en movimiento
+            lowPass = lowPass * 0.84 + rawNoise * 0.16
+            midBand = midBand * 0.68 + (rawNoise - lowPass) * 0.32
+            let washEnv = min(1.0, t * 45.0) * exp(-t * 6.0)
+            let waterWash = (lowPass * 0.45 + midBand * 0.28) * washEnv
+
+            // 4. Micro-burbujas burbujeantes en la estela
+            let b1 = sin(2.0 * .pi * (460.0 + 130.0 * sin(t * 38.0)) * t) * exp(-t * 11.0) * 0.14
+            let b2 = sin(2.0 * .pi * (700.0 + 160.0 * cos(t * 32.0)) * t) * exp(-t * 13.0) * 0.10
+
+            let combined = (slap + cavityTone + waterWash + b1 + b2)
+            let fadeOut = min(1.0, (1.0 - progress) * 6.5)
+            let sample = Float(tanh(combined * 1.35) * fadeOut * 0.92)
+
             channels[0][frame] = sample
-            channels[1][frame] = sample * (variant == 1 ? 0.86 : 0.94)
+            channels[1][frame] = sample * (variant == 1 ? 0.88 : 0.95)
         }
         return buffer
     }

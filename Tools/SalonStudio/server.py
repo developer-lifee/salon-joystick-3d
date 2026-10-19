@@ -54,6 +54,13 @@ class StudioHandler(http.server.SimpleHTTPRequestHandler):
             data = json.loads(self.rfile.read(length).decode('utf-8'))
             success, msg = self.update_water_settings(data)
             self._send_json({"success": success, "message": msg})
+        elif self.path == "/api/presets/save-character":
+            length = int(self.headers.get('content-length', 0))
+            data = json.loads(self.rfile.read(length).decode('utf-8'))
+            char_file = os.path.join(BASE_DIR, "presets", "character_customization.json")
+            with open(char_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            self._send_json({"success": True, "message": "¡Configuración de Slime Imp guardada en presets/!"})
         else:
             self.send_error(404, "Not Found")
 

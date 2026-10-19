@@ -261,27 +261,37 @@ inline AnalyticalHit analyticalPatioIntersect(ray r) {
     result.albedo = float3(0.3f);
     result.kind = 0.0f;
 
-    // 1. Ground / Floor Plane (y = 0.0)
+    // 1. Ground / Floor Plane (y = 0.0 outside pool, y = -4.50 inside pool)
     if (r.direction.y < -0.001f) {
         float tFloor = (0.0f - r.origin.y) / r.direction.y;
         if (tFloor > 0.01f && tFloor < result.distance) {
-            result.hit = true;
-            result.distance = tFloor;
-            result.position = r.origin + r.direction * tFloor;
-            result.normal = float3(0.0f, 1.0f, 0.0f);
-            
-            bool insidePool = (result.position.x > -5.35f && result.position.x < 2.35f &&
-                               result.position.z > -4.20f && result.position.z < 1.20f);
-            if (insidePool) {
-                float2 grid = fract(result.position.xz * 1.5f);
-                float grout = step(0.04f, grid.x) * step(0.04f, grid.y);
-                result.albedo = mix(float3(0.02f, 0.25f, 0.42f), float3(0.12f, 0.65f, 0.85f), grout);
-                result.kind = 3.0f;
-            } else {
-                float2 grid = fract(result.position.xz * 0.8f);
+            float3 pFloor = r.origin + r.direction * tFloor;
+            bool insidePool = (pFloor.x > -5.35f && pFloor.x < 2.35f &&
+                               pFloor.z > -4.20f && pFloor.z < 1.20f);
+            if (!insidePool) {
+                result.hit = true;
+                result.distance = tFloor;
+                result.position = pFloor;
+                result.normal = float3(0.0f, 1.0f, 0.0f);
+                float2 grid = fract(pFloor.xz * 0.8f);
                 float grout = step(0.03f, grid.x) * step(0.03f, grid.y);
                 result.albedo = mix(float3(0.15f, 0.16f, 0.18f), float3(0.42f, 0.45f, 0.48f), grout);
                 result.kind = 0.0f;
+            }
+        }
+        // Fondo cerámico profundo de la piscina a y = -4.50m
+        float tDeepPool = (-4.50f - r.origin.y) / r.direction.y;
+        if (tDeepPool > 0.01f && tDeepPool < result.distance) {
+            float3 pPool = r.origin + r.direction * tDeepPool;
+            if (pPool.x > -5.35f && pPool.x < 2.35f && pPool.z > -4.20f && pPool.z < 1.20f) {
+                result.hit = true;
+                result.distance = tDeepPool;
+                result.position = pPool;
+                result.normal = float3(0.0f, 1.0f, 0.0f);
+                float2 grid = fract(pPool.xz * 1.5f);
+                float grout = step(0.04f, grid.x) * step(0.04f, grid.y);
+                result.albedo = mix(float3(0.02f, 0.25f, 0.42f), float3(0.12f, 0.65f, 0.85f), grout);
+                result.kind = 3.0f;
             }
         }
     }
@@ -1165,7 +1175,7 @@ kernel void raytracePatio(
     // 🌊 Complete Aquatic Realm: Surface Pool & Subterranean Ocean Chamber
     float3 cameraPos = uniforms.cameraPosition.xyz;
     bool isCameraInPoolXZ = (cameraPos.x > -5.35f && cameraPos.x < 2.35f && cameraPos.z > -4.20f && cameraPos.z < 1.20f);
-    bool isSubterranean = (cameraPos.y < -0.45f);
+    bool isSubterranean = (cameraPos.y < -4.75f);
     bool isUnderwater = (isCameraInPoolXZ && cameraPos.y < 0.38f) || isSubterranean;
 
     if (isUnderwater) {
