@@ -373,55 +373,82 @@ struct ContentView: View {
             .padding(.leading, 18)
             .padding(.bottom, 22)
 
-            VStack(alignment: .trailing, spacing: 10) {
-                if let nearbyLight = model.nearbyLight {
-                    ContextualLightButton(
-                        isOn: model.lightStates.isEnabled(nearbyLight),
-                        label: nearbyLight.label,
-                        onTap: model.toggleNearbyLight,
-                        onLongPress: { dimmerFixture = nearbyLight }
-                    )
-                    .popover(
-                        isPresented: Binding(
-                            get: { dimmerFixture != nil },
-                            set: { if !$0 { dimmerFixture = nil } }
-                        ),
-                        arrowEdge: .trailing
-                    ) {
-                        if let fixture = dimmerFixture {
-                            VStack(alignment: .leading, spacing: 10) {
-                                HStack {
-                                    Image(systemName: "lightbulb.fill")
-                                        .foregroundStyle(.yellow)
-                                    Text(fixture.label)
-                                        .font(.headline)
-                                    Spacer()
-                                    Text("\(Int((model.lightStates.intensity(fixture) * 100).rounded()))%")
-                                        .font(.caption.monospacedDigit())
-                                }
-                                Slider(
-                                    value: Binding(
-                                        get: { Double(model.lightStates.intensity(fixture)) },
-                                        set: { model.setLightIntensity(Float($0), for: fixture) }
-                                    ),
-                                    in: 0.1...1
-                                )
-                                .tint(.yellow)
-                            }
-                            .padding(14)
-                            .frame(width: 260)
-                            .presentationCompactAdaptation(.popover)
-                        }
-                    }
-                }
+            VStack(alignment: .trailing, spacing: 12) {
+                // Top Action Row: Tool Status Badge & Contextual Light Button (Side-by-side to eliminate crowding)
+                HStack(spacing: 10) {
+                    if !model.toolStatus.label.isEmpty {
+                        HStack(spacing: 5) {
+                            Circle()
+                                .fill(model.toolStatus.activeRemaining > 0 ? Color.red : Color.orange)
+                                .frame(width: 7, height: 7)
+                                .shadow(color: (model.toolStatus.activeRemaining > 0 ? Color.red : Color.orange).opacity(0.8), radius: 3)
 
-                if !model.toolStatus.label.isEmpty {
-                    Text(model.toolStatus.label)
-                        .font(.caption.monospacedDigit().bold())
-                        .foregroundStyle(.white)
+                            Text(model.toolStatus.label)
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundStyle(.white)
+                        }
                         .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 6))
+                        .padding(.vertical, 6)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .overlay(
+                            Capsule()
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [
+                                            (model.toolStatus.activeRemaining > 0 ? Color.red : Color.orange).opacity(0.8),
+                                            Color.white.opacity(0.2)
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    ),
+                                    lineWidth: 1.2
+                                )
+                        )
+                        .shadow(color: .black.opacity(0.35), radius: 6, x: 0, y: 2)
+                        .transition(.scale.combined(with: .opacity))
+                    }
+
+                    if let nearbyLight = model.nearbyLight {
+                        ContextualLightButton(
+                            isOn: model.lightStates.isEnabled(nearbyLight),
+                            label: nearbyLight.label,
+                            onTap: model.toggleNearbyLight,
+                            onLongPress: { dimmerFixture = nearbyLight }
+                        )
+                        .popover(
+                            isPresented: Binding(
+                                get: { dimmerFixture != nil },
+                                set: { if !$0 { dimmerFixture = nil } }
+                            ),
+                            arrowEdge: .trailing
+                        ) {
+                            if let fixture = dimmerFixture {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    HStack {
+                                        Image(systemName: "lightbulb.fill")
+                                            .foregroundStyle(.yellow)
+                                        Text(fixture.label)
+                                            .font(.headline)
+                                        Spacer()
+                                        Text("\(Int((model.lightStates.intensity(fixture) * 100).rounded()))%")
+                                            .font(.caption.monospacedDigit())
+                                    }
+                                    Slider(
+                                        value: Binding(
+                                            get: { Double(model.lightStates.intensity(fixture)) },
+                                            set: { model.setLightIntensity(Float($0), for: fixture) }
+                                        ),
+                                        in: 0.1...1
+                                    )
+                                    .tint(.yellow)
+                                }
+                                .padding(14)
+                                .frame(width: 260)
+                                .presentationCompactAdaptation(.popover)
+                            }
+                        }
+                        .transition(.scale.combined(with: .opacity))
+                    }
                 }
 
                 // Bar 1: Action/Skill Capsules (Slow-Mo, Warp)
@@ -479,7 +506,7 @@ struct ContentView: View {
                             HStack(spacing: 4) {
                                 Image(systemName: model.isCoverActive ? "shield.fill" : "shield")
                                     .font(.system(size: 13, weight: .bold))
-                                Text(model.isCoverActive ? "En Cobertura" : "Pegarse a Piedra")
+                                Text(model.isCoverActive ? "En Cobertura" : "Cobertura")
                                     .font(.system(size: 11, weight: .bold))
                             }
                             .foregroundStyle(model.isCoverActive ? .black : .green)
@@ -1022,10 +1049,11 @@ private struct ContextualLightButton: View {
 
     var body: some View {
         Image(systemName: isOn ? "lightbulb.fill" : "lightbulb.slash.fill")
-            .font(.system(size: 22, weight: .semibold))
+            .font(.system(size: 20, weight: .semibold))
             .foregroundStyle(isOn ? .yellow : .white)
-            .frame(width: 54, height: 54)
+            .frame(width: 44, height: 44)
             .background(.black.opacity(0.64), in: Circle())
+            .overlay(Circle().stroke(Color.yellow.opacity(isOn ? 0.85 : 0.40), lineWidth: 1.5))
             .contentShape(Circle())
             .gesture(
                 LongPressGesture(minimumDuration: 0.45)
@@ -4086,14 +4114,15 @@ struct MainMenuView: View {
                 .ignoresSafeArea()
 
             GeometryReader { proxy in
+                let isCompactLandscape = proxy.size.height < 520
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
-                        Spacer(minLength: 32)
+                        Spacer(minLength: isCompactLandscape ? 10 : 32)
 
                         //  iOS 18 Liquid Glass Title Card
-                        VStack(spacing: 8) {
+                        VStack(spacing: isCompactLandscape ? 4 : 8) {
                             Text("LASER TRACER 3D")
-                                .font(.system(size: 42, weight: .black, design: .rounded))
+                                .font(.system(size: isCompactLandscape ? 28 : 42, weight: .black, design: .rounded))
                                 .minimumScaleFactor(0.55)
                                 .lineLimit(1)
                                 .foregroundStyle(
@@ -4103,24 +4132,24 @@ struct MainMenuView: View {
                                         endPoint: .trailing
                                     )
                                 )
-                                .shadow(color: .cyan.opacity(0.9), radius: 18)
+                                .shadow(color: .cyan.opacity(0.9), radius: isCompactLandscape ? 10 : 18)
 
                             Text("METAL RAY TRACING COMBAT & DEFENSIVE SHIELD")
-                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .font(.system(size: isCompactLandscape ? 9 : 11, weight: .bold, design: .monospaced))
                                 .minimumScaleFactor(0.55)
                                 .lineLimit(1)
                                 .foregroundStyle(.white.opacity(0.90))
-                                .tracking(2.5)
+                                .tracking(isCompactLandscape ? 1.5 : 2.5)
                         }
-                        .padding(.horizontal, 28)
-                        .padding(.vertical, 20)
+                        .padding(.horizontal, isCompactLandscape ? 20 : 28)
+                        .padding(.vertical, isCompactLandscape ? 10 : 20)
                         .background(
                             ZStack {
-                                RoundedRectangle(cornerRadius: 26)
+                                RoundedRectangle(cornerRadius: isCompactLandscape ? 18 : 26)
                                     .fill(Color.white.opacity(0.18))
-                                    .background(Color.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 26))
+                                    .background(Color.black.opacity(0.35), in: RoundedRectangle(cornerRadius: isCompactLandscape ? 18 : 26))
 
-                                RoundedRectangle(cornerRadius: 26)
+                                RoundedRectangle(cornerRadius: isCompactLandscape ? 18 : 26)
                                     .stroke(
                                         LinearGradient(
                                             colors: [.white.opacity(0.90), .cyan.opacity(0.60), .white.opacity(0.30)],
@@ -4131,31 +4160,31 @@ struct MainMenuView: View {
                                     )
                             }
                         )
-                        .shadow(color: .cyan.opacity(0.30), radius: 16)
+                        .shadow(color: .cyan.opacity(0.30), radius: isCompactLandscape ? 10 : 16)
                         .padding(.horizontal, 24)
 
-                        Spacer(minLength: 40)
+                        Spacer(minLength: isCompactLandscape ? 10 : 40)
 
                         //  iOS 18 Control Center Liquid Glass Action Tiles
-                        VStack(spacing: 16) {
+                        VStack(spacing: isCompactLandscape ? 8 : 16) {
                             Button {
                                 model.startGame()
                             } label: {
-                                HStack(spacing: 14) {
+                                HStack(spacing: 12) {
                                     Image(systemName: "play.fill")
-                                        .font(.title3.bold())
+                                        .font(isCompactLandscape ? .subheadline.bold() : .title3.bold())
                                     Text("JUGAR EN SOLITARIO")
-                                        .font(.headline.bold())
+                                        .font(isCompactLandscape ? .subheadline.bold() : .headline.bold())
                                 }
                                 .foregroundStyle(.white)
-                                .frame(maxWidth: 340, minHeight: 58)
+                                .frame(maxWidth: isCompactLandscape ? 320 : 340, minHeight: isCompactLandscape ? 44 : 58)
                                 .background(
                                     ZStack {
-                                        RoundedRectangle(cornerRadius: 22)
+                                        RoundedRectangle(cornerRadius: isCompactLandscape ? 16 : 22)
                                             .fill(
                                                 LinearGradient(colors: [.blue.opacity(0.85), .cyan.opacity(0.85)], startPoint: .leading, endPoint: .trailing)
                                             )
-                                        RoundedRectangle(cornerRadius: 22)
+                                        RoundedRectangle(cornerRadius: isCompactLandscape ? 16 : 22)
                                             .stroke(Color.white.opacity(0.85), lineWidth: 1.5)
                                     }
                                 )
@@ -4166,21 +4195,21 @@ struct MainMenuView: View {
                             Button {
                                 model.showsMultiplayerSheet = true
                             } label: {
-                                HStack(spacing: 14) {
+                                HStack(spacing: 12) {
                                     Image(systemName: "person.2.fill")
-                                        .font(.title3.bold())
+                                        .font(isCompactLandscape ? .subheadline.bold() : .title3.bold())
                                     Text("MULTIJUGADOR LOCAL")
-                                        .font(.headline.bold())
+                                        .font(isCompactLandscape ? .subheadline.bold() : .headline.bold())
                                 }
                                 .foregroundStyle(.white)
-                                .frame(maxWidth: 340, minHeight: 58)
+                                .frame(maxWidth: isCompactLandscape ? 320 : 340, minHeight: isCompactLandscape ? 44 : 58)
                                 .background(
                                     ZStack {
-                                        RoundedRectangle(cornerRadius: 22)
+                                        RoundedRectangle(cornerRadius: isCompactLandscape ? 16 : 22)
                                             .fill(Color.white.opacity(0.18))
-                                            .background(Color.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 22))
+                                            .background(Color.black.opacity(0.35), in: RoundedRectangle(cornerRadius: isCompactLandscape ? 16 : 22))
 
-                                        RoundedRectangle(cornerRadius: 22)
+                                        RoundedRectangle(cornerRadius: isCompactLandscape ? 16 : 22)
                                             .stroke(
                                                 LinearGradient(colors: [.white.opacity(0.90), .white.opacity(0.25)], startPoint: .topLeading, endPoint: .bottomTrailing),
                                                 lineWidth: 1.2
@@ -4194,21 +4223,21 @@ struct MainMenuView: View {
                             Button {
                                 showsCoffeeStore = true
                             } label: {
-                                HStack(spacing: 14) {
+                                HStack(spacing: 12) {
                                     Text("☕️")
-                                        .font(.title3)
+                                        .font(isCompactLandscape ? .subheadline : .title3)
                                     Text("INVITAR UN CAFÉ")
-                                        .font(.headline.bold())
+                                        .font(isCompactLandscape ? .subheadline.bold() : .headline.bold())
                                 }
                                 .foregroundStyle(.yellow)
-                                .frame(maxWidth: 340, minHeight: 58)
+                                .frame(maxWidth: isCompactLandscape ? 320 : 340, minHeight: isCompactLandscape ? 44 : 58)
                                 .background(
                                     ZStack {
-                                        RoundedRectangle(cornerRadius: 22)
+                                        RoundedRectangle(cornerRadius: isCompactLandscape ? 16 : 22)
                                             .fill(Color.yellow.opacity(0.18))
-                                            .background(Color.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 22))
+                                            .background(Color.black.opacity(0.35), in: RoundedRectangle(cornerRadius: isCompactLandscape ? 16 : 22))
 
-                                        RoundedRectangle(cornerRadius: 22)
+                                        RoundedRectangle(cornerRadius: isCompactLandscape ? 16 : 22)
                                             .stroke(
                                                 LinearGradient(colors: [.yellow.opacity(0.90), .orange.opacity(0.50)], startPoint: .topLeading, endPoint: .bottomTrailing),
                                                 lineWidth: 1.2
@@ -4222,14 +4251,14 @@ struct MainMenuView: View {
                             Button {
                                 model.showsSettingsSheet = true
                             } label: {
-                                HStack(spacing: 12) {
+                                HStack(spacing: 10) {
                                     Image(systemName: "gearshape.fill")
                                         .font(.subheadline.bold())
                                     Text("OPCIONES Y AJUSTES")
                                         .font(.subheadline.bold())
                                 }
                                 .foregroundStyle(.white.opacity(0.90))
-                                .frame(maxWidth: 280, minHeight: 46)
+                                .frame(maxWidth: 280, minHeight: isCompactLandscape ? 38 : 46)
                                 .background(
                                     ZStack {
                                         Capsule()
@@ -4244,9 +4273,10 @@ struct MainMenuView: View {
                             .buttonStyle(.plain)
                         }
 
-                        Spacer(minLength: 32)
+                        Spacer(minLength: isCompactLandscape ? 12 : 32)
                     }
                     .frame(minWidth: proxy.size.width, minHeight: proxy.size.height)
+                    .padding(.bottom, isCompactLandscape ? 16 : 24)
                 }
             }
         }
