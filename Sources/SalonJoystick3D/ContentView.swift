@@ -871,7 +871,9 @@ final class GameModel: ObservableObject {
 
     func toggleSlowMotion() {
         isSlowMotionActive.toggle()
-        audio.playLaserIgnition()
+        audio.setSlowMotion(isSlowMotionActive)
+        let impact = UIImpactFeedbackGenerator(style: isSlowMotionActive ? .heavy : .medium)
+        impact.impactOccurred()
     }
 
     func toggleCover() {
@@ -2641,6 +2643,9 @@ final class ChiptuneAudioEngine {
     private let waterNode = AVAudioPlayerNode()
     private let splashNode = AVAudioPlayerNode()
     private let landingNode = AVAudioPlayerNode()
+    private let masterMixer = AVAudioMixerNode()
+    private let slowMoTimePitch = AVAudioUnitTimePitch()
+    private let slowMoFXNode = AVAudioPlayerNode()
     private let format = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 2)!
     private let audioQueue = DispatchQueue(label: "com.codex.salonjoystick3d.audio", qos: .userInitiated)
     private var musicBuffer: AVAudioPCMBuffer?
@@ -2652,6 +2657,9 @@ final class ChiptuneAudioEngine {
     private var laserPlayerHitBuffer: AVAudioPCMBuffer?
     private var laserReflectionBuffer: AVAudioPCMBuffer?
     private var robloxOofBuffer: AVAudioPCMBuffer?
+    private var lightsaberDefeatBuffer: AVAudioPCMBuffer?
+    private var slowMoActivationBuffer: AVAudioPCMBuffer?
+    private var slowMoDeactivationBuffer: AVAudioPCMBuffer?
     private var nextSplash = 0
     private var nextLanding = 0
     private var nodesAttached = false
@@ -2712,6 +2720,9 @@ final class ChiptuneAudioEngine {
                 laserPlayerHitBuffer = makeLaserPlayerHitBuffer()
                 laserReflectionBuffer = makeLaserReflectionBuffer()
                 robloxOofBuffer = makeRobloxOofBuffer()
+                lightsaberDefeatBuffer = makeLightsaberDefeatBuffer()
+                slowMoActivationBuffer = makeSlowMotionActivationBuffer()
+                slowMoDeactivationBuffer = makeSlowMotionDeactivationBuffer()
             }
 
             let session = AVAudioSession.sharedInstance()
@@ -2725,11 +2736,19 @@ final class ChiptuneAudioEngine {
                 engine.attach(waterNode)
                 engine.attach(splashNode)
                 engine.attach(landingNode)
-                engine.connect(musicNode, to: engine.mainMixerNode, format: format)
-                engine.connect(effectsNode, to: engine.mainMixerNode, format: format)
-                engine.connect(waterNode, to: engine.mainMixerNode, format: format)
-                engine.connect(splashNode, to: engine.mainMixerNode, format: format)
-                engine.connect(landingNode, to: engine.mainMixerNode, format: format)
+                engine.attach(masterMixer)
+                engine.attach(slowMoTimePitch)
+                engine.attach(slowMoFXNode)
+
+                engine.connect(musicNode, to: masterMixer, format: format)
+                engine.connect(effectsNode, to: masterMixer, format: format)
+                engine.connect(waterNode, to: masterMixer, format: format)
+                engine.connect(splashNode, to: masterMixer, format: format)
+                engine.connect(landingNode, to: masterMixer, format: format)
+
+                engine.connect(masterMixer, to: slowMoTimePitch, format: format)
+                engine.connect(slowMoTimePitch, to: engine.mainMixerNode, format: format)
+                engine.connect(slowMoFXNode, to: engine.mainMixerNode, format: format)
                 nodesAttached = true
             }
 
@@ -2844,6 +2863,50 @@ final class ChiptuneAudioEngine {
         }
     }
 
+    func playLightsaberDefeatSound() {
+        audioQueue.async { [weak self] in
+            guard let self, self.started, self.effectsEnabled else { return }
+            if let buffer = self.lightsaberDefeatBuffer {
+                self.effectsNode.stop()
+                self.effectsNode.volume = 1.0
+                self.effectsNode.scheduleBuffer(buffer)
+                self.effectsNode.play()
+            }
+        }
+    }
+
+    func setSlowMotion(_ active: Bool) {
+        audioQueue.async { [weak self] in
+            guard let self else { return }
+            if active {
+                // Pitch down master audio by -900 cents (9 semitones deeper, heavy cinematic bass)
+                self.slowMoTimePitch.pitch = -900
+                self.slowMoTimePitch.rate = 0.50
+                self.playSlowMoActivationSound()
+            } else {
+                self.slowMoTimePitch.pitch = 0
+                self.slowMoTimePitch.rate = 1.0
+                self.playSlowMoDeactivationSound()
+            }
+        }
+    }
+
+    private func playSlowMoActivationSound() {
+        guard started, effectsEnabled, let buffer = slowMoActivationBuffer else { return }
+        slowMoFXNode.stop()
+        slowMoFXNode.volume = 1.0
+        slowMoFXNode.scheduleBuffer(buffer, at: nil)
+        slowMoFXNode.play()
+    }
+
+    private func playSlowMoDeactivationSound() {
+        guard started, effectsEnabled, let buffer = slowMoDeactivationBuffer else { return }
+        slowMoFXNode.stop()
+        slowMoFXNode.volume = 0.85
+        slowMoFXNode.scheduleBuffer(buffer, at: nil)
+        slowMoFXNode.play()
+    }
+
     func playLanding(intensity: Float) {
         audioQueue.async { [weak self] in
             guard let self else { return }
@@ -2953,6 +3016,133 @@ final class ChiptuneAudioEngine {
             let envelope = sin(progress * Double.pi) * exp(-progress * 1.8)
             let wave = (sin(phase) + 0.35 * sin(phase * 2.0) + 0.15 * sin(phase * 3.0)) * envelope
             channels[0][frame] = Float(wave * 0.85)
+        }
+        return buffer
+    }
+
+    private func makeLightsaberDefeatBuffer() -> AVAudioPCMBuffer? {
+        let duration = 0.46
+        let frameCount = AVAudioFrameCount(format.sampleRate * duration)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
+              let channels = buffer.floatChannelData else {
+            return nil
+        }
+        buffer.frameLength = frameCount
+
+        for frame in 0..<Int(frameCount) {
+            let t = Double(frame) / format.sampleRate
+            let progress = t / duration
+
+            // Envolvente con ataque agresivo y disipación de plasma
+            let attack = min(1.0, progress * 45.0)
+            let decay = exp(-progress * 4.2)
+            let envelope = attack * decay
+
+            // Frecuencia descendente de sable con zumbido resonante de 110Hz
+            let baseFreq = 580.0 * exp(-progress * 1.8) + sin(t * 110.0 * 2.0 * .pi) * 45.0
+            let phase = 2.0 * Double.pi * baseFreq * t
+
+            // Armónicos densos característicos de hoja de plasma
+            let wave = sin(phase) 
+                     + 0.50 * sin(phase * 2.0) 
+                     + 0.30 * sin(phase * 3.0) 
+                     + 0.15 * sin(phase * 5.0)
+
+            // Chisporroteo de desintegración
+            let sparkNoise = Double.random(in: -1.0...1.0) * exp(-progress * 5.5) * 0.40
+
+            // Saturación suave para el grosor de sable
+            let combined = tanh((wave + sparkNoise) * 1.5) * envelope
+            channels[0][frame] = Float(combined * 0.90)
+        }
+        return buffer
+    }
+
+    // ⚡ Modo Furia / Dead Eye / Black Ops Slow-Mo Activation Sound
+    private func makeSlowMotionActivationBuffer() -> AVAudioPCMBuffer? {
+        let duration = 1.35
+        let frameCount = AVAudioFrameCount(format.sampleRate * duration)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
+              let channels = buffer.floatChannelData else {
+            return nil
+        }
+        buffer.frameLength = frameCount
+
+        for frame in 0..<Int(frameCount) {
+            let t = Double(frame) / format.sampleRate
+
+            // 1. Sub-Bass Drop ("BWWOOOMMMM") - 165Hz sweeping down to 34Hz
+            let bassFreq = 34.0 + 131.0 * exp(-t * 3.4)
+            let bassPhase = 2.0 * .pi * bassFreq * t
+            let bassEnv = min(1.0, t * 80.0) * exp(-t * 2.2)
+            let subBass = tanh((sin(bassPhase) + 0.40 * sin(bassPhase * 2.0)) * 2.2) * bassEnv
+
+            // 2. Vacuum Inhalation / Temporal Distortion Whoosh (t: 0.0 -> 0.38s)
+            var whoosh: Double = 0
+            if t < 0.38 {
+                let wProgress = t / 0.38
+                let wNoise = Double.random(in: -1.0...1.0)
+                let wFreq = 180.0 + 950.0 * pow(wProgress, 2.0)
+                let resonance = sin(2.0 * .pi * wFreq * t)
+                whoosh = (wNoise * 0.4 + resonance * 0.6) * pow(wProgress, 2.8) * 0.70
+            }
+
+            // 3. Ethereal "Dead Eye" Resonant Bell / Chime (432Hz & 864Hz harmonic ring)
+            var bellL: Double = 0
+            var bellR: Double = 0
+            if t >= 0.08 {
+                let bt = t - 0.08
+                let bEnv = min(1.0, bt * 120.0) * exp(-bt * 3.0)
+                let bPhase1 = 2.0 * .pi * 432.0 * bt
+                let bPhase2 = 2.0 * .pi * 864.0 * bt
+                let bPhaseDetune = 2.0 * .pi * 435.5 * bt
+                bellL = (sin(bPhase1) * 0.60 + sin(bPhase2) * 0.25) * bEnv
+                bellR = (sin(bPhaseDetune) * 0.60 + sin(bPhase2) * 0.25) * bEnv
+            }
+
+            // 4. Visceral Adrenaline Heartbeat Pulses (Thump 1 at 0.38s, Thump 2 at 0.78s)
+            var heart: Double = 0
+            for thumpTime in [0.38, 0.78] {
+                if t >= thumpTime && t < thumpTime + 0.25 {
+                    let ht = t - thumpTime
+                    let hFreq = 58.0 * exp(-ht * 8.0)
+                    let hEnv = sin(ht / 0.25 * .pi)
+                    heart += sin(2.0 * .pi * hFreq * ht) * hEnv * 0.85
+                }
+            }
+
+            let left = tanh(subBass * 0.90 + whoosh * 0.50 + bellL * 0.55 + heart * 0.80)
+            let right = tanh(subBass * 0.90 + whoosh * 0.50 + bellR * 0.55 + heart * 0.80)
+
+            channels[0][frame] = Float(left * 0.95)
+            channels[1][frame] = Float(right * 0.95)
+        }
+        return buffer
+    }
+
+    private func makeSlowMotionDeactivationBuffer() -> AVAudioPCMBuffer? {
+        let duration = 0.38
+        let frameCount = AVAudioFrameCount(format.sampleRate * duration)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
+              let channels = buffer.floatChannelData else {
+            return nil
+        }
+        buffer.frameLength = frameCount
+
+        for frame in 0..<Int(frameCount) {
+            let t = Double(frame) / format.sampleRate
+            let progress = t / duration
+
+            // Rising snap back to normal time: 45Hz sweeping to 320Hz
+            let freq = 45.0 + 275.0 * pow(progress, 2.2)
+            let phase = 2.0 * .pi * freq * t
+            let env = sin(progress * .pi)
+            let whoosh = sin(phase) * env
+            let snap = progress > 0.85 ? Double.random(in: -0.6...0.6) * (1.0 - progress) * 6.0 : 0
+
+            let val = Float(tanh((whoosh + snap) * 1.4) * 0.85)
+            channels[0][frame] = val
+            channels[1][frame] = val
         }
         return buffer
     }
