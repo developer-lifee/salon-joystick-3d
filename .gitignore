@@ -16,3 +16,5 @@ DerivedDataDevice/
 # Temporary & Log files
 *.log
 /tmp/
+Tools/SalonStudio/*.png
+

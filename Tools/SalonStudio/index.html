@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SalonStudio 3D - Inspector Visual de Rigging & Agua</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #070a0f;
+      --card-bg: rgba(13, 19, 28, 0.94);
+      --card-border: rgba(0, 229, 255, 0.25);
+      --accent-cyan: #00e5ff;
+      --accent-magenta: #ff007f;
+      --accent-yellow: #ffd600;
+      --accent-green: #00e676;
+      --text-main: #f0f4f8;
+      --text-muted: #8295a8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: 'Outfit', -apple-system, sans-serif;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+    }
+    #viewport-container {
+      flex: 1;
+      height: 100%;
+      position: relative;
+    }
+    #three-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    #sidebar {
+      width: 440px;
+      height: 100%;
+      background: var(--card-bg);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border-left: 1px solid var(--card-border);
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+      z-index: 10;
+      box-shadow: -15px 0 35px rgba(0,0,0,0.6);
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      padding-bottom: 14px;
+    }
+    .header h1 {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      letter-spacing: 0.5px;
+    }
+    .tag {
+      background: rgba(0, 229, 255, 0.15);
+      color: var(--accent-cyan);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      border: 1px solid rgba(0, 229, 255, 0.3);
+    }
+    .tabs {
+      display: flex;
+      gap: 8px;
+      background: rgba(0,0,0,0.4);
+      padding: 4px;
+      border-radius: 10px;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 10px 14px;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 13px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .tab-btn.active {
+      background: rgba(0, 229, 255, 0.25);
+      color: var(--accent-cyan);
+      box-shadow: 0 0 12px rgba(0, 229, 255, 0.3);
+    }
+    .panel {
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .panel.active {
+      display: flex;
+    }
+    .control-group {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .control-group h3 {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--accent-cyan);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .slider-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .slider-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      color: var(--text-main);
+    }
+    .slider-val {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--accent-cyan);
+      font-weight: 600;
+    }
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%;
+      background: rgba(255,255,255,0.1);
+      height: 6px;
+      border-radius: 3px;
+      outline: none;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--accent-cyan);
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(0, 229, 255, 0.8);
+      transition: transform 0.1s;
+    }
+    input[type=range]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+    .toggle-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+    }
+    .toggle-switch {
+      position: relative;
+      width: 44px;
+      height: 24px;
+    }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .slider-round {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: rgba(255,255,255,0.2);
+      transition: .3s;
+      border-radius: 24px;
+    }
+    .slider-round:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+    input:checked + .slider-round {
+      background-color: var(--accent-cyan);
+    }
+    input:checked + .slider-round:before {
+      transform: translateX(20px);
+    }
+    .preset-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .preset-btn {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: var(--text-main);
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .preset-btn:hover {
+      border-color: var(--accent-cyan);
+      background: rgba(0, 229, 255, 0.12);
+    }
+    .btn-action {
+      background: linear-gradient(135deg, #00b0ff, #00e5ff);
+      color: #050d18;
+      border: none;
+      padding: 13px 18px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 16px rgba(0, 229, 255, 0.35);
+    }
+    .btn-action:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 22px rgba(0, 229, 255, 0.55);
+    }
+    .status-badge {
+      font-size: 12px;
+      color: var(--accent-green);
+      font-weight: 600;
+      display: none;
+      text-align: center;
+      padding: 8px;
+      background: rgba(0, 230, 118, 0.1);
+      border-radius: 6px;
+      border: 1px solid rgba(0, 230, 118, 0.3);
+    }
+    .hud-overlay {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: rgba(7, 10, 15, 0.85);
+      backdrop-filter: blur(12px);
+      padding: 10px 16px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.12);
+      font-size: 13px;
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      pointer-events: auto;
+      z-index: 5;
+    }
+    .hud-item { display: flex; align-items: center; gap: 6px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-green); }
+    .camera-bar {
+      position: absolute;
+      bottom: 24px;
+      left: 20px;
+      display: flex;
+      gap: 8px;
+      z-index: 5;
+    }
+    .cam-btn {
+      background: rgba(13, 19, 28, 0.88);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(0, 229, 255, 0.3);
+      color: var(--text-main);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .cam-btn:hover {
+      background: rgba(0, 229, 255, 0.2);
+      border-color: var(--accent-cyan);
+      transform: translateY(-2px);
+    }
+    .legend {
+      display: flex;
+      gap: 12px;
+      font-size: 11px;
+      margin-top: 4px;
+    }
+    .legend-item { display: flex; align-items: center; gap: 4px; }
+    .color-box { width: 10px; height: 10px; border-radius: 2px; }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+  <div id="viewport-container">
+    <canvas id="three-canvas"></canvas>
+    
+    <!-- HUD Superior -->
+    <div class="hud-overlay">
+      <div class="hud-item"><span class="dot"></span> 3D Engine Activo</div>
+      <div class="hud-item" style="color: var(--text-muted)">Orbitar: Clic izq | Zoom: Rueda</div>
+    </div>
+
+    <!-- Barra de Vistas de Cámara Rápidas -->
+    <div class="camera-bar">
+      <button class="cam-btn" onclick="setCameraView('side')">👁️ Vista Lateral (Perfil)</button>
+      <button class="cam-btn" onclick="setCameraView('knees')">🦵 Detalle Rodillas</button>
+      <button class="cam-btn" onclick="setCameraView('front')">🪨 Vista Frontal Roca</button>
+      <button class="cam-btn" onclick="setCameraView('reset')">🔄 Órbita General</button>
+    </div>
+  </div>
+
+  <div id="sidebar">
+    <div class="header">
+      <div>
+        <h1>SalonStudio 3D</h1>
+        <div style="font-size: 12px; color: var(--text-muted)">Inspector Visual para Metal RT</div>
+      </div>
+      <span class="tag">Metal 3 Link</span>
+    </div>
+
+    <div class="tabs">
+      <button id="btn-tab-cover" class="tab-btn active" onclick="switchTab('tab-cover')">🪨 Rigging Cobertura</button>
+      <button id="btn-tab-water" class="tab-btn" onclick="switchTab('tab-water')">💧 Piscina & Agua</button>
+    </div>
+
+    <!-- Pestaña 1: Rigging y Cobertura GTA -->
+    <div id="tab-cover" class="panel active">
+      <div class="control-group">
+        <h3>🦴 Visualización de Articulaciones & Rigging</h3>
+        <div class="toggle-row">
+          <span>Huesos & Marcadores de Rodilla</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="toggleSkeleton" checked onchange="toggleSkeletonView()">
+            <span class="slider-round"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <span>Modo Rayos X (Cuerpo Translúcido)</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="toggleXRay" checked onchange="toggleXRayView()">
+            <span class="slider-round"></span>
+          </label>
+        </div>
+        <div class="legend">
+          <div class="legend-item"><span class="color-box" style="background:#ff007f"></span> Rodilla Hincada</div>
+          <div class="legend-item"><span class="color-box" style="background:#00e676"></span> Rodilla Adelante</div>
+          <div class="legend-item"><span class="color-box" style="background:#ffd600"></span> Cadera Central</div>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <h3>🦵 Articulación de Piernas</h3>
+        
+        <div class="slider-row">
+          <div class="slider-label"><span>Apertura de Cadera / Piernas (X)</span><span class="slider-val" id="val-legSpread">0.14m</span></div>
+          <input type="range" id="legSpread" min="0.06" max="0.28" step="0.01" value="0.14" oninput="updatePose()">
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-label"><span>Rodilla Adelante (Flexión)</span><span class="slider-val" id="val-kneeFrontAngle">65°</span></div>
+          <input type="range" id="kneeFrontAngle" min="20" max="110" step="1" value="65" oninput="updatePose()">
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-label"><span>Rodilla Hincada al Suelo</span><span class="slider-val" id="val-kneeKneelAngle">85°</span></div>
+          <input type="range" id="kneeKneelAngle" min="40" max="130" step="1" value="85" oninput="updatePose()">
+        </div>
+      </div>
+
+      <div class="control-group">
+        <h3>🥋 Torso & Centro de Gravedad</h3>
+        
+        <div class="slider-row">
+          <div class="slider-label"><span>Altura de Cadera (Y)</span><span class="slider-val" id="val-crouchY">0.45m</span></div>
+          <input type="range" id="crouchY" min="0.25" max="0.75" step="0.01" value="0.45" oninput="updatePose()">
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-label"><span>Inclinación de Espalda hacia la Roca</span><span class="slider-val" id="val-spineTilt">18°</span></div>
+          <input type="range" id="spineTilt" min="-10" max="45" step="1" value="18" oninput="updatePose()">
+        </div>
+      </div>
+
+      <div class="control-group">
+        <h3>🪨 Roca de Río Táctica</h3>
+        <div class="slider-row">
+          <div class="slider-label"><span>Radio de la Piedra</span><span class="slider-val" id="val-rockRadius">0.55m</span></div>
+          <input type="range" id="rockRadius" min="0.35" max="1.10" step="0.02" value="0.55" oninput="updateRock()">
+        </div>
+        <div class="slider-row">
+          <div class="slider-label"><span>Distancia del Jugador al Muro</span><span class="slider-val" id="val-rockDist">0.40m</span></div>
+          <input type="range" id="rockDist" min="0.15" max="0.80" step="0.02" value="0.40" oninput="updateRock()">
+        </div>
+      </div>
+
+      <button class="btn-action" onclick="saveCoverPose()">
+        💾 Guardar Postura en Swift
+      </button>
+      <div id="status-cover" class="status-badge">✅ Pose guardada en MetalRayRenderer.swift</div>
+    </div>
+
+    <!-- Pestaña 2: Piscina & Agua -->
+    <div id="tab-water" class="panel">
+      <div class="control-group">
+        <h3>🎨 Preajustes Rápidos de Agua</h3>
+        <div class="preset-grid">
+          <button class="preset-btn" onclick="applyWaterPreset('caribe')">🏝️ Caribeño</button>
+          <button class="preset-btn" onclick="applyWaterPreset('cyberpunk')">🌃 Neón Nocturno</button>
+          <button class="preset-btn" onclick="applyWaterPreset('emerald')">🌲 Esmeralda</button>
+          <button class="preset-btn" onclick="applyWaterPreset('crystal')">🌊 Olímpica Cristalina</button>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <h3>💧 Propiedades Ópticas del Agua</h3>
+        
+        <div class="slider-row">
+          <div class="slider-label"><span>Claridad / Transparencia</span><span class="slider-val" id="val-waterClarity">0.88</span></div>
+          <input type="range" id="waterClarity" min="0.2" max="1.0" step="0.02" value="0.88" oninput="updateWater()">
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-label"><span>Reflejos de Espejo</span><span class="slider-val" id="val-waterReflect">0.94</span></div>
+          <input type="range" id="waterReflect" min="0.2" max="1.0" step="0.02" value="0.94" oninput="updateWater()">
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-label"><span>Oleaje y Cáusticas</span><span class="slider-val" id="val-waterWaves">0.035</span></div>
+          <input type="range" id="waterWaves" min="0.005" max="0.08" step="0.002" value="0.035" oninput="updateWater()">
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-label"><span>Velocidad de Corriente</span><span class="slider-val" id="val-waterSpeed">1.2x</span></div>
+          <input type="range" id="waterSpeed" min="0.2" max="3.0" step="0.1" value="1.2" oninput="updateWater()">
+        </div>
+      </div>
+
+      <button class="btn-action" onclick="saveWaterSettings()">
+        💾 Sincronizar Shader de Agua
+      </button>
+      <div id="status-water" class="status-badge">✅ Configuración de agua guardada</div>
+    </div>
+  </div>
+
+  <script src="studio.js"></script>
+</body>
+</html>
