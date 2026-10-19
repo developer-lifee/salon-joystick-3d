@@ -498,12 +498,23 @@ kernel void traceToolLaser(
         ray cameraAimRay;
         cameraAimRay.origin = uniforms.cameraPosition.xyz;
         cameraAimRay.direction = normalize(uniforms.cameraForward.xyz);
-        cameraAimRay.max_distance = 30.0f;
+        cameraAimRay.max_distance = 45.0f;
         auto cameraAimHit = tracer.intersect(cameraAimRay, accelerationStructure, 0x05);
-        float3 aimTarget = cameraAimHit.type == intersection_type::none
-            ? cameraAimRay.origin + cameraAimRay.direction * cameraAimRay.max_distance
-            : cameraAimRay.origin + cameraAimRay.direction * cameraAimHit.distance;
-        direction = normalize(aimTarget - origin);
+        float3 aimTarget;
+        if (cameraAimHit.type != intersection_type::none) {
+            aimTarget = cameraAimRay.origin + cameraAimRay.direction * cameraAimHit.distance;
+        } else {
+            AnalyticalHit analytical = analyticalPatioIntersect(cameraAimRay);
+            if (analytical.hit) {
+                aimTarget = analytical.position;
+            } else {
+                aimTarget = cameraAimRay.origin + cameraAimRay.direction * cameraAimRay.max_distance;
+            }
+        }
+        float3 computedDir = normalize(aimTarget - origin);
+        if (length_squared(computedDir) > 0.001f) {
+            direction = computedDir;
+        }
     }
 
     ray laserRay;
@@ -565,6 +576,183 @@ kernel void traceToolLaser(
         ? secondaryRay.origin + secondaryRay.direction * secondaryRay.max_distance
         : secondaryRay.origin + secondaryRay.direction * secondaryHit.distance;
     result.reflectedEnd = float4(secondaryEnd, 1.0f);
+}
+
+struct FirstPersonHit {
+    bool hit;
+    float distance;
+    float3 normal;
+    float3 albedo;
+    float3 emission;
+};
+
+// Analytical intersection for first-person hands and swimming arms
+inline FirstPersonHit intersectFirstPersonViewModel(
+    ray r,
+    float3 camPos,
+    float3 cRight,
+    float3 cUp,
+    float3 cFwd,
+    float time,
+    bool isUnderwater,
+    float toolKind
+) {
+    FirstPersonHit result;
+    result.hit = false;
+    result.distance = 1e5f;
+    result.normal = float3(0, 1, 0);
+    result.albedo = float3(0.15f, 0.95f, 0.45f);
+    result.emission = float3(0.04f, 0.22f, 0.10f);
+
+    if (isUnderwater) {
+        // 🏊‍♂️ Breaststroke swimming arms in water
+        float strokePhase = time * 4.2f;
+        float sweep = sin(strokePhase);
+        float pull = cos(strokePhase);
+
+        // Left hand & forearm
+        float3 lHandCam = float3(
+            -0.22f - 0.12f * (1.0f - pull),
+            -0.18f + 0.08f * sweep,
+            0.42f + 0.18f * sweep
+        );
+        float3 lHandWorld = camPos + cRight * lHandCam.x + cUp * lHandCam.y + cFwd * lHandCam.z;
+
+        // Right hand & forearm
+        float3 rHandCam = float3(
+            0.22f + 0.12f * (1.0f - pull),
+            -0.18f + 0.08f * sweep,
+            0.42f + 0.18f * sweep
+        );
+        float3 rHandWorld = camPos + cRight * rHandCam.x + cUp * rHandCam.y + cFwd * rHandCam.z;
+
+        float handRadius = 0.065f;
+
+        // Left hand sphere
+        float3 ocL = r.origin - lHandWorld;
+        float bL = dot(ocL, r.direction);
+        float cL = dot(ocL, ocL) - handRadius * handRadius;
+        float discL = bL * bL - cL;
+        if (discL >= 0.0f) {
+            float tL = -bL - sqrt(discL);
+            if (tL > 0.08f && tL < result.distance) {
+                result.hit = true;
+                result.distance = tL;
+                result.normal = normalize((r.origin + r.direction * tL) - lHandWorld);
+            }
+        }
+
+        // Right hand sphere
+        float3 ocR = r.origin - rHandWorld;
+        float bR = dot(ocR, r.direction);
+        float cR = dot(ocR, ocR) - handRadius * handRadius;
+        float discR = bR * bR - cR;
+        if (discR >= 0.0f) {
+            float tR = -bR - sqrt(discR);
+            if (tR > 0.08f && tR < result.distance) {
+                result.hit = true;
+                result.distance = tR;
+                result.normal = normalize((r.origin + r.direction * tR) - rHandWorld);
+            }
+        }
+
+        // Forearm segments (connecting elbow to hand)
+        float3 lElbowWorld = camPos + cRight * -0.36f + cUp * -0.38f + cFwd * 0.18f;
+        float3 rElbowWorld = camPos + cRight * 0.36f + cUp * -0.38f + cFwd * 0.18f;
+
+        // Left forearm capsule
+        float3 baL = lHandWorld - lElbowWorld;
+        float3 oaL = r.origin - lElbowWorld;
+        float badaL = dot(baL, baL);
+        float bardL = dot(baL, r.direction);
+        float baoaL = dot(baL, oaL);
+        float rdoaL = dot(r.direction, oaL);
+        float oaoaL = dot(oaL, oaL);
+        float armRadius = 0.052f;
+
+        float aCapsL = badaL - bardL * bardL;
+        float bCapsL = badaL * rdoaL - baoaL * bardL;
+        float cCapsL = badaL * oaoaL - baoaL * baoaL - armRadius * armRadius * badaL;
+        float dCapsL = bCapsL * bCapsL - aCapsL * cCapsL;
+        if (dCapsL >= 0.0f && abs(aCapsL) > 1e-6f) {
+            float tCapsL = (-bCapsL - sqrt(dCapsL)) / aCapsL;
+            if (tCapsL > 0.08f && tCapsL < result.distance) {
+                float yCapsL = baoaL + tCapsL * bardL;
+                if (yCapsL > 0.0f && yCapsL < badaL) {
+                    result.hit = true;
+                    result.distance = tCapsL;
+                    float3 pHit = r.origin + r.direction * tCapsL;
+                    result.normal = normalize(pHit - (lElbowWorld + baL * (yCapsL / badaL)));
+                }
+            }
+        }
+
+        // Right forearm capsule
+        float3 baR = rHandWorld - rElbowWorld;
+        float3 oaR = r.origin - rElbowWorld;
+        float badaR = dot(baR, baR);
+        float bardR = dot(baR, r.direction);
+        float baoaR = dot(baR, oaR);
+        float rdoaR = dot(r.direction, oaR);
+        float oaoaR = dot(oaR, oaR);
+
+        float aCapsR = badaR - bardR * bardR;
+        float bCapsR = badaR * rdoaR - baoaR * bardR;
+        float cCapsR = badaR * oaoaR - baoaR * baoaR - armRadius * armRadius * badaR;
+        float dCapsR = bCapsR * bCapsR - aCapsR * cCapsR;
+        if (dCapsR >= 0.0f && abs(aCapsR) > 1e-6f) {
+            float tCapsR = (-bCapsR - sqrt(dCapsR)) / aCapsR;
+            if (tCapsR > 0.08f && tCapsR < result.distance) {
+                float yCapsR = baoaR + tCapsR * bardR;
+                if (yCapsR > 0.0f && yCapsR < badaR) {
+                    result.hit = true;
+                    result.distance = tCapsR;
+                    float3 pHit = r.origin + r.direction * tCapsR;
+                    result.normal = normalize(pHit - (rElbowWorld + baR * (yCapsR / badaR)));
+                }
+            }
+        }
+    } else {
+        // 🧍 First person idle/holding hands on land
+        float breathe = sin(time * 2.2f) * 0.008f;
+        float3 rHandCam = float3(0.24f, -0.22f + breathe, 0.44f);
+        float3 rHandWorld = camPos + cRight * rHandCam.x + cUp * rHandCam.y + cFwd * rHandCam.z;
+        float handRadius = 0.060f;
+
+        float3 ocR = r.origin - rHandWorld;
+        float bR = dot(ocR, r.direction);
+        float cR = dot(ocR, ocR) - handRadius * handRadius;
+        float discR = bR * bR - cR;
+        if (discR >= 0.0f) {
+            float tR = -bR - sqrt(discR);
+            if (tR > 0.08f && tR < result.distance) {
+                result.hit = true;
+                result.distance = tR;
+                result.normal = normalize((r.origin + r.direction * tR) - rHandWorld);
+            }
+        }
+
+        // Tool body in hand (Flashlight or Laser)
+        if (toolKind > 0.5f) {
+            float3 toolCenter = rHandWorld + cFwd * 0.09f + cUp * 0.02f;
+            float3 ocT = r.origin - toolCenter;
+            float bT = dot(ocT, r.direction);
+            float cT = dot(ocT, ocT) - 0.040f * 0.040f;
+            float discT = bT * bT - cT;
+            if (discT >= 0.0f) {
+                float tT = -bT - sqrt(discT);
+                if (tT > 0.08f && tT < result.distance) {
+                    result.hit = true;
+                    result.distance = tT;
+                    result.normal = normalize((r.origin + r.direction * tT) - toolCenter);
+                    result.albedo = toolKind > 1.5f ? float3(0.95f, 0.15f, 0.15f) : float3(0.92f, 0.85f, 0.20f);
+                    result.emission = toolKind > 1.5f ? float3(0.6f, 0.05f, 0.05f) : float3(0.4f, 0.35f, 0.05f);
+                }
+            }
+        }
+    }
+
+    return result;
 }
 
 kernel void raytracePatio(
@@ -641,22 +829,52 @@ kernel void raytracePatio(
         float roughness = 0.5f;
         float3 emission = float3(0.0f);
 
-        if (hit.type != intersection_type::none) {
-            if (bounce == 0) {
-                firstSurfaceDistance = hit.distance;
+        bool hitFP = false;
+        if (bounce == 0 && firstPerson) {
+            bool inWater = uniforms.cameraPosition.y < 0.35f || uniforms.cameraPosition.y <= -4.75f;
+            FirstPersonHit fpHit = intersectFirstPersonViewModel(
+                currentRay,
+                uniforms.cameraPosition.xyz,
+                normalize(uniforms.cameraRight.xyz),
+                normalize(uniforms.cameraUp.xyz),
+                normalize(uniforms.cameraForward.xyz),
+                uniforms.viewport.z,
+                inWater,
+                uniforms.toolParameters.x
+            );
+            if (fpHit.hit && (hit.type == intersection_type::none || fpHit.distance < hit.distance)) {
+                hitFP = true;
+                firstSurfaceDistance = fpHit.distance;
+                position = currentRay.origin + currentRay.direction * fpHit.distance;
+                normal = fpHit.normal;
+                if (dot(normal, currentRay.direction) > 0.0f) {
+                    normal = -normal;
+                }
+                albedo = fpHit.albedo;
+                emission = fpHit.emission;
+                kind = 0.0f;
+                baseReflectivity = 0.35f;
+                roughness = 0.22f;
             }
-            RTTriangleData material = *(const device RTTriangleData *)hit.primitive_data;
-            position = currentRay.origin + currentRay.direction * hit.distance;
-            normal = transformedNormal(material.normalRoughness.xyz, instances, hit.instance_id);
-            if (dot(normal, currentRay.direction) > 0.0f) {
-                normal = -normal;
-            }
-            kind = material.emissionKind.w;
-            emission = material.emissionKind.xyz;
-            albedo = material.albedoReflectivity.xyz;
-            baseReflectivity = material.albedoReflectivity.w;
-            roughness = material.normalRoughness.w;
-        } else {
+        }
+
+        if (!hitFP) {
+            if (hit.type != intersection_type::none) {
+                if (bounce == 0) {
+                    firstSurfaceDistance = hit.distance;
+                }
+                RTTriangleData material = *(const device RTTriangleData *)hit.primitive_data;
+                position = currentRay.origin + currentRay.direction * hit.distance;
+                normal = transformedNormal(material.normalRoughness.xyz, instances, hit.instance_id);
+                if (dot(normal, currentRay.direction) > 0.0f) {
+                    normal = -normal;
+                }
+                kind = material.emissionKind.w;
+                emission = material.emissionKind.xyz;
+                albedo = material.albedoReflectivity.xyz;
+                baseReflectivity = material.albedoReflectivity.w;
+                roughness = material.normalRoughness.w;
+            } else {
             bool isHardwareRT = uniforms.waterSimulation.w > 0.5f;
             if (isHardwareRT) {
                 accumulated += throughput * nightSky(currentRay.direction);
