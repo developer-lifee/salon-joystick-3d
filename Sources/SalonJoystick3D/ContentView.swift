@@ -348,6 +348,26 @@ struct ContentView: View {
                     }
                 }
                 .padding(.top, 2)
+
+                if model.heldTool == .mirror && model.toolStatus.activeRemaining > 0 {
+                    HStack(spacing: 12) {
+                        Label("ESCENARIO", systemImage: "camera.viewfinder")
+                            .font(.system(size: 10, weight: .black, design: .monospaced))
+                            .foregroundStyle(.white)
+                        Text("|")
+                            .font(.system(size: 11, weight: .black, design: .monospaced))
+                            .foregroundStyle(.cyan)
+                        Label("REFLEJO DEL ESPEJO (APUNTA AL RIVAL)", systemImage: "scope")
+                            .font(.system(size: 10, weight: .black, design: .monospaced))
+                            .foregroundStyle(.cyan)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 5)
+                    .background(.black.opacity(0.75), in: Capsule())
+                    .overlay(Capsule().stroke(Color.cyan.opacity(0.85), lineWidth: 1.5))
+                    .shadow(color: .cyan.opacity(0.45), radius: 6)
+                    .padding(.top, 3)
+                }
             }
             .padding(.top, 46)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -522,6 +542,24 @@ struct ContentView: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Pegarse a Cobertura en Piedras")
+                    } else if model.isUnderwater {
+                        Button {
+                            model.requestDive()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.down.circle.fill")
+                                    .font(.system(size: 13, weight: .bold))
+                                Text("Bucear")
+                                    .font(.system(size: 11, weight: .bold))
+                            }
+                            .foregroundStyle(.cyan)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color.black.opacity(0.65), in: Capsule())
+                            .overlay(Capsule().stroke(Color.cyan.opacity(0.8), lineWidth: 1.5))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Sumergirse hacia el fondo del agua")
                     }
                 }
 
@@ -908,6 +946,14 @@ final class GameModel: ObservableObject {
         audio.playLaserIgnition()
     }
 
+    @Published var isUnderwater = false
+    @Published private(set) var diveRequestID = 0
+
+    func requestDive() {
+        diveRequestID &+= 1
+        audio.playSwimStrokeSound(intensity: 0.95)
+    }
+
     func updateCoverStatus(isNear: Bool) {
         self.isNearCoverRock = isNear
         if !isNear && isCoverActive {
@@ -977,6 +1023,7 @@ final class GameModel: ObservableObject {
         }
         if playerHealth <= 0 && !isDefeated {
             isDefeated = true
+            heldTool = .none
             audio.playRobloxOofDefeatSound()
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
                 self?.respawnPlayer()
@@ -986,6 +1033,7 @@ final class GameModel: ObservableObject {
 
     func respawnPlayer() {
         playerHealth = 100.0
+        playerScore = 0
         isDefeated = false
         heldTool = .none
         currentWave = 1
@@ -4087,12 +4135,16 @@ struct MirrorShieldJoystickButton: View {
                 .onChanged { value in
                     if model.heldTool != .mirror {
                         model.heldTool = .mirror
+                    } else if model.toolStatus.activeRemaining <= 0.01 && model.toolStatus.cooldownRemaining <= 0.01 {
+                        // Re-activar inmediatamente el espejo si ya terminó la recarga sin obligar a cambiar de herramienta
+                        model.heldTool = .flashlight
+                        model.heldTool = .mirror
                     }
-                    let maxRadius: CGFloat = 20.0
+                    let maxRadius: CGFloat = 28.0
                     let dx = max(-maxRadius, min(maxRadius, value.translation.width))
                     let dy = max(-maxRadius, min(maxRadius, value.translation.height))
                     dragOffset = CGSize(width: dx, height: dy)
-                    model.shieldAngleOffset = CGVector(dx: dx / maxRadius, dy: dy / maxRadius)
+                    model.shieldAngleOffset = CGVector(dx: -(dx / maxRadius) * 1.25, dy: -(dy / maxRadius) * 1.25)
                 }
                 .onEnded { _ in
                     dragOffset = .zero

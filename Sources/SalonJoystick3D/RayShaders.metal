@@ -485,16 +485,18 @@ kernel void traceToolLaser(
     result.primaryStart = float4(origin, 1.0f);
     result.primaryEnd = float4(origin, 0.0f);
     result.reflectedEnd = float4(origin, 0.0f);
-    if (uniforms.toolParameters.x < 1.5f || uniforms.toolParameters.x > 2.5f) {
+    if (uniforms.toolParameters.x < 1.5f) {
         return;
     }
+
+    bool isMirrorTool = (uniforms.toolParameters.x > 2.5f);
 
     intersector<triangle_data, instancing> tracer;
     tracer.assume_geometry_type(geometry_type::triangle);
     tracer.force_opacity(forced_opacity::opaque);
     tracer.accept_any_intersection(false);
 
-    if (uniforms.waterSimulation.z < 0.5f) {
+    if (!isMirrorTool && uniforms.waterSimulation.z < 0.5f) {
         ray cameraAimRay;
         cameraAimRay.origin = uniforms.cameraPosition.xyz;
         cameraAimRay.direction = normalize(uniforms.cameraForward.xyz);
@@ -518,10 +520,10 @@ kernel void traceToolLaser(
     }
 
     ray laserRay;
-    laserRay.origin = origin;
+    laserRay.origin = isMirrorTool ? (origin + direction * 0.14f) : origin;
     laserRay.direction = direction;
     laserRay.max_distance = 30.0f;
-    auto hit = tracer.intersect(laserRay, accelerationStructure, 0x05);
+    auto hit = tracer.intersect(laserRay, accelerationStructure, isMirrorTool ? 0x01 : 0x05);
     if (hit.type == intersection_type::none) {
         AnalyticalHit analytical = analyticalPatioIntersect(laserRay);
         if (analytical.hit) {
@@ -584,9 +586,7 @@ struct FirstPersonHit {
     float3 normal;
     float3 albedo;
     float3 emission;
-};
-
-// Analytical intersection for first-person hands and swimming arms
+};// Analytical intersection for first-person hands and swimming arms
 inline FirstPersonHit intersectFirstPersonViewModel(
     ray r,
     float3 camPos,
@@ -595,38 +595,52 @@ inline FirstPersonHit intersectFirstPersonViewModel(
     float3 cFwd,
     float time,
     bool isUnderwater,
-    float toolKind
+    float toolKind,
+    float swimSpeed
 ) {
     FirstPersonHit result;
     result.hit = false;
     result.distance = 1e5f;
     result.normal = float3(0, 1, 0);
-    result.albedo = float3(0.15f, 0.95f, 0.45f);
-    result.emission = float3(0.04f, 0.22f, 0.10f);
+    result.albedo = float3(0.20f, 0.88f, 0.28f);
+    result.emission = float3(0.03f, 0.16f, 0.06f);
 
     if (isUnderwater) {
-        // 🏊‍♂️ Breaststroke swimming arms in water
-        float strokePhase = time * 4.2f;
-        float sweep = sin(strokePhase);
-        float pull = cos(strokePhase);
+        float3 lHandCam, rHandCam;
+        float3 lElbowCam, rElbowCam;
 
-        // Left hand & forearm
-        float3 lHandCam = float3(
-            -0.22f - 0.12f * (1.0f - pull),
-            -0.18f + 0.08f * sweep,
-            0.42f + 0.18f * sweep
-        );
+        if (swimSpeed < 0.12f) {
+            // 🌊 Modo Flotación Relajada en Reposo (Treading Water / Sculling Idle)
+            float floatBob = sin(time * 1.6f) * 0.022f;
+            float scull = cos(time * 1.6f) * 0.028f;
+            lHandCam = float3(-0.28f - scull, -0.26f + floatBob, 0.36f + floatBob * 0.5f);
+            rHandCam = float3( 0.28f + scull, -0.26f + floatBob, 0.36f + floatBob * 0.5f);
+            lElbowCam = float3(-0.35f, -0.38f + floatBob * 0.5f, 0.18f);
+            rElbowCam = float3( 0.35f, -0.38f + floatBob * 0.5f, 0.18f);
+        } else {
+            // 🏊‍♂️ Brazada Anatómica de Braza (Natural Dynamic Breaststroke Cycle)
+            float strokeRate = 2.8f + swimSpeed * 1.1f;
+            float strokeT = fmod(time * strokeRate, 6.2831853f);
+            float extension = sin(strokeT);
+            float reachZ = 0.38f + 0.14f * extension;
+            float sweepY = -0.20f - 0.08f * saturate(-extension);
+            float spreadX = 0.14f + 0.18f * saturate(-extension * 0.8f + 0.4f);
+
+            lHandCam = float3(-spreadX, sweepY, reachZ);
+            rHandCam = float3( spreadX, sweepY, reachZ);
+
+            float elbowFlex = saturate(-extension);
+            lElbowCam = float3(-0.32f - elbowFlex * 0.10f, -0.34f + elbowFlex * 0.06f, 0.18f + elbowFlex * 0.04f);
+            rElbowCam = float3( 0.32f + elbowFlex * 0.10f, -0.34f + elbowFlex * 0.06f, 0.18f + elbowFlex * 0.04f);
+        }
+
         float3 lHandWorld = camPos + cRight * lHandCam.x + cUp * lHandCam.y + cFwd * lHandCam.z;
-
-        // Right hand & forearm
-        float3 rHandCam = float3(
-            0.22f + 0.12f * (1.0f - pull),
-            -0.18f + 0.08f * sweep,
-            0.42f + 0.18f * sweep
-        );
         float3 rHandWorld = camPos + cRight * rHandCam.x + cUp * rHandCam.y + cFwd * rHandCam.z;
+        float3 lElbowWorld = camPos + cRight * lElbowCam.x + cUp * lElbowCam.y + cFwd * lElbowCam.z;
+        float3 rElbowWorld = camPos + cRight * rElbowCam.x + cUp * rElbowCam.y + cFwd * rElbowCam.z;
 
-        float handRadius = 0.065f;
+        float handRadius = 0.055f;
+        float armRadius = 0.046f;
 
         // Left hand sphere
         float3 ocL = r.origin - lHandWorld;
@@ -656,10 +670,6 @@ inline FirstPersonHit intersectFirstPersonViewModel(
             }
         }
 
-        // Forearm segments (connecting elbow to hand)
-        float3 lElbowWorld = camPos + cRight * -0.36f + cUp * -0.38f + cFwd * 0.18f;
-        float3 rElbowWorld = camPos + cRight * 0.36f + cUp * -0.38f + cFwd * 0.18f;
-
         // Left forearm capsule
         float3 baL = lHandWorld - lElbowWorld;
         float3 oaL = r.origin - lElbowWorld;
@@ -668,7 +678,6 @@ inline FirstPersonHit intersectFirstPersonViewModel(
         float baoaL = dot(baL, oaL);
         float rdoaL = dot(r.direction, oaL);
         float oaoaL = dot(oaL, oaL);
-        float armRadius = 0.052f;
 
         float aCapsL = badaL - bardL * bardL;
         float bCapsL = badaL * rdoaL - baoaL * bardL;
@@ -783,7 +792,48 @@ kernel void raytracePatio(
                                      uniforms.cameraForward.xyz);
 
     bool isSplitScreen = uniforms.toolParameters.w > 0.5f;
-    if (isSplitScreen) {
+    bool isMirrorSplit = (uniforms.toolParameters.x > 2.5f);
+    bool isMirrorViewport = false;
+    float2 mirrorLocalUV = float2(0.0f);
+
+    if (isMirrorSplit) {
+        uint halfWidth = width / 2;
+        if (abs(int(tid.x) - int(halfWidth)) <= 3) {
+            bool deflecting = (uniforms.toolParameters.y > 1.5f);
+            half4 divColor = deflecting ? half4(0.15h, 1.0h, 0.72h, 1.0h) : half4(0.08h, 0.88h, 1.0h, 1.0h);
+            output.write(divColor, tid);
+            return;
+        }
+        isMirrorViewport = (tid.x >= halfWidth);
+        float subScreenWidth = float(halfWidth);
+        float localX = isMirrorViewport ? float(tid.x - halfWidth) : float(tid.x);
+        mirrorLocalUV = float2(((localX + 0.5f) / subScreenWidth) * 2.0f - 1.0f, uv.y);
+
+        if (!isMirrorViewport) {
+            // Mitad Izquierda: Vista del Escenario centrada en el jugador y el escudo espejo
+            float arenaU = mirrorLocalUV.x * 0.56f;
+            currentRay.origin = uniforms.cameraPosition.xyz;
+            currentRay.direction = normalize(arenaU * uniforms.cameraRight.xyz +
+                                             uv.y * uniforms.cameraUp.xyz +
+                                             uniforms.cameraForward.xyz);
+        } else {
+            // Mitad Derecha: Vista Óptica en Vivo desde el Reflejo del Espejo
+            firstPerson = false;
+            float3 mirrorForward = normalize(uniforms.toolDirection.xyz);
+            float3 mirrorRight = cross(mirrorForward, float3(0.0f, 1.0f, 0.0f));
+            if (length_squared(mirrorRight) < 1e-4f) {
+                mirrorRight = float3(1.0f, 0.0f, 0.0f);
+            } else {
+                mirrorRight = normalize(mirrorRight);
+            }
+            float3 mirrorUp = normalize(cross(mirrorRight, mirrorForward));
+            float halfAspect = (subScreenWidth / max(1.0f, float(height))) * 0.50f;
+            currentRay.origin = uniforms.toolOrigin.xyz + mirrorForward * 0.14f;
+            currentRay.direction = normalize(mirrorLocalUV.x * mirrorRight * halfAspect +
+                                             mirrorLocalUV.y * mirrorUp * 0.50f +
+                                             mirrorForward);
+        }
+    } else if (isSplitScreen) {
         uint halfHeight = height / 2;
         bool isBottomViewport = (tid.y >= halfHeight);
         float subScreenHeight = float(halfHeight);
@@ -807,6 +857,7 @@ kernel void raytracePatio(
     }
 
     currentRay.max_distance = 80.0f;
+    float3 primaryOrigin = currentRay.origin;
     float3 primaryDirection = currentRay.direction;
     float firstSurfaceDistance = currentRay.max_distance;
 
@@ -819,7 +870,7 @@ kernel void raytracePatio(
 
     for (uint bounce = 0; bounce < 3; ++bounce) {
         tracer.accept_any_intersection(false);
-        uint rayMask = bounce == 0 && firstPerson ? 0x05 : 0x07;
+        uint rayMask = (bounce == 0 && isMirrorViewport) ? 0x01 : (bounce == 0 && firstPerson ? 0x05 : 0x07);
         auto hit = tracer.intersect(currentRay, accelerationStructure, rayMask);
         float3 position;
         float3 normal;
@@ -840,7 +891,8 @@ kernel void raytracePatio(
                 normalize(uniforms.cameraForward.xyz),
                 uniforms.viewport.z,
                 inWater,
-                uniforms.toolParameters.x
+                uniforms.toolParameters.x,
+                max(0.0f, uniforms.waterSimulation.z - 1.0f)
             );
             if (fpHit.hit && (hit.type == intersection_type::none || fpHit.distance < hit.distance)) {
                 hitFP = true;
@@ -896,7 +948,7 @@ kernel void raytracePatio(
                     float discTorso = bTorso * bTorso - cTorso;
                     if (discTorso > 0.0f) {
                         float tTorso = -bTorso - sqrt(discTorso);
-                        if (tTorso > 0.01f && tTorso < analytical.distance) {
+                        if (tTorso > 0.32f && tTorso < analytical.distance) {
                             analytical.hit = true;
                             analytical.distance = tTorso;
                             analytical.position = currentRay.origin + currentRay.direction * tTorso;
@@ -914,7 +966,7 @@ kernel void raytracePatio(
                     float discHead = bHead * bHead - cHead;
                     if (discHead > 0.0f) {
                         float tHead = -bHead - sqrt(discHead);
-                        if (tHead > 0.01f && tHead < analytical.distance) {
+                        if (tHead > 0.32f && tHead < analytical.distance) {
                             analytical.hit = true;
                             analytical.distance = tHead;
                             analytical.position = currentRay.origin + currentRay.direction * tHead;
@@ -932,7 +984,7 @@ kernel void raytracePatio(
                     float discPack = bPack * bPack - cPack;
                     if (discPack > 0.0f) {
                         float tPack = -bPack - sqrt(discPack);
-                        if (tPack > 0.01f && tPack < analytical.distance) {
+                        if (tPack > 0.32f && tPack < analytical.distance) {
                             analytical.hit = true;
                             analytical.distance = tPack;
                             analytical.position = currentRay.origin + currentRay.direction * tPack;
@@ -956,6 +1008,7 @@ kernel void raytracePatio(
             albedo = analytical.albedo;
             kind = analytical.kind;
             baseReflectivity = (kind == 2.0f) ? 0.35f : 0.08f;
+        }
         }
 
         bool poolWaterSurface = kind > 1.5f && kind < 2.5f;
@@ -1291,7 +1344,7 @@ kernel void raytracePatio(
             float3 pEndActual = pStart + pDir * primaryCurrentLen;
 
             float primaryBeam = laserBeamIntensity(
-                uniforms.cameraPosition.xyz,
+                primaryOrigin,
                 primaryDirection,
                 firstSurfaceDistance,
                 pStart,
@@ -1313,7 +1366,7 @@ kernel void raytracePatio(
                     float3 rEndActual = rStart + rDir * refCurrentLen;
 
                     reflectedBeam = laserBeamIntensity(
-                        uniforms.cameraPosition.xyz,
+                        primaryOrigin,
                         primaryDirection,
                         firstSurfaceDistance,
                         rStart,
@@ -1324,7 +1377,7 @@ kernel void raytracePatio(
             }
 
             // 🔴 Slow-Motion Photon Pulse Head (Leading edge photon packet)
-            float3 hitPoint = uniforms.cameraPosition.xyz + primaryDirection * firstSurfaceDistance;
+            float3 hitPoint = primaryOrigin + primaryDirection * firstSurfaceDistance;
             float distToPhoton = distance(hitPoint, photonFrontPos);
             float photonPulse = 1.0f - smoothstep(0.04f, 0.28f, distToPhoton);
             float photonGlow = 1.0f - smoothstep(0.01f, 0.65f, distToPhoton);
@@ -1333,11 +1386,36 @@ kernel void raytracePatio(
                          + float3(18.0f, 1.2f, 0.3f) * photonPulse
                          + float3(4.5f, 0.4f, 0.1f) * photonGlow;
         }
+    } else if (uniforms.toolParameters.x > 2.5f && laserResult.primaryEnd.w > 0.5f) {
+        // 🛡️✨ Haz Táctico del Espejo: Línea guía cian + Rayo Reflejado Sobrecargado Cian-Esmeralda
+        float3 mStart = laserResult.primaryStart.xyz;
+        float3 mEnd = laserResult.primaryEnd.xyz;
+        float mirrorBeam = laserBeamIntensity(
+            primaryOrigin,
+            primaryDirection,
+            firstSurfaceDistance,
+            mStart,
+            mEnd
+        );
+        float3 hitPoint = primaryOrigin + primaryDirection * firstSurfaceDistance;
+        float distToTarget = distance(hitPoint, mEnd);
+        float impactSpot = 1.0f - smoothstep(0.03f, 0.28f, distToTarget);
+        float impactGlow = 1.0f - smoothstep(0.02f, 0.72f, distToTarget);
+        bool isDeflecting = (uniforms.toolParameters.y > 1.5f);
+
+        if (isDeflecting) {
+            accumulated += float3(0.18f, 11.5f, 9.2f) * (mirrorBeam * 1.15f)
+                         + float3(0.45f, 20.0f, 15.0f) * impactSpot
+                         + float3(0.12f, 5.5f, 4.8f) * impactGlow;
+        } else {
+            accumulated += float3(0.08f, 3.6f, 5.2f) * (mirrorBeam * 0.58f)
+                         + float3(0.15f, 7.5f, 9.5f) * impactSpot;
+        }
     }
 
     if (laserResult.bot0End.w > 0.5f) {
         float botBeam = laserBeamIntensity(
-            uniforms.cameraPosition.xyz,
+            primaryOrigin,
             primaryDirection,
             firstSurfaceDistance,
             laserResult.bot0Start.xyz,
@@ -1348,7 +1426,7 @@ kernel void raytracePatio(
 
     if (laserResult.bot1End.w > 0.5f) {
         float botBeam = laserBeamIntensity(
-            uniforms.cameraPosition.xyz,
+            primaryOrigin,
             primaryDirection,
             firstSurfaceDistance,
             laserResult.bot1Start.xyz,
@@ -1359,7 +1437,7 @@ kernel void raytracePatio(
 
     if (laserResult.bot2End.w > 0.5f) {
         float botBeam = laserBeamIntensity(
-            uniforms.cameraPosition.xyz,
+            primaryOrigin,
             primaryDirection,
             firstSurfaceDistance,
             laserResult.bot2Start.xyz,
@@ -1370,7 +1448,7 @@ kernel void raytracePatio(
 
     if (laserResult.bot3End.w > 0.5f) {
         float botBeam = laserBeamIntensity(
-            uniforms.cameraPosition.xyz,
+            primaryOrigin,
             primaryDirection,
             firstSurfaceDistance,
             laserResult.bot3Start.xyz,
@@ -1381,13 +1459,37 @@ kernel void raytracePatio(
 
     if (laserResult.bot4End.w > 0.5f) {
         float botBeam = laserBeamIntensity(
-            uniforms.cameraPosition.xyz,
+            primaryOrigin,
             primaryDirection,
             firstSurfaceDistance,
             laserResult.bot4Start.xyz,
             laserResult.bot4End.xyz
         );
         accumulated += float3(9.5f, 0.08f, 0.02f) * (botBeam * 0.95f);
+    }
+
+    if (isMirrorViewport) {
+        // 🪞 Tinte óptico de cristal de espejo y Retícula de Puntería de Talento en la mitad derecha
+        bool isDeflecting = (uniforms.toolParameters.y > 1.5f);
+        float3 mirrorTint = isDeflecting ? float3(0.88f, 1.12f, 1.05f) : float3(0.86f, 1.04f, 1.14f);
+        accumulated *= mirrorTint;
+
+        float aspectHalf = (float(width) * 0.5f) / max(1.0f, float(height));
+        float2 reticlePos = float2(mirrorLocalUV.x * aspectHalf, mirrorLocalUV.y);
+        float rDist = length(reticlePos);
+        float ring = smoothstep(0.012f, 0.003f, abs(rDist - 0.075f));
+        float centerDot = 1.0f - smoothstep(0.005f, 0.014f, rDist);
+        float crossH = (abs(reticlePos.y) < 0.0045f && abs(reticlePos.x) > 0.028f && abs(reticlePos.x) < 0.125f) ? 1.0f : 0.0f;
+        float crossV = (abs(reticlePos.x) < 0.0045f && abs(reticlePos.y) > 0.028f && abs(reticlePos.y) < 0.125f) ? 1.0f : 0.0f;
+        float reticleMask = saturate(ring + centerDot + (crossH + crossV) * 0.85f);
+        float3 reticleColor = isDeflecting ? float3(0.20f, 8.0f, 4.5f) : float3(0.10f, 4.5f, 6.5f);
+        accumulated = mix(accumulated, reticleColor, reticleMask * 0.85f);
+
+        // Borde biselado de espejo en el contorno de la mitad derecha
+        float edgeDist = max(abs(mirrorLocalUV.x), abs(mirrorLocalUV.y));
+        if (edgeDist > 0.965f) {
+            accumulated += isDeflecting ? float3(0.15f, 4.5f, 3.0f) : float3(0.08f, 2.5f, 3.8f);
+        }
     }
 
     // 🌊 Complete Aquatic Realm: Surface Pool & Subterranean Ocean Chamber

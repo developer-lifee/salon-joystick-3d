@@ -916,7 +916,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private var handledJumpRequestID = 0
     private var jumpQueued = false
     private var cameraYaw: Float = 0
-    private var orbitPitch: Float = 0.36
+    private var orbitPitch: Float = 0.22
     private var firstPersonPitch: Float = 0
     private var manualCameraTimer: Float = 0
     private var playerPosition = SIMD3<Float>(3.8, 0, 3.8)
@@ -1168,10 +1168,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private var shieldYawOffset: Float = 0
     private var shieldPitchOffset: Float = 0
     var onCoverStatusUpdate: ((Bool) -> Void)?
+    var onUnderwaterStatusUpdate: ((Bool) -> Void)?
 
     private var handledWarpRequestID = 0
     private var handledResetRequestID = 0
     private var handledRespawnRequestID = 0
+    private var handledDiveRequestID = 0
+    private var diveQueued = false
 
     func resetSimulation() {
         playerPosition = SIMD3<Float>(3.8, 0, 3.8)
@@ -1179,7 +1182,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         verticalVelocity = 0
         playerYaw = .pi
         cameraYaw = 0
-        orbitPitch = 0.36
+        orbitPitch = 0.22
         firstPersonPitch = 0
         isSlidingOnToboggan = false
 
@@ -1219,7 +1222,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         resetRequestID: Int = 0,
         isCoverActive: Bool = false,
         shieldAngleOffset: CGVector = .zero,
-        respawnRequestID: Int = 0
+        respawnRequestID: Int = 0,
+        diveRequestID: Int = 0
     ) {
         self.joystick = joystick
         self.cameraMode = cameraMode
@@ -1229,11 +1233,15 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         self.isSlowMotionActive = isSlowMotionActive
         self.isGamePaused = isPaused
         self.isCoverActive = isCoverActive
-        self.shieldYawOffset = Float(shieldAngleOffset.dx) * 0.75
-        self.shieldPitchOffset = -Float(shieldAngleOffset.dy) * 0.60
+        self.shieldYawOffset = Float(shieldAngleOffset.dx) * 0.90
+        self.shieldPitchOffset = -Float(shieldAngleOffset.dy) * 0.90
         if handledJumpRequestID != jumpRequestID {
             handledJumpRequestID = jumpRequestID
             jumpQueued = true
+        }
+        if handledDiveRequestID != diveRequestID {
+            handledDiveRequestID = diveRequestID
+            diveQueued = true
         }
         if handledWarpRequestID != warpRequestID {
             handledWarpRequestID = warpRequestID
@@ -1250,7 +1258,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             horizontalVelocity = .zero
             verticalVelocity = 0
             isSlidingOnToboggan = false
-            orbitPitch = 0.36
+            orbitPitch = 0.22
         }
     }
 
@@ -1260,13 +1268,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if cameraMode == .firstPerson {
             firstPersonPitch = max(-1.35, min(1.35, firstPersonPitch - deltaY * 0.0045))
         } else {
-            orbitPitch = max(-1.10, min(1.25, orbitPitch - deltaY * 0.0045))
+            orbitPitch = max(-0.25, min(0.68, orbitPitch - deltaY * 0.0045))
         }
     }
 
     func resetCamera() {
         cameraYaw = playerYaw + .pi
-        orbitPitch = 0.36
+        orbitPitch = 0.22
         firstPersonPitch = 0
     }
 
@@ -1373,6 +1381,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 if let staticAS = staticMesh.accelerationStructure { laserEncoder.useResource(staticAS, usage: .read) }
                 if let waterAS = waterMesh.accelerationStructure { laserEncoder.useResource(waterAS, usage: .read) }
                 if let floatAS = floatMesh.accelerationStructure { laserEncoder.useResource(floatAS, usage: .read) }
+                if let npcAS = npcMesh.accelerationStructure { laserEncoder.useResource(npcAS, usage: .read) }
+                if let shieldAS = mirrorShieldMesh.accelerationStructure { laserEncoder.useResource(shieldAS, usage: .read) }
                 laserEncoder.dispatchThreads(
                     MTLSize(width: 1, height: 1, depth: 1),
                     threadsPerThreadgroup: MTLSize(width: 1, height: 1, depth: 1)
@@ -1399,6 +1409,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 if let playerClimbAS = playerClimbMesh.accelerationStructure { encoder.useResource(playerClimbAS, usage: .read) }
                 if let waterAS = waterMesh.accelerationStructure { encoder.useResource(waterAS, usage: .read) }
                 if let floatAS = floatMesh.accelerationStructure { encoder.useResource(floatAS, usage: .read) }
+                if let npcAS = npcMesh.accelerationStructure { encoder.useResource(npcAS, usage: .read) }
+                if let shieldAS = mirrorShieldMesh.accelerationStructure { encoder.useResource(shieldAS, usage: .read) }
                 encoder.dispatchThreads(
                     MTLSize(width: drawable.texture.width, height: drawable.texture.height, depth: 1),
                     threadsPerThreadgroup: MTLSize(width: 8, height: 8, depth: 1)
@@ -1471,6 +1483,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let isSubterranean = playerPosition.y <= -4.75
         let currentGroundHeight = isSubterranean ? -11.0 : groundHeight(at: playerPosition, insidePool: currentlyInPool)
         let currentlyOnFloat = currentlyInPool && isStandingOnFloat(playerPosition)
+        onUnderwaterStatusUpdate?(currentlyInPool && !currentlyOnFloat || isSubterranean)
         let isUnderFire = pendingDamageAccumulator > 0
         let isDivingInPool = currentlyInPool && !currentlyOnFloat && playerPosition.y <= -0.65
         let baseSpeed: Float = isDivingInPool ? 4.2 : (currentlyInPool && !currentlyOnFloat ? 3.6 : (isSubterranean ? 4.6 : 4.0))
@@ -1493,7 +1506,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 isClimbingLadder = true
                 let snapT = min(1.0, dt * 14.0)
                 playerPosition.x += (-3.80 - playerPosition.x) * snapT
-                playerPosition.z += (-16.46 - playerPosition.z) * snapT
+                playerPosition.z += (-16.02 - playerPosition.z) * snapT
                 playerYaw = Float.pi
                 horizontalVelocity = .zero
 
@@ -1699,24 +1712,33 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let isSubterraneanSubmerged = playerPosition.y <= -4.75 || proposed.y <= -4.75
         let onTrampolineBoard = playerPosition.x >= 0.7 && playerPosition.x <= 2.1 && playerPosition.z >= -6.9 && playerPosition.z <= -3.7 && playerPosition.y >= 2.7
         // Ángulo vertical de mirada para control de buceo 3D:
-        // Incorpora zona muerta para que avanzar con joystick nade horizontalmente sin elevarte
-        let rawDiveAngle: Float = cameraMode == .firstPerson ? firstPersonPitch : -(orbitPitch - 0.36)
         let divePitch: Float
-        if abs(rawDiveAngle) > 0.16 {
-            divePitch = rawDiveAngle - (rawDiveAngle > 0 ? 0.16 : -0.16)
+        if cameraMode == .firstPerson {
+            divePitch = firstPersonPitch
         } else {
-            divePitch = 0
+            // En 3ra persona: al mirar hacia abajo con la cámara (orbitPitch > 0.22), diff es fuertemente negativo para sumergirse
+            let diff = -(orbitPitch - 0.22)
+            divePitch = diff * 2.2
+        }
+
+        if diveQueued {
+            diveQueued = false
+            if willBeInPool || isSubterraneanSubmerged {
+                verticalVelocity = -3.2 // Impulso inmediato de inmersión / buceo hacia el fondo
+                audio.playSwimStrokeSound(intensity: 0.95)
+                pendingWaterImpulse = SIMD4<Float>(playerPosition.x, playerPosition.z, -0.75, 1)
+            }
         }
 
         if jumpQueued {
             jumpQueued = false
             if isSubterraneanSubmerged {
-                verticalVelocity = 2.4 // Impulso suave y controlado de aletazo submarino
+                verticalVelocity = 2.8 // Impulso suave y controlado de aletazo submarino
                 audio.playSwimStrokeSound(intensity: 0.85)
             } else if willBeInPool && !willBeOnFloat {
                 if proposed.y <= -0.55 {
                     // En inmersión profunda: brazada hacia arriba
-                    verticalVelocity = 2.6
+                    verticalVelocity = 2.8
                     audio.playSwimStrokeSound(intensity: 0.85)
                     pendingWaterImpulse = SIMD4<Float>(playerPosition.x, playerPosition.z, -0.60, 1)
                 } else {
@@ -1735,8 +1757,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if isSubterraneanSubmerged {
             // 🤿 Modo Buceo 3D Subterráneo: natación libre sin empujes parásitos hacia arriba
             if magnitude > 0.08 {
-                let targetVerticalSwim = sin(divePitch) * movementSpeed * magnitude * 0.90
-                verticalVelocity += (targetVerticalSwim - verticalVelocity) * min(1.0, dt * 4.5)
+                let targetVerticalSwim = sin(divePitch) * movementSpeed * magnitude * 0.95
+                verticalVelocity += (targetVerticalSwim - verticalVelocity) * min(1.0, dt * 5.0)
                 swimStrokeTimer -= dt
                 if swimStrokeTimer <= 0 {
                     audio.playSwimStrokeSound(intensity: 0.60 * magnitude)
@@ -1744,7 +1766,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 }
             } else {
                 // Flotabilidad neutra sin botar al jugador hacia arriba
-                verticalVelocity *= exp(-dt * 3.0)
+                verticalVelocity *= exp(-dt * 2.5)
                 swimStrokeTimer = min(swimStrokeTimer, 0.12)
             }
             horizontalVelocity *= exp(-dt * 2.0)
@@ -1752,9 +1774,19 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             // 🤿 Piscina Ultra Profunda (-4.50m) con Modo Buceo Fluido 3D
             let isSwimming = magnitude > 0.08
             let isDeepUnderwater = proposed.y < -0.55
+            let isDivingDown = divePitch < -0.08 || verticalVelocity < -0.3
 
-            if isSwimming {
-                // 3D Hydrodynamic Swimming: nadar en la dirección apuntada (Pitch = 0 -> horizontal puro)
+            if isDivingDown && isSwimming {
+                // Inmersión fluida y controlada hacia el fondo de la piscina
+                let targetVerticalSwim = sin(divePitch) * movementSpeed * magnitude * 1.30
+                verticalVelocity += (targetVerticalSwim - verticalVelocity) * min(1.0, dt * 5.5)
+
+                swimStrokeTimer -= dt
+                if swimStrokeTimer <= 0 {
+                    audio.playSwimStrokeSound(intensity: 0.70 * magnitude)
+                    swimStrokeTimer = 0.45
+                }
+            } else if isSwimming {
                 let targetVerticalSwim = sin(divePitch) * movementSpeed * magnitude * 0.95
                 verticalVelocity += (targetVerticalSwim - verticalVelocity) * min(1.0, dt * 4.8)
 
@@ -1765,15 +1797,15 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     swimStrokeTimer = 0.50
                 }
             } else {
-                if isDeepUnderwater {
-                    // Flotabilidad neutra en inmersión profunda: se mantiene suspendido sin flotar hacia arriba
-                    verticalVelocity *= exp(-dt * 3.0)
+                if isDeepUnderwater || isDivingDown {
+                    // Flotabilidad neutra realista en inmersión: flotación suave y natural
+                    verticalVelocity *= exp(-dt * 2.5)
                 } else {
-                    // Flotación suave a nivel del pecho en la superficie (-0.22m) sin efecto rebote violento
+                    // Flotación suave a nivel del pecho en la superficie (-0.22m) solo cuando NO se está buceando
                     let targetY: Float = -0.22
                     let diff = targetY - proposed.y
-                    verticalVelocity += diff * 3.5 * dt
-                    verticalVelocity *= exp(-dt * 3.5)
+                    verticalVelocity += diff * 2.5 * dt
+                    verticalVelocity *= exp(-dt * 2.5)
                 }
                 swimStrokeTimer = min(swimStrokeTimer, 0.12)
             }
@@ -1904,9 +1936,15 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
     }
 
+    private var isMirrorReflectingLaser = false
+    private var mirrorReflectHitCooldowns = [Float](repeating: 0, count: 5)
+
     private func updateToolTimers(dt: Float) {
         if laserCooldownRemaining > 0 { laserCooldownRemaining = max(0, laserCooldownRemaining - dt) }
         if mirrorCooldownRemaining > 0 { mirrorCooldownRemaining = max(0, mirrorCooldownRemaining - dt) }
+        for i in mirrorReflectHitCooldowns.indices where mirrorReflectHitCooldowns[i] > 0 {
+            mirrorReflectHitCooldowns[i] = max(0, mirrorReflectHitCooldowns[i] - dt)
+        }
 
         if heldTool != lastHeldTool {
             lastHeldTool = heldTool
@@ -1915,7 +1953,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 laserPropagationDistance = 0.0
                 audio.playLaserIgnition()
             } else if heldTool == .mirror && mirrorCooldownRemaining <= 0 {
-                mirrorActiveRemaining = 3.0
+                mirrorActiveRemaining = 5.5
+                audio.playLaserReflectionSound()
             }
         }
 
@@ -1945,9 +1984,14 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 }
             }
         }
-        if heldTool == .mirror && mirrorActiveRemaining > 0 {
-            mirrorActiveRemaining = max(0, mirrorActiveRemaining - dt)
-            if mirrorActiveRemaining == 0 { mirrorCooldownRemaining = 5.0 }
+        if heldTool == .mirror {
+            if mirrorActiveRemaining > 0 {
+                mirrorActiveRemaining = max(0, mirrorActiveRemaining - dt)
+                if mirrorActiveRemaining == 0 { mirrorCooldownRemaining = 3.0 }
+            } else if mirrorCooldownRemaining <= 0 {
+                mirrorActiveRemaining = 5.5
+                audio.playLaserReflectionSound()
+            }
         }
 
         toolStatusCountdown -= dt
@@ -2072,6 +2116,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
         }
 
+        isMirrorReflectingLaser = false
+
         for index in npcPositions.indices {
             switch index {
             case 0: results.pointee.bot0Start = .zero; results.pointee.bot0End = .zero
@@ -2167,7 +2213,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 moveDirection = simd_normalize(rawDirection * (1.0 - blend) + strongestAvoidance * blend)
             }
 
-            let stepFactor: Float = distance > 0.92 ? 1.0 : 0.0
+            let stepFactor: Float = distance > 1.45 ? 1.0 : 0.0
             var proposedX = npcPositions[index].x + (moveDirection.x * speed * stepFactor + npcPushVelocities[index].x) * dt
             var proposedZ = npcPositions[index].z + (moveDirection.y * speed * stepFactor + npcPushVelocities[index].y) * dt
             npcPushVelocities[index] *= exp(-dt * 7.5)
@@ -2201,15 +2247,15 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 }
             }
 
-            // 🤜🤛 Colisión Sólida y Empuje Mutuo con el Jugador (sin atravesarse nunca)
-            let minPlayerBotSeparation: Float = 0.92
+            // 🤜🤛 Colisión Sólida y Empuje Mutuo con el Jugador (sin atravesarse nunca con la cámara)
+            let minPlayerBotSeparation: Float = 1.35
             if abs(playerPosition.y - npcPositions[index].y) < 1.55 {
                 let toBot = SIMD2<Float>(proposedX - playerPosition.x, proposedZ - playerPosition.z)
                 let playerDist = simd_length(toBot)
                 if playerDist < minPlayerBotSeparation {
                     let pushDir = playerDist > 0.001 ? toBot / playerDist : -moveDirection
                     let overlap = minPlayerBotSeparation - playerDist
-                    // El bot se mantiene fuera del radio físico y empuja suavemente al jugador
+                    // El bot se mantiene fuera del radio de la cámara y empuja suavemente al jugador
                     proposedX = playerPosition.x + pushDir.x * minPlayerBotSeparation
                     proposedZ = playerPosition.z + pushDir.y * minPlayerBotSeparation
                     horizontalVelocity -= pushDir * min(3.2, overlap * 9.5 + 0.65)
@@ -2243,11 +2289,15 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             botAimTargets[index] += (targetWithNoise - botAimTargets[index]) * aimSpeed
             let playerTarget = botAimTargets[index]
 
+            let playerIsUsingMirror = (heldTool == .mirror && mirrorActiveRemaining > 0)
+
             // Bot Laser Combat AI with symmetric active/cooldown windows & 3D visual beams
             if botLaserCooldownTimers[index] > 0 {
-                botLaserCooldownTimers[index] = max(0, botLaserCooldownTimers[index] - dt)
-                if botLaserCooldownTimers[index] == 0 && distance < 12.0 && botTeleportReactionTimers[index] <= 0 {
-                    botLaserActiveTimers[index] = 2.2
+                let cooldownRate: Float = (playerIsUsingMirror && distance < 18.0) ? 4.8 : 1.0
+                botLaserCooldownTimers[index] = max(0, botLaserCooldownTimers[index] - dt * cooldownRate)
+                let maxEngageDist: Float = playerIsUsingMirror ? 18.0 : 12.0
+                if botLaserCooldownTimers[index] == 0 && distance < maxEngageDist && botTeleportReactionTimers[index] <= 0 {
+                    botLaserActiveTimers[index] = playerIsUsingMirror ? 3.2 : 2.2
                     // Reset propagation when bot fires a new burst
                     botLaserPropagationDistances[index] = 0
                     botLaserOrigins[index] = npcPositions[index] + SIMD3<Float>(0.42, 0.88, 0.20)
@@ -2284,52 +2334,52 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 let startVec = SIMD4<Float>(botHandOrigin, 1.0)
                 var endVec: SIMD4<Float> = .zero
 
-                let playerIsUsingMirror = (heldTool == .mirror && mirrorActiveRemaining > 0)
                 let effYaw = playerYaw + shieldYawOffset
-                let effPitch = (cameraMode == .firstPerson ? firstPersonPitch : orbitPitch) + shieldPitchOffset
+                let baseMirrorPitch: Float = (cameraMode == .firstPerson) ? firstPersonPitch : -(orbitPitch - 0.22) * 1.15
+                let effPitch = max(-0.95, min(0.95, baseMirrorPitch + shieldPitchOffset))
 
-                let shieldCenter = playerPosition + SIMD3<Float>(sin(effYaw) * 0.50, 1.05 + sin(effPitch) * 0.30, cos(effYaw) * 0.50)
-                let shieldNormal = SIMD3<Float>(
+                let shieldCenter = playerPosition + SIMD3<Float>(sin(effYaw) * 0.58, 1.12 + sin(effPitch) * 0.25, cos(effYaw) * 0.58)
+                let shieldNormal = simd_normalize(SIMD3<Float>(
                     sin(effYaw) * cos(effPitch),
                     sin(effPitch),
                     cos(effYaw) * cos(effPitch)
-                )
+                ))
                 let laserRayDir = bDir
                 let facingDot = simd_dot(-laserRayDir, shieldNormal)
 
-                if playerIsUsingMirror && facingDot > 0.15 {
-                    // Real 3D Optical Reflection (Snell's Law: R = I - 2 * (I · N) * N)
-                    let reflectedDir = simd_normalize(laserRayDir - 2.0 * simd_dot(laserRayDir, shieldNormal) * shieldNormal)
-                    var reflectedHitEnd = shieldCenter + reflectedDir * 22.0
+                if playerIsUsingMirror && !hitRock && facingDot > -0.20 {
+                    isMirrorReflectingLaser = true
+                    // El rayo enemigo choca contra el escudo espejo del jugador
+                    endVec = SIMD4<Float>(shieldCenter, 1.0)
 
-                    // Check if reflected beam hits any rival bot along angle R
+                    // El rayo reflejado sale exactamente hacia la mira del espejo (shieldNormal) controlada por el jugador
+                    let reflectedDir = shieldNormal
                     for targetIdx in npcPositions.indices where npcRespawnTimers[targetIdx] <= 0 && npcHealths[targetIdx] > 0 {
-                        let botCenter = npcPositions[targetIdx] + SIMD3<Float>(0, 0.85, 0)
+                        let botCenter = npcPositions[targetIdx] + SIMD3<Float>(0, 0.90, 0)
                         let toBot = botCenter - shieldCenter
                         let alongR = simd_dot(toBot, reflectedDir)
-                        if alongR > 0.2 && alongR < 25.0 {
+                        if alongR > 0.2 && alongR < 30.0 {
                             let closestPoint = shieldCenter + reflectedDir * alongR
-                            if simd_distance(botCenter, closestPoint) < 0.65 {
-                                // Dynamic Angle Hit! Reflected laser beam deals 50 HP damage to rival bot!
-                                reflectedHitEnd = closestPoint
-                                let damage: Float = 50.0
-                                npcHealths[targetIdx] = max(0, npcHealths[targetIdx] - damage)
-                                audio.playLaserReflectionSound()
-                                onNPCHealthsUpdate?(npcHealths)
+                            if simd_distance(botCenter, closestPoint) < 0.92 {
+                                if mirrorReflectHitCooldowns[targetIdx] <= 0 {
+                                    mirrorReflectHitCooldowns[targetIdx] = 0.18
+                                    let damage: Float = 50.0
+                                    npcHealths[targetIdx] = max(0, npcHealths[targetIdx] - damage)
+                                    audio.playLaserReflectionSound()
+                                    onNPCHealthsUpdate?(npcHealths)
 
-                                if npcHealths[targetIdx] <= 0 {
-                                    botLaserActiveTimers[index] = 0
-                                    botLaserCooldownTimers[index] = botCooldown
-                                    audio.playLaserPlayerHitSound()
-                                    onScoreUpdate?(500)
-                                    handleNPCElimination(index: targetIdx)
+                                    if npcHealths[targetIdx] <= 0 {
+                                        botLaserActiveTimers[index] = 0
+                                        botLaserCooldownTimers[index] = botCooldown
+                                        audio.playLaserPlayerHitSound()
+                                        onScoreUpdate?(500)
+                                        handleNPCElimination(index: targetIdx)
+                                    }
                                 }
                                 break
                             }
                         }
                     }
-
-                    endVec = SIMD4<Float>(reflectedHitEnd, 1.0)
                 } else {
                     endVec = SIMD4<Float>(bEndActual, 1.0)
                     // Damage only applies when photon front reaches player AND bot is actually aligned AND NO ROCK OBSTRUCTS
@@ -2366,10 +2416,17 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     }
 
     private func checkCombatHits() {
-        guard heldTool == .laser, laserActiveRemaining > 0 else { return }
+        guard !isPlayerDead, heldTool == .laser, laserActiveRemaining > 0 else { return }
 
-        let origin = lastToolOrigin
-        let direction = lastToolDirection
+        let origin: SIMD3<Float>
+        let direction: SIMD3<Float>
+        if cameraMode == .firstPerson {
+            origin = lastCameraPosition
+            direction = lastCameraForward
+        } else {
+            origin = lastToolOrigin
+            direction = lastToolDirection
+        }
         var closestIndex: Int?
         var closestDistance: Float = 35
 
@@ -2378,7 +2435,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             let alongRay = simd_dot(center - origin, direction)
             guard alongRay > 0, alongRay < closestDistance else { continue }
             let closestPoint = origin + direction * alongRay
-            guard simd_distance(center, closestPoint) < 1.35 else { continue }
+            guard simd_distance(center, closestPoint) < 1.45 else { continue }
             closestIndex = index
             closestDistance = alongRay
         }
@@ -2879,7 +2936,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if isCoverActive {
             targetOffsetY = (cameraMode == .firstPerson ? 0.70 : 0.65)
         } else if currentlyInPool && cameraMode == .thirdPerson {
-            targetOffsetY = 1.05
+            targetOffsetY = 1.35
         } else if isSubterraneanTarget {
             targetOffsetY = (cameraMode == .firstPerson ? 1.35 : 1.10)
         } else if isClimbingLadder {
@@ -2908,36 +2965,41 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 sin(firstPersonPitch),
                 viewForward.z * pitchCosine
             ))
-            cameraPosition = smoothedCameraTarget + viewForward * 0.38
+            var camPos = smoothedCameraTarget + viewForward * 0.38
+            if isClimbingLadder {
+                camPos.z = max(-16.12, camPos.z)
+            }
+            cameraPosition = camPos
             fieldOfView = 72
         } else {
             // ☁️ 🐢 Super Mario 64 Lakitu Camera + SpringArm Anti-Clipping
-            let distance: Float = isUnderwaterCamera ? 3.4 : 4.4
-            let shoulderOffset: Float = isUnderwaterCamera ? 0.15 : 0.40
-            let heightOffset: Float = isSubterraneanTarget ? 0.70 : (currentlyInPool ? 0.75 : 1.65)
+            let distance: Float = isUnderwaterCamera ? 3.4 : 4.0
+            let shoulderOffset: Float = isUnderwaterCamera ? 0.28 : 0.36
+            let pitchClamped = max(-0.25, min(0.68, orbitPitch))
+            let cosP = cos(pitchClamped)
+            let sinP = sin(pitchClamped)
 
-            let horizontalDist = cos(orbitPitch) * distance
-            let rawCameraY = smoothedCameraTarget.y + heightOffset + sin(orbitPitch) * distance
+            // Vector unitario esférico hacia atrás/arriba de la cámara respecto al pivote
+            let backwardDir = SIMD3<Float>(
+                sin(cameraYaw) * cosP,
+                sinP,
+                cos(cameraYaw) * cosP
+            )
 
-            let lakituTargetY: Float
+            var idealLakituPos = smoothedCameraTarget + backwardDir * distance + rawRight * shoulderOffset
+
             if isSubterraneanTarget {
                 let inOpening = isInsidePoolXZ(playerPosition)
                 if inOpening {
-                    lakituTargetY = max(-10.2, min(0.60, rawCameraY))
+                    idealLakituPos.y = max(-10.2, min(0.60, idealLakituPos.y))
                 } else {
-                    lakituTargetY = max(-10.2, min(-5.15, rawCameraY))
+                    idealLakituPos.y = max(-10.2, min(-5.15, idealLakituPos.y))
                 }
             } else if currentlyInPool {
-                lakituTargetY = max(-4.15, min(1.80, rawCameraY))
+                idealLakituPos.y = max(smoothedCameraTarget.y + 0.30, min(1.80, idealLakituPos.y))
             } else {
-                lakituTargetY = max(0.42, rawCameraY)
+                idealLakituPos.y = max(0.25, idealLakituPos.y)
             }
-
-            let idealLakituPos = SIMD3<Float>(
-                smoothedCameraTarget.x + sin(cameraYaw) * horizontalDist,
-                lakituTargetY,
-                smoothedCameraTarget.z + cos(cameraYaw) * horizontalDist
-            ) + rawRight * shoulderOffset
 
             // 🎯 🦾 SpringArm Raycast: Acercar inmediatamente la cámara si un muro, escalera o pilar se interpone
             let safeCameraPos = resolveCameraSpringArm(
@@ -2968,7 +3030,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
 
             cameraPosition = lakituPosition
-            let aimTarget = smoothedCameraTarget + viewForward * 20.0 + SIMD3<Float>(0, 0.45, 0)
+            let shoulderPivot = smoothedCameraTarget + rawRight * shoulderOffset
+            let aimTarget = shoulderPivot - backwardDir * 30.0
             cameraForward = simd_normalize(aimTarget - cameraPosition)
             fieldOfView = isUnderwaterCamera ? 68 : 62
         }
@@ -2995,7 +3058,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             } else if isCoverActive || isClimbingLadder || isGroundedInPool {
                 pPitch = 0
             } else if isDeepSubmerged && abs(verticalVelocity) > 0.25 {
-                pPitch = max(-0.45, min(0.45, (orbitPitch - 0.36) * 0.9))
+                pPitch = max(-0.45, min(0.45, (orbitPitch - 0.22) * 0.9))
             } else if isSlidingOnToboggan {
                 pPitch = -0.62
             } else {
@@ -3051,6 +3114,25 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let activeLightPos = isSubterraneanIlluminated ? SIMD4<Float>(0.0, -5.2, 0.0, 1) : (isPoolSubmerged ? SIMD4<Float>(-1.5, -3.5, -1.5, 1) : SIMD4<Float>(-7.55, 2.72, 6.65, 1))
         let activeLightColor = isSubterraneanIlluminated ? SIMD4<Float>(0.10, 0.95, 0.98, 48.0) : (isPoolSubmerged ? SIMD4<Float>(0.08, 0.85, 0.95, 38.0) : SIMD4<Float>(1.0, 0.66, 0.24, lightStates.effectiveIntensity(.post) * 46))
 
+        let moveMagnitude = Float(hypot(joystick.dx, joystick.dy))
+        let swimMotionValue: Float = (cameraMode == .firstPerson) ? (1.0 + min(1.0, moveMagnitude * 1.5)) : 0.0
+
+        var effectiveToolOrigin = toolOrigin
+        var effectiveToolDirection = toolDirection
+        var effectiveToolParamY = laserPropagationDistance
+        if renderTool == .mirror {
+            let effYaw = playerYaw + shieldYawOffset
+            let baseMirrorPitch: Float = (cameraMode == .firstPerson) ? firstPersonPitch : -(orbitPitch - 0.22) * 1.15
+            let effPitch = max(-0.95, min(0.95, baseMirrorPitch + shieldPitchOffset))
+            effectiveToolOrigin = playerPosition + SIMD3<Float>(sin(effYaw) * 0.58, 1.12 + sin(effPitch) * 0.25, cos(effYaw) * 0.58)
+            effectiveToolDirection = simd_normalize(SIMD3<Float>(
+                sin(effYaw) * cos(effPitch),
+                sin(effPitch),
+                cos(effYaw) * cos(effPitch)
+            ))
+            effectiveToolParamY = isMirrorReflectingLaser ? 2.0 : 1.0
+        }
+
         var uniforms = RTUniforms(
             viewport: SIMD4<Float>(Float(texture.width), Float(texture.height), elapsedTime, rayBouncesEnabled ? 1 : 0),
             cameraPosition: SIMD4<Float>(cameraPosition, 1),
@@ -3059,11 +3141,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             cameraForward: SIMD4<Float>(cameraForward, 0),
             lightPosition: activeLightPos,
             lightColor: activeLightColor,
-            waterSimulation: SIMD4<Float>(dt, elapsedTime, cameraMode == .firstPerson ? 1 : 0, instanceAccelerationStructure != nil ? 1 : 0),
+            waterSimulation: SIMD4<Float>(dt, elapsedTime, swimMotionValue, instanceAccelerationStructure != nil ? 1 : 0),
             waterImpulse: pendingWaterImpulse,
-            toolOrigin: SIMD4<Float>(toolOrigin, 1),
-            toolDirection: SIMD4<Float>(toolDirection, 0),
-            toolParameters: SIMD4<Float>(Float(renderTool.rawValue), laserPropagationDistance, isSlowMotionActive ? 1.0 : 0.0, isSplitScreenMode ? 1.0 : 0.0),
+            toolOrigin: SIMD4<Float>(effectiveToolOrigin, 1),
+            toolDirection: SIMD4<Float>(effectiveToolDirection, 0),
+            toolParameters: SIMD4<Float>(Float(renderTool.rawValue), effectiveToolParamY, isSlowMotionActive ? 1.0 : 0.0, isSplitScreenMode ? 1.0 : 0.0),
             lightStates: SIMD4<Float>(
                 lightStates.effectiveIntensity(.post),
                 lightStates.effectiveIntensity(.piscinaNeon),
@@ -3075,8 +3157,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         lastCameraRight = right * aspect * imagePlaneHeight
         lastCameraUp = up * imagePlaneHeight
         lastCameraForward = cameraForward
-        lastToolOrigin = toolOrigin
-        lastToolDirection = toolDirection
+        lastToolOrigin = effectiveToolOrigin
+        lastToolDirection = effectiveToolDirection
         withUnsafeBytes(of: &uniforms) { bytes in
             guard let baseAddress = bytes.baseAddress else { return }
             uniformBuffer.contents().copyMemory(from: baseAddress, byteCount: bytes.count)
@@ -3088,8 +3170,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let isSubterraneanTarget = playerPosition.y <= -4.75
         let isGroundedInPool = currentlyInPool && (playerPosition.y <= -4.40)
         let isDeepSubmerged = (currentlyInPool || isSubterraneanTarget) && !isGroundedInPool && playerPosition.y <= -0.85
+        let isSwimmingInWater = (currentlyInPool || isSubterraneanTarget) && !isGroundedInPool && !isClimbingLadder && !isSlidingOnToboggan
         let isPlayerDead = self.isPlayerDead
         let isMirrorActive = (heldTool == .mirror && mirrorActiveRemaining > 0)
+        let isMoving = hypot(joystick.dx, joystick.dy) > 0.15
 
         let pPitch: Float
         if isPlayerDead {
@@ -3098,9 +3182,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         } else if isCoverActive || isClimbingLadder || isGroundedInPool {
             // 🧍 De pie / caminando en el fondo de la piscina o en cobertura/escalera: estrictamente vertical (0 pitch)
             pPitch = 0
-        } else if isDeepSubmerged && abs(verticalVelocity) > 0.25 {
-            // 🏊‍♂️ Fluid Diving: Solo inclinación moderada al nadar libremente hacia arriba o abajo en suspensión
-            pPitch = max(-0.45, min(0.45, (orbitPitch - 0.36) * 0.9))
+        } else if isSwimmingInWater {
+            // 🏊‍♂️ Postura natural de nado: cuerpo inclinado horizontalmente cortando el agua
+            let swimTilt: Float = isMoving ? -0.42 : -0.12
+            pPitch = swimTilt + max(-0.35, min(0.35, (orbitPitch - 0.22) * 0.8))
         } else if isSlidingOnToboggan {
             pPitch = -0.62
         } else {
@@ -3109,25 +3194,26 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         let pPos: SIMD3<Float> = isSlidingOnToboggan ? playerPosition + SIMD3<Float>(0, -0.15, 0) : playerPosition
         let effYaw = playerYaw + shieldYawOffset
-        let effPitch = pPitch + shieldPitchOffset
+        let baseMirrorPitch: Float = (cameraMode == .firstPerson) ? firstPersonPitch : -(orbitPitch - 0.22) * 1.15
+        let effPitch = max(-0.95, min(0.95, baseMirrorPitch + shieldPitchOffset))
+        let isFirstPerson = (cameraMode == .firstPerson)
         let shieldPos: SIMD3<Float>
+        let shieldMask: UInt32
         if isMirrorActive {
-            shieldPos = pPos + SIMD3<Float>(sin(effYaw) * 0.55, 0.20 + sin(effPitch) * 0.25, cos(effYaw) * 0.55)
+            shieldPos = pPos + SIMD3<Float>(sin(effYaw) * 0.58, 1.12 + sin(effPitch) * 0.25, cos(effYaw) * 0.58)
+            shieldMask = isFirstPerson ? 0x02 : 0x01
         } else {
-            shieldPos = SIMD3<Float>(0, -100, 0)
+            shieldPos = SIMD3<Float>(0, -500, 0)
+            shieldMask = 0x00
         }
 
-        // 🎯 🦾 Oclusión del Jugador y Near Clipping (Self-Occlusion Fade / Invisibility):
-        // Cuando la cámara se acerca a menos de 1.18m (o 1.45m en escaleras verticales),
-        // se oculta la malla del personaje y su máscara BVH (0x00) como si pasara a primera persona,
-        // garantizando visibilidad total y que el crosshair nunca quede tapado por la espalda.
+        // 🎯 🦾 Oclusión del Jugador y Near Clipping con Espejos Realistas:
         let headPos = playerPosition + SIMD3<Float>(0, 1.15, 0)
         let distToCamera = simd_distance(lakituPosition, headPos)
-        let shouldHideForNearCamera = (cameraMode == .thirdPerson && (distToCamera < 1.18 || (isClimbingLadder && distToCamera < 1.45)))
-        let playerRenderPos = (cameraMode == .firstPerson || shouldHideForNearCamera) ? SIMD3<Float>(0, -100, 0) : pPos
-        let playerInstanceMask: UInt32 = (cameraMode == .firstPerson || shouldHideForNearCamera) ? 0x00 : 0x02
+        let shouldHideInThirdPerson = (!isFirstPerson && (distToCamera < 1.25 || (isClimbingLadder && distToCamera < 1.50)))
+        let playerRenderPos = shouldHideInThirdPerson ? SIMD3<Float>(0, -500, 0) : pPos
+        let playerInstanceMask: UInt32 = shouldHideInThirdPerson ? 0x00 : 0x02
 
-        let isMoving = hypot(joystick.dx, joystick.dy) > 0.15
         let playerASIndex: UInt32
         if isPlayerDead {
             playerASIndex = 1
@@ -3137,8 +3223,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             playerASIndex = 6 // 🛡️ GTA Crouch Cover
         } else if isSlidingOnToboggan {
             playerASIndex = 8 // 🛷 Sit Tobogán
-        } else if isDeepSubmerged && abs(verticalVelocity) > 0.25 {
-            playerASIndex = 7 // 🏊 Swim Mario (únicamente mientras nada en suspensión)
+        } else if isSwimmingInWater {
+            playerASIndex = 7 // 🏊 Swim Pose in water (brazos arqueados y aletas de buceo)
         } else if isMoving {
             playerASIndex = 9 // 🏃 Walk / Run articulado
         } else {
@@ -3185,7 +3271,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 mask: (npcHealths[4] > 0 && npcRespawnTimers[4] <= 0 && !isWaveIntermission) ? 0x01 : 0x00,
                 accelerationStructureIndex: 4
             ),
-            Self.makeInstanceDescriptor(translation: shieldPos, yaw: effYaw, pitch: effPitch, mask: 0x01, accelerationStructureIndex: 5)
+            Self.makeInstanceDescriptor(translation: shieldPos, yaw: effYaw, pitch: effPitch, mask: shieldMask, accelerationStructureIndex: 5)
         ]
         descriptors.withUnsafeBytes { bytes in
             guard let baseAddress = bytes.baseAddress else { return }
@@ -3225,9 +3311,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let cy = cos(yaw), sy = sin(yaw)
         let cp = cos(pitch), sp = sin(pitch)
         var descriptor = MTLAccelerationStructureInstanceDescriptor()
-        descriptor.transformationMatrix.columns.0 = MTLPackedFloat3Make(cy, sy * sp, -sy * cp)
-        descriptor.transformationMatrix.columns.1 = MTLPackedFloat3Make(0, cp, sp)
-        descriptor.transformationMatrix.columns.2 = MTLPackedFloat3Make(sy, -cy * sp, cy * cp)
+        descriptor.transformationMatrix.columns.0 = MTLPackedFloat3Make(cy, 0, -sy)
+        descriptor.transformationMatrix.columns.1 = MTLPackedFloat3Make(-sy * sp, cp, -cy * sp)
+        descriptor.transformationMatrix.columns.2 = MTLPackedFloat3Make(sy * cp, sp, cy * cp)
         descriptor.transformationMatrix.columns.3 = MTLPackedFloat3Make(translation.x, translation.y, translation.z)
         descriptor.options = .opaque
         descriptor.mask = mask
@@ -3344,11 +3430,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let oneWayVisorBack = RTMaterial(color: SIMD3<Float>(0.05, 0.45, 0.65), roughness: 0.05, emission: SIMD3<Float>(0.02, 0.15, 0.25), reflectivity: 0.08, kind: 0.0)
 
         // Compact tactical shield size: 0.48m wide x 0.58m tall
-        // Outward (+Z): 100% Reflective Mirror Glass
-        builder.addBox(center: SIMD3<Float>(0, 1.05, 0.012), size: SIMD3<Float>(0.52, 0.62, 0.015), material: mirrorFrame)
-        builder.addBox(center: SIMD3<Float>(0, 1.05, 0.018), size: SIMD3<Float>(0.46, 0.56, 0.010), material: mirrorGlassFront)
+        // Outward (+Z): 100% Reflective Mirror Glass (Centrado en origen para rotar sobre su propio eje)
+        builder.addBox(center: SIMD3<Float>(0, 0, 0.012), size: SIMD3<Float>(0.52, 0.62, 0.015), material: mirrorFrame)
+        builder.addBox(center: SIMD3<Float>(0, 0, 0.018), size: SIMD3<Float>(0.46, 0.56, 0.010), material: mirrorGlassFront)
         // Inward (-Z facing player in 1st person): One-way see-through cyan glass visor
-        builder.addBox(center: SIMD3<Float>(0, 1.05, -0.012), size: SIMD3<Float>(0.46, 0.56, 0.010), material: oneWayVisorBack)
+        builder.addBox(center: SIMD3<Float>(0, 0, -0.012), size: SIMD3<Float>(0.46, 0.56, 0.010), material: oneWayVisorBack)
         return builder
     }
 

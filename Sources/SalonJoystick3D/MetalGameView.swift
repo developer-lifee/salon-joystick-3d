@@ -81,6 +81,11 @@ struct MetalGameView: UIViewRepresentable {
                     model?.updateCoverStatus(isNear: isNear)
                 }
             }
+            renderer.onUnderwaterStatusUpdate = { [weak model] inWater in
+                Task { @MainActor in
+                    model?.isUnderwater = inWater
+                }
+            }
             renderer.onNPCHealthsUpdate = { [weak model] healths in
                 Task { @MainActor in
                     model?.updateNPCHealths(healths)
@@ -124,7 +129,7 @@ struct MetalGameView: UIViewRepresentable {
     func updateUIView(_ view: MTKView, context: Context) {
         (view as? PointResolutionMTKView)?.renderScale = model.renderResolution.scale
         context.coordinator.invertsCameraY = model.invertsCameraY
-        context.coordinator.renderer?.isPlayerDead = (model.playerHealth <= 0)
+        context.coordinator.renderer?.isPlayerDead = (model.playerHealth <= 0 || model.isDefeated)
         context.coordinator.renderer?.onFPSUpdate = model.showsFPS
             ? context.coordinator.onFPSUpdate
             : nil
@@ -144,7 +149,8 @@ struct MetalGameView: UIViewRepresentable {
             resetRequestID: model.resetRequestID,
             isCoverActive: model.isCoverActive,
             shieldAngleOffset: model.shieldAngleOffset,
-            respawnRequestID: model.respawnRequestID
+            respawnRequestID: model.respawnRequestID,
+            diveRequestID: model.diveRequestID
         )
     }
 
