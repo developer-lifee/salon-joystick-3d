@@ -14,7 +14,8 @@ DerivedDataDevice/
 *~
 
 # Temporary & Log files
-*.log
-/tmp/
 Tools/SalonStudio/*.png
 
+# App Store Marketing & Screenshot Assets
+AppStoreAssets*/
+AppStoreAssets_v2.0/
