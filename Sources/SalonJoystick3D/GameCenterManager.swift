@@ -29,6 +29,7 @@ final class GameCenterManager: NSObject, ObservableObject {
     private(set) var activeMatch: GKMatch?
 
     var onPacketReceived: ((LocalMatchPacket) -> Void)?
+    var onMatchStarted: (() -> Void)?
 
     override init() {
         super.init()
@@ -119,9 +120,21 @@ final class GameCenterManager: NSObject, ObservableObject {
     func startMatch(_ match: GKMatch) {
         self.activeMatch = match
         self.isInMatch = true
-        self.connectedPlayerNames = match.players.map { $0.alias }
+        let names = match.players.map { $0.displayName.isEmpty ? $0.alias : $0.displayName }
+        self.connectedPlayerNames = names.isEmpty ? ["Jugador Online"] : names
         self.showsMatchmakerSheet = false
         match.delegate = self
+
+        let hello = LocalMatchPacket(
+            kind: .hello,
+            peerID: GKLocalPlayer.local.alias,
+            timestamp: Date().timeIntervalSince1970
+        )
+        sendPacket(hello)
+
+        if match.expectedPlayerCount == 0 {
+            onMatchStarted?()
+        }
     }
 
     func leaveMatch() {
@@ -134,8 +147,9 @@ final class GameCenterManager: NSObject, ObservableObject {
     func sendPacket(_ packet: LocalMatchPacket) {
         guard let activeMatch, isInMatch,
               let data = try? JSONEncoder().encode(packet) else { return }
+        let mode: GKMatch.SendDataMode = (packet.kind == .state || packet.kind == .controllerInput) ? .unreliable : .reliable
         do {
-            try activeMatch.sendData(toAllPlayers: data, with: .reliable)
+            try activeMatch.sendData(toAllPlayers: data, with: mode)
         } catch {
             lastError = error.localizedDescription
         }
@@ -152,8 +166,22 @@ extension GameCenterManager: GKMatchDelegate {
 
     nonisolated func match(_ match: GKMatch, player: GKPlayer, didChange state: GKPlayerConnectionState) {
         Task { @MainActor in
-            self.connectedPlayerNames = match.players.map { $0.alias }
-            self.isInMatch = !match.players.isEmpty
+            let names = match.players.map { $0.displayName.isEmpty ? $0.alias : $0.displayName }
+            self.connectedPlayerNames = names.isEmpty ? [player.alias] : names
+            if state == .connected {
+                self.isInMatch = true
+                let hello = LocalMatchPacket(
+                    kind: .hello,
+                    peerID: GKLocalPlayer.local.alias,
+                    timestamp: Date().timeIntervalSince1970
+                )
+                self.sendPacket(hello)
+                if match.expectedPlayerCount == 0 {
+                    self.onMatchStarted?()
+                }
+            } else if state == .disconnected && match.players.isEmpty {
+                self.isInMatch = false
+            }
         }
     }
 

@@ -869,7 +869,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     var onScoreUpdate: ((Int) -> Void)?
     var onDamageTaken: ((Float) -> Void)?
     var onWaveUpdate: ((Int, Int, Int, Bool, Float) -> Void)?
+    var onLocalPlayerTransformUpdate: ((SIMD3<Float>, Float) -> Void)?
     var isPlayerDead: Bool = false
+    var isRemotePlayerConnected: Bool = false
+    var remotePlayerPosition: SIMD3<Float> = SIMD3<Float>(-3.8, 0, 3.8)
+    var remotePlayerYaw: Float = .pi
+    private var smoothedRemotePos: SIMD3<Float> = SIMD3<Float>(-3.8, 0, 3.8)
+    private var netSyncTimer: Float = 0
 
     private var currentWave: Int = 1
     private var botsKilledInCurrentWave: Int = 0
@@ -1099,7 +1105,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         self.floatMesh = try Self.makeMesh(builder: floatBuilder, device: device, queue: commandQueue)
         self.mirrorShieldMesh = try Self.makeMesh(builder: mirrorShieldBuilder, device: device, queue: commandQueue)
 
-        let instanceLength = MemoryLayout<MTLAccelerationStructureInstanceDescriptor>.stride * 10
+        let instanceLength = MemoryLayout<MTLAccelerationStructureInstanceDescriptor>.stride * 11
         guard let instanceBuffer = device.makeBuffer(length: instanceLength, options: .storageModeShared) else {
             throw MetalRayRendererError.resourceCreationFailed
         }
@@ -1131,7 +1137,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 playerWalkAS,    // 9 (walk articulado)
                 playerClimbAS    // 10 (climb escalera)
             ]
-            descriptor.instanceCount = 10
+            descriptor.instanceCount = 11
             descriptor.instanceDescriptorBuffer = instanceBuffer
             self.instanceDescriptor = descriptor
 
@@ -1462,6 +1468,16 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         flushDamageReport(rawDt: rawDt)
         checkCombatHits()
         onNPCHealthsUpdate?(npcHealths)
+
+        if isRemotePlayerConnected {
+            let interp = min(1.0, rawDt * 14.0)
+            smoothedRemotePos += (remotePlayerPosition - smoothedRemotePos) * interp
+            netSyncTimer += rawDt
+            if netSyncTimer >= 0.065 {
+                netSyncTimer = 0
+                onLocalPlayerTransformUpdate?(playerPosition, playerYaw)
+            }
+        }
         let wasRidingFloat = isStandingOnFloat(playerPosition)
         let floatDisplacement = updateFloatSimulation(dt: dt)
         if wasRidingFloat {
@@ -3271,7 +3287,14 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 mask: (npcHealths[4] > 0 && npcRespawnTimers[4] <= 0 && !isWaveIntermission) ? 0x01 : 0x00,
                 accelerationStructureIndex: 4
             ),
-            Self.makeInstanceDescriptor(translation: shieldPos, yaw: effYaw, pitch: effPitch, mask: shieldMask, accelerationStructureIndex: 5)
+            Self.makeInstanceDescriptor(translation: shieldPos, yaw: effYaw, pitch: effPitch, mask: shieldMask, accelerationStructureIndex: 5),
+            Self.makeInstanceDescriptor(
+                translation: isRemotePlayerConnected ? smoothedRemotePos : SIMD3<Float>(0, -500, 0),
+                yaw: remotePlayerYaw,
+                pitch: 0,
+                mask: isRemotePlayerConnected ? 0x01 : 0x00,
+                accelerationStructureIndex: (simd_distance_squared(smoothedRemotePos, remotePlayerPosition) > 0.002) ? 9 : 1
+            )
         ]
         descriptors.withUnsafeBytes { bytes in
             guard let baseAddress = bytes.baseAddress else { return }

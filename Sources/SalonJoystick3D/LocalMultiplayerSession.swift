@@ -1,5 +1,6 @@
 import Foundation
 import MultipeerConnectivity
+import UIKit
 
 enum LocalMatchMode: String, Codable, CaseIterable, Identifiable {
     case cooperative
@@ -59,22 +60,61 @@ final class LocalMultiplayerSession: NSObject, ObservableObject {
     @Published private(set) var isSearching = false
     @Published private(set) var isConnected = false
     @Published private(set) var peers: [MCPeerID] = []
-    @Published var mode: LocalMatchMode = .versus
+    @Published private(set) var discoveredPeers: [MCPeerID] = []
+    @Published private(set) var statusMessage: String = "Listo para enlazar"
+    @Published var mode: LocalMatchMode = .cooperative
     @Published var role: LocalDeviceRole = .full3DRender
     @Published private(set) var lastError: String?
 
+    var onPacketReceived: ((LocalMatchPacket) -> Void)?
+    var onConnected: (() -> Void)?
+
     private let serviceType = "salon-laser"
-    private let localPeer: MCPeerID
-    private let session: MCSession
+    let localPeer: MCPeerID
+    private var session: MCSession
     private var advertiser: MCNearbyServiceAdvertiser?
     private var browser: MCNearbyServiceBrowser?
 
     override init() {
-        let name = UIDevice.current.name.isEmpty ? "Jugador" : UIDevice.current.name
-        localPeer = MCPeerID(displayName: String(name.prefix(32)))
-        session = MCSession(peer: localPeer, securityIdentity: nil, encryptionPreference: .required)
+        // Generar nombre único por modelo de iPhone + tag corto (en iOS 16+ UIDevice.current.name siempre devuelve "iPhone")
+        let tagKey = "salon_mp_unique_tag"
+        let savedTag = UserDefaults.standard.string(forKey: tagKey)
+        let tag: String
+        if let savedTag, !savedTag.isEmpty {
+            tag = savedTag
+        } else {
+            let newTag = String(UUID().uuidString.prefix(4)).uppercased()
+            UserDefaults.standard.set(newTag, forKey: tagKey)
+            tag = newTag
+        }
+
+        let modelName = Self.detectDeviceModelName()
+        let uniqueDisplay = "\(modelName) #\(tag)"
+        self.localPeer = MCPeerID(displayName: String(uniqueDisplay.prefix(32)))
+        self.session = MCSession(peer: localPeer, securityIdentity: nil, encryptionPreference: .none)
         super.init()
-        session.delegate = self
+        self.session.delegate = self
+    }
+
+    static func detectDeviceModelName() -> String {
+        var systemInfo = utsname()
+        uname(&systemInfo)
+        let machineMirror = Mirror(reflecting: systemInfo.machine)
+        let identifier = machineMirror.children.reduce("") { id, element in
+            guard let value = element.value as? Int8, value != 0 else { return id }
+            return id + String(UnicodeScalar(UInt8(value)))
+        }
+        switch identifier {
+        case "iPhone16,2": return "iPhone 15 Pro Max"
+        case "iPhone16,1": return "iPhone 15 Pro"
+        case "iPhone15,2": return "iPhone 14 Pro"
+        case "iPhone15,3": return "iPhone 14 Pro Max"
+        case "iPhone17,1": return "iPhone 16 Pro"
+        case "iPhone17,2": return "iPhone 16 Pro Max"
+        default:
+            if identifier.hasPrefix("iPad") { return "iPad" }
+            return "iPhone"
+        }
     }
 
     func host() {
@@ -82,13 +122,22 @@ final class LocalMultiplayerSession: NSObject, ObservableObject {
         lastError = nil
         isHosting = true
         isSearching = false
-        advertiser = MCNearbyServiceAdvertiser(
+        statusMessage = "Sala creada por \(localPeer.displayName). Esperando jugador..."
+
+        let adv = MCNearbyServiceAdvertiser(
             peer: localPeer,
             discoveryInfo: ["mode": mode.rawValue],
             serviceType: serviceType
         )
-        advertiser?.delegate = self
-        advertiser?.startAdvertisingPeer()
+        adv.delegate = self
+        adv.startAdvertisingPeer()
+        self.advertiser = adv
+
+        // También activar navegador en segundo plano para acelerar el descubrimiento mutuo
+        let brw = MCNearbyServiceBrowser(peer: localPeer, serviceType: serviceType)
+        brw.delegate = self
+        brw.startBrowsingForPeers()
+        self.browser = brw
     }
 
     func join() {
@@ -96,25 +145,47 @@ final class LocalMultiplayerSession: NSObject, ObservableObject {
         lastError = nil
         isHosting = false
         isSearching = true
-        browser = MCNearbyServiceBrowser(peer: localPeer, serviceType: serviceType)
-        browser?.delegate = self
-        browser?.startBrowsingForPeers()
+        discoveredPeers = []
+        statusMessage = "Buscando salas cercanas de Laser Tracer..."
+
+        let brw = MCNearbyServiceBrowser(peer: localPeer, serviceType: serviceType)
+        brw.delegate = self
+        brw.startBrowsingForPeers()
+        self.browser = brw
+
+        // También anunciar presencia para que el Host nos vea de inmediato
+        let adv = MCNearbyServiceAdvertiser(
+            peer: localPeer,
+            discoveryInfo: ["mode": mode.rawValue],
+            serviceType: serviceType
+        )
+        adv.delegate = self
+        adv.startAdvertisingPeer()
+        self.advertiser = adv
+    }
+
+    func invitePeer(_ peer: MCPeerID) {
+        statusMessage = "Conectando con \(peer.displayName)..."
+        browser?.invitePeer(peer, to: session, withContext: nil, timeout: 15)
     }
 
     func stop() {
         stopDiscovery()
         session.disconnect()
         peers = []
+        discoveredPeers = []
         isConnected = false
         isHosting = false
         isSearching = false
+        statusMessage = "Desconectado"
     }
 
     func send(_ packet: LocalMatchPacket) {
         guard !session.connectedPeers.isEmpty,
               let data = try? JSONEncoder().encode(packet) else { return }
+        let mode: MCSessionSendDataMode = (packet.kind == .state || packet.kind == .controllerInput) ? .unreliable : .reliable
         do {
-            try session.send(data, toPeers: session.connectedPeers, with: .reliable)
+            try session.send(data, toPeers: session.connectedPeers, with: mode)
         } catch {
             lastError = error.localizedDescription
         }
@@ -136,7 +207,28 @@ extension LocalMultiplayerSession: MCSessionDelegate {
     ) {
         Task { @MainActor in
             self.peers = session.connectedPeers
-            self.isConnected = !session.connectedPeers.isEmpty
+            let connectedNow = !session.connectedPeers.isEmpty
+            let wasConnected = self.isConnected
+            self.isConnected = connectedNow
+
+            switch state {
+            case .connected:
+                self.statusMessage = "¡Enlazado con \(peerID.displayName)!"
+                self.isHosting = false
+                self.isSearching = false
+                self.stopDiscovery()
+                if !wasConnected && connectedNow {
+                    self.onConnected?()
+                }
+            case .connecting:
+                self.statusMessage = "Enlazando con \(peerID.displayName)..."
+            case .notConnected:
+                if session.connectedPeers.isEmpty {
+                    self.statusMessage = "Jugador desconectado"
+                }
+            @unknown default:
+                break
+            }
         }
     }
 
@@ -145,9 +237,10 @@ extension LocalMultiplayerSession: MCSessionDelegate {
         didReceive data: Data,
         fromPeer peerID: MCPeerID
     ) {
-        // Gameplay packets will be routed into GameModel in the next step.
-        _ = data
-        _ = peerID
+        guard let packet = try? JSONDecoder().decode(LocalMatchPacket.self, from: data) else { return }
+        Task { @MainActor in
+            self.onPacketReceived?(packet)
+        }
     }
 
     nonisolated func session(
@@ -180,7 +273,10 @@ extension LocalMultiplayerSession: MCNearbyServiceAdvertiserDelegate {
         withContext context: Data?,
         invitationHandler: @escaping (Bool, MCSession?) -> Void
     ) {
-        invitationHandler(true, session)
+        Task { @MainActor in
+            self.statusMessage = "Aceptando invitación de \(peerID.displayName)..."
+            invitationHandler(true, self.session)
+        }
     }
 
     nonisolated func advertiser(
@@ -197,13 +293,24 @@ extension LocalMultiplayerSession: MCNearbyServiceBrowserDelegate {
         foundPeer peerID: MCPeerID,
         withDiscoveryInfo info: [String: String]?
     ) {
-        browser.invitePeer(peerID, to: session, withContext: nil, timeout: 15)
+        Task { @MainActor in
+            guard peerID.displayName != self.localPeer.displayName else { return }
+            if !self.discoveredPeers.contains(peerID) {
+                self.discoveredPeers.append(peerID)
+            }
+            self.statusMessage = "Sala encontrada: \(peerID.displayName). Enlazando..."
+            browser.invitePeer(peerID, to: self.session, withContext: nil, timeout: 15)
+        }
     }
 
     nonisolated func browser(
         _ browser: MCNearbyServiceBrowser,
         lostPeer peerID: MCPeerID
-    ) {}
+    ) {
+        Task { @MainActor in
+            self.discoveredPeers.removeAll { $0 == peerID }
+        }
+    }
 
     nonisolated func browser(
         _ browser: MCNearbyServiceBrowser,

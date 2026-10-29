@@ -2,6 +2,7 @@ import SwiftUI
 import AVFoundation
 import Metal
 import StoreKit
+import Combine
 
 enum GameCameraMode: Int {
     case thirdPerson
@@ -699,12 +700,6 @@ struct ContentView: View {
                             }
                         }
                     }
-
-                    Button {
-                        showsCoffeeStore = true
-                    } label: {
-                        Label("Invitarme un café", systemImage: "cup.and.saucer.fill")
-                    }
                 } label: {
                     Image(systemName: "gearshape.fill")
                         .font(.system(size: 19, weight: .semibold))
@@ -756,6 +751,41 @@ struct ContentView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             .safeAreaPadding(.top, 8)
+
+            if model.isAnyMultiplayerConnected {
+                HStack(spacing: 10) {
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: 8, height: 8)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("ENLAZADO: \(model.activePeerDisplayName)")
+                            .font(.system(size: 11, weight: .black, design: .monospaced))
+                            .foregroundStyle(.green)
+                        Text("HP Aliado: \(Int(model.remotePlayerHealth))% • Score: \(model.remotePlayerScore)")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.85))
+                    }
+                    Button {
+                        model.sendMultiplayerActionPulse()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "bolt.horizontal.fill")
+                            Text("PULSO 2P")
+                        }
+                        .font(.system(size: 10, weight: .black, design: .monospaced))
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(Color.cyan, in: Capsule())
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(.black.opacity(0.75), in: Capsule())
+                .overlay(Capsule().stroke(Color.green.opacity(0.6), lineWidth: 1.2))
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .safeAreaPadding(.top, 8)
+            }
 
             if model.gameState == .paused {
                 PauseMenuView(model: model)
@@ -1146,21 +1176,212 @@ final class GameModel: ObservableObject {
     }
 
     @Published private(set) var resetRequestID = 0
+    @Published var remotePlayerName: String = ""
+    @Published var remotePlayerHealth: Float = 100.0
+    @Published var remotePlayerScore: Int = 0
+    @Published var remotePlayerPosition = SIMD3<Float>(-3.8, 0, 3.8)
+    @Published var remotePlayerYaw: Float = .pi
+    private var localPlayerPosition = SIMD3<Float>(3.8, 0, 3.8)
+    private var localPlayerYaw: Float = .pi
+    private var cancellables = Set<AnyCancellable>()
+
+    var isAnyMultiplayerConnected: Bool {
+        multiplayer.isConnected || gameCenter.isInMatch
+    }
+
+    var activePeerDisplayName: String {
+        if multiplayer.isConnected, let localPeer = multiplayer.peers.first?.displayName {
+            return localPeer
+        }
+        if gameCenter.isInMatch, let gcPeer = gameCenter.connectedPlayerNames.first {
+            return gcPeer
+        }
+        return remotePlayerName.isEmpty ? "Jugador 2" : remotePlayerName
+    }
 
     init() {
         audio.start()
+
+        // Reenviar cambios de multiplayer y gameCenter a las vistas SwiftUI
+        multiplayer.objectWillChange
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
+        gameCenter.objectWillChange
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
+        multiplayer.onConnected = { [weak self] in
+            guard let self else { return }
+            self.remotePlayerName = self.multiplayer.peers.first?.displayName ?? "Jugador 2"
+            self.audio.playLaserIgnition()
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+        }
+
+        multiplayer.onPacketReceived = { [weak self] packet in
+            self?.handleMultiplayerPacket(packet)
+        }
+
+        gameCenter.onPacketReceived = { [weak self] packet in
+            self?.handleMultiplayerPacket(packet)
+        }
+
+        gameCenter.onMatchStarted = { [weak self] in
+            guard let self else { return }
+            self.remotePlayerName = self.gameCenter.connectedPlayerNames.first ?? "Jugador Game Center"
+            self.audio.playLaserIgnition()
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            self.startGame(fromNetwork: false)
+        }
     }
 
-    func startGame() {
+    func updateLocalTransform(position: SIMD3<Float>, yaw: Float) {
+        self.localPlayerPosition = position
+        self.localPlayerYaw = yaw
+        broadcastLocalState()
+    }
+
+    func startGame(fromNetwork: Bool = false) {
         playerHealth = 100.0
         playerScore = 0
+        remotePlayerHealth = 100.0
+        remotePlayerScore = 0
         currentWave = 1
         botsRemainingInWave = 5
         totalBotsInWave = 5
         isWaveIntermission = false
         heldTool = .none
+        showsMultiplayerSheet = false
         resetRequestID += 1
         gameState = .playing
+
+        if !fromNetwork {
+            let startPacket = LocalMatchPacket(
+                kind: .start,
+                peerID: multiplayer.localPeer.displayName,
+                mode: multiplayer.mode,
+                position: localPlayerPosition,
+                yaw: localPlayerYaw,
+                timestamp: Date().timeIntervalSince1970,
+                health: playerHealth,
+                score: playerScore
+            )
+            if multiplayer.isConnected {
+                remotePlayerName = multiplayer.peers.first?.displayName ?? "Jugador 2"
+                multiplayer.send(startPacket)
+            }
+            if gameCenter.isInMatch {
+                remotePlayerName = gameCenter.connectedPlayerNames.first ?? "Jugador Game Center"
+                gameCenter.sendPacket(startPacket)
+            }
+        }
+    }
+
+    func handleMultiplayerPacket(_ packet: LocalMatchPacket) {
+        if !packet.peerID.isEmpty {
+            remotePlayerName = packet.peerID
+        }
+        switch packet.kind {
+        case .start:
+            if let m = packet.mode {
+                multiplayer.mode = m
+            }
+            if let pos = packet.position {
+                remotePlayerPosition = pos
+            }
+            if let y = packet.yaw {
+                remotePlayerYaw = y
+            }
+            startGame(fromNetwork: true)
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+
+        case .controllerInput:
+            if let jx = packet.joystickX, let jy = packet.joystickY {
+                self.joystick = CGVector(dx: CGFloat(jx), dy: CGFloat(jy))
+            }
+            if packet.jumpPressed == true {
+                self.requestJump()
+            }
+            if let toolIndex = packet.tool, let newTool = GameHeldTool(rawValue: toolIndex) {
+                self.heldTool = newTool
+            }
+
+        case .state:
+            if let h = packet.health {
+                self.remotePlayerHealth = h
+            }
+            if let s = packet.score {
+                self.remotePlayerScore = s
+            }
+            if let pos = packet.position {
+                self.remotePlayerPosition = pos
+            }
+            if let y = packet.yaw {
+                self.remotePlayerYaw = y
+            }
+
+        case .hit, .laser:
+            if multiplayer.mode == .versus {
+                takeDamage(12.0, broadcast: false)
+                UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+            } else {
+                // En modo Cooperativo: curación/escudo compartido + puntos de equipo
+                playerHealth = min(100.0, playerHealth + 10.0)
+                playerScore += 25
+                broadcastLocalState()
+            }
+
+        case .hello:
+            broadcastLocalState()
+        }
+    }
+
+    func broadcastLocalState() {
+        guard isAnyMultiplayerConnected else { return }
+        let pkt = LocalMatchPacket(
+            kind: .state,
+            peerID: multiplayer.localPeer.displayName,
+            mode: multiplayer.mode,
+            position: localPlayerPosition,
+            yaw: localPlayerYaw,
+            timestamp: Date().timeIntervalSince1970,
+            health: playerHealth,
+            score: playerScore
+        )
+        if multiplayer.isConnected {
+            multiplayer.send(pkt)
+        }
+        if gameCenter.isInMatch {
+            gameCenter.sendPacket(pkt)
+        }
+    }
+
+    func sendMultiplayerActionPulse() {
+        guard isAnyMultiplayerConnected else { return }
+        let pkt = LocalMatchPacket(
+            kind: .hit,
+            peerID: multiplayer.localPeer.displayName,
+            mode: multiplayer.mode,
+            position: localPlayerPosition,
+            yaw: localPlayerYaw,
+            timestamp: Date().timeIntervalSince1970,
+            health: playerHealth,
+            score: playerScore
+        )
+        if multiplayer.isConnected {
+            multiplayer.send(pkt)
+        }
+        if gameCenter.isInMatch {
+            gameCenter.sendPacket(pkt)
+        }
+        audio.playLaserIgnition()
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }
 
     func returnToMainMenu() {
@@ -1185,13 +1406,17 @@ final class GameModel: ObservableObject {
 
     func addScore(_ points: Int) {
         playerScore += points
+        broadcastLocalState()
     }
 
-    func takeDamage(_ damage: Float) {
+    func takeDamage(_ damage: Float, broadcast: Bool = true) {
         if damage < 0 {
             playerHealth = min(100.0, playerHealth - damage)
         } else {
             playerHealth = max(0, playerHealth - damage)
+        }
+        if broadcast {
+            broadcastLocalState()
         }
         if playerHealth <= 0 && !isDefeated {
             isDefeated = true
@@ -4079,13 +4304,31 @@ struct PauseMenuView: View {
 
 struct MultiplayerSettingsSheet: View {
     @ObservedObject var model: GameModel
+    @ObservedObject var multiplayer: LocalMultiplayerSession
     @Environment(\.dismiss) private var dismiss
+
+    init(model: GameModel) {
+        self.model = model
+        self.multiplayer = model.multiplayer
+    }
 
     var body: some View {
         NavigationStack {
             Form {
+                Section("Tu Dispositivo") {
+                    HStack {
+                        Label(multiplayer.localPeer.displayName, systemImage: "iphone.radiowaves.left.and.right")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.cyan)
+                        Spacer()
+                        Text(multiplayer.isConnected ? "ENLAZADO" : "LISTO")
+                            .font(.caption2.bold())
+                            .foregroundStyle(multiplayer.isConnected ? .green : .secondary)
+                    }
+                }
+
                 Section("Modo de Juego") {
-                    Picker("Modo", selection: $model.multiplayer.mode) {
+                    Picker("Modo", selection: $multiplayer.mode) {
                         ForEach(LocalMatchMode.allCases) { mode in
                             Text(mode.label).tag(mode)
                         }
@@ -4094,7 +4337,7 @@ struct MultiplayerSettingsSheet: View {
                 }
 
                 Section("Rol de este Dispositivo") {
-                    Picker("Rol", selection: $model.multiplayer.role) {
+                    Picker("Rol", selection: $multiplayer.role) {
                         ForEach(LocalDeviceRole.allCases) { role in
                             Text(role.label).tag(role)
                         }
@@ -4102,62 +4345,106 @@ struct MultiplayerSettingsSheet: View {
                 }
 
                 Section("Conexión Local Wi-Fi / Bluetooth") {
+                    // Estado en vivo
+                    HStack(spacing: 10) {
+                        Image(systemName: multiplayer.isConnected ? "checkmark.seal.fill" : (multiplayer.isHosting || multiplayer.isSearching ? "dot.radiowaves.left.and.right" : "wifi"))
+                            .foregroundStyle(multiplayer.isConnected ? .green : .cyan)
+                        Text(multiplayer.statusMessage)
+                            .font(.caption.bold())
+                            .foregroundStyle(multiplayer.isConnected ? .green : .primary)
+                    }
+
                     Button {
-                        model.multiplayer.host()
+                        multiplayer.host()
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                     } label: {
                         HStack {
-                            Label("Crear sala (Host 3D)", systemImage: "wifi")
+                            Label("1. Crear sala (Host 3D)", systemImage: "antenna.radiowaves.left.and.right")
+                                .font(.subheadline.bold())
                             Spacer()
-                            if model.multiplayer.isHosting && !model.multiplayer.isConnected {
+                            if multiplayer.isHosting && !multiplayer.isConnected {
                                 ProgressView()
+                            } else if multiplayer.isHosting {
+                                Text("Activa")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.green)
                             }
                         }
                     }
 
                     Button {
-                        model.multiplayer.join()
+                        multiplayer.join()
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                     } label: {
                         HStack {
-                            Label("Unirse a sala cercana", systemImage: "person.2")
+                            Label("2. Unirse a sala cercana", systemImage: "person.2.wave.2.fill")
+                                .font(.subheadline.bold())
                             Spacer()
-                            if model.multiplayer.isSearching && !model.multiplayer.isConnected {
+                            if multiplayer.isSearching && !multiplayer.isConnected {
                                 ProgressView()
                             }
                         }
                     }
 
-                    if model.multiplayer.isHosting && !model.multiplayer.isConnected {
-                        HStack(spacing: 8) {
-                            Image(systemName: "antenna.radiowaves.left.and.right")
-                                .foregroundStyle(.blue)
-                            Text("Anunciando sala... Pon 'Unirse' en el otro dispositivo cerca de este.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    } else if model.multiplayer.isSearching && !model.multiplayer.isConnected {
-                        HStack(spacing: 8) {
-                            Image(systemName: "magnifyingglass")
-                                .foregroundStyle(.orange)
-                            Text("Buscando salas... Asegúrate de presionar 'Crear sala' en el dispositivo principal.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    if model.multiplayer.isConnected {
-                        HStack {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                            Text(model.multiplayer.role == .remoteController ? "Control Remoto Conectado" : "Jugador Conectado")
-                        }
-
-                        Button("Desconectar", role: .destructive) {
-                            model.multiplayer.stop()
+                    if !multiplayer.discoveredPeers.isEmpty && !multiplayer.isConnected {
+                        ForEach(multiplayer.discoveredPeers, id: \.displayName) { peer in
+                            Button {
+                                multiplayer.invitePeer(peer)
+                            } label: {
+                                HStack {
+                                    Image(systemName: "iphone")
+                                        .foregroundStyle(.green)
+                                    Text("Conectar con \(peer.displayName)")
+                                        .font(.caption.bold())
+                                    Spacer()
+                                    Text("Enlazar")
+                                        .font(.caption2.bold())
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.green.opacity(0.2), in: Capsule())
+                                }
+                            }
                         }
                     }
 
-                    if let error = model.multiplayer.lastError {
-                        Text("Error: \(error)")
+                    if multiplayer.isConnected {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                                Text("Conectado con: \(multiplayer.peers.first?.displayName ?? "Jugador 2")")
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.green)
+                            }
+
+                            Button {
+                                dismiss()
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                    model.startGame(fromNetwork: false)
+                                }
+                            } label: {
+                                HStack {
+                                    Image(systemName: "play.fill")
+                                    Text("INICIAR PARTIDA MULTIJUGADOR AHORA")
+                                        .font(.subheadline.bold())
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color.green, in: RoundedRectangle(cornerRadius: 12))
+                                .foregroundStyle(.black)
+                            }
+                            .buttonStyle(.plain)
+
+                            Button("Desconectar sala", role: .destructive) {
+                                multiplayer.stop()
+                            }
+                            .font(.caption)
+                        }
+                        .padding(.vertical, 4)
+                    }
+
+                    if let error = multiplayer.lastError {
+                        Text("Aviso: \(error)")
                             .font(.caption)
                             .foregroundStyle(.red)
                     }
@@ -4198,19 +4485,42 @@ struct MultiplayerSettingsSheet: View {
                     }
 
                     if model.gameCenter.isInMatch {
-                        HStack {
-                            Image(systemName: "globe.americas.fill")
-                                .foregroundStyle(.green)
-                            Text("Partida remota activa (\(model.gameCenter.connectedPlayerNames.count + 1) jugadores)")
-                                .font(.caption.bold())
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Image(systemName: "globe.americas.fill")
+                                    .foregroundStyle(.green)
+                                Text("Partida de Game Center lista (\(model.gameCenter.connectedPlayerNames.count + 1) jugadores)")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.green)
+                            }
+                            ForEach(model.gameCenter.connectedPlayerNames, id: \.self) { peer in
+                                Label(peer, systemImage: "person.fill")
+                                    .font(.caption.bold())
+                            }
+                            Button {
+                                dismiss()
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                    model.startGame(fromNetwork: false)
+                                }
+                            } label: {
+                                HStack {
+                                    Image(systemName: "play.fill")
+                                    Text("INICIAR PARTIDA DE GAME CENTER AHORA")
+                                        .font(.subheadline.bold())
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color.green, in: RoundedRectangle(cornerRadius: 12))
+                                .foregroundStyle(.black)
+                            }
+                            .buttonStyle(.plain)
+
+                            Button("Abandonar partida de Game Center", role: .destructive) {
+                                model.gameCenter.leaveMatch()
+                            }
+                            .font(.caption)
                         }
-                        ForEach(model.gameCenter.connectedPlayerNames, id: \.self) { peer in
-                            Label(peer, systemImage: "person.fill")
-                                .font(.caption)
-                        }
-                        Button("Abandonar partida de Game Center", role: .destructive) {
-                            model.gameCenter.leaveMatch()
-                        }
+                        .padding(.vertical, 4)
                     }
 
                     if let error = model.gameCenter.lastError {
@@ -4395,10 +4705,16 @@ struct MainMenuView: View {
                                 model.startGame()
                             } label: {
                                 HStack(spacing: 12) {
-                                    Image(systemName: "play.fill")
+                                    Image(systemName: model.isAnyMultiplayerConnected ? "bolt.horizontal.circle.fill" : "play.fill")
                                         .font(isCompactLandscape ? .subheadline.bold() : .title3.bold())
-                                    Text("JUGAR EN SOLITARIO")
-                                        .font(isCompactLandscape ? .subheadline.bold() : .headline.bold())
+                                    Text(
+                                        model.isAnyMultiplayerConnected
+                                            ? "INICIAR MULTIJUGADOR (\(model.activePeerDisplayName))"
+                                            : "JUGAR EN SOLITARIO"
+                                    )
+                                    .font(isCompactLandscape ? .subheadline.bold() : .headline.bold())
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
                                 }
                                 .foregroundStyle(.white)
                                 .frame(maxWidth: isCompactLandscape ? 320 : 340, minHeight: isCompactLandscape ? 44 : 58)
@@ -4406,13 +4722,19 @@ struct MainMenuView: View {
                                     ZStack {
                                         RoundedRectangle(cornerRadius: isCompactLandscape ? 16 : 22)
                                             .fill(
-                                                LinearGradient(colors: [.blue.opacity(0.85), .cyan.opacity(0.85)], startPoint: .leading, endPoint: .trailing)
+                                                LinearGradient(
+                                                    colors: model.isAnyMultiplayerConnected
+                                                        ? [.green.opacity(0.90), .teal.opacity(0.90)]
+                                                        : [.blue.opacity(0.85), .cyan.opacity(0.85)],
+                                                    startPoint: .leading,
+                                                    endPoint: .trailing
+                                                )
                                             )
                                         RoundedRectangle(cornerRadius: isCompactLandscape ? 16 : 22)
                                             .stroke(Color.white.opacity(0.85), lineWidth: 1.5)
                                     }
                                 )
-                                .shadow(color: .cyan.opacity(0.65), radius: 14)
+                                .shadow(color: (model.isAnyMultiplayerConnected ? Color.green : Color.cyan).opacity(0.65), radius: 14)
                             }
                             .buttonStyle(.plain)
 
@@ -4420,55 +4742,40 @@ struct MainMenuView: View {
                                 model.showsMultiplayerSheet = true
                             } label: {
                                 HStack(spacing: 12) {
-                                    Image(systemName: "person.2.fill")
+                                    Image(systemName: model.isAnyMultiplayerConnected ? "checkmark.seal.fill" : "person.2.fill")
                                         .font(isCompactLandscape ? .subheadline.bold() : .title3.bold())
-                                    Text("MULTIJUGADOR LOCAL")
-                                        .font(isCompactLandscape ? .subheadline.bold() : .headline.bold())
+                                        .foregroundStyle(model.isAnyMultiplayerConnected ? .green : .white)
+                                    Text(
+                                        model.isAnyMultiplayerConnected
+                                            ? "SALA ACTIVA (\(model.activePeerDisplayName))"
+                                            : "MULTIJUGADOR LOCAL / ONLINE"
+                                    )
+                                    .font(isCompactLandscape ? .subheadline.bold() : .headline.bold())
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
                                 }
                                 .foregroundStyle(.white)
                                 .frame(maxWidth: isCompactLandscape ? 320 : 340, minHeight: isCompactLandscape ? 44 : 58)
                                 .background(
                                     ZStack {
                                         RoundedRectangle(cornerRadius: isCompactLandscape ? 16 : 22)
-                                            .fill(Color.white.opacity(0.18))
+                                            .fill(model.isAnyMultiplayerConnected ? Color.green.opacity(0.25) : Color.white.opacity(0.18))
                                             .background(Color.black.opacity(0.35), in: RoundedRectangle(cornerRadius: isCompactLandscape ? 16 : 22))
 
                                         RoundedRectangle(cornerRadius: isCompactLandscape ? 16 : 22)
                                             .stroke(
-                                                LinearGradient(colors: [.white.opacity(0.90), .white.opacity(0.25)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                                                LinearGradient(
+                                                    colors: model.isAnyMultiplayerConnected
+                                                        ? [.green.opacity(0.95), .cyan.opacity(0.50)]
+                                                        : [.white.opacity(0.90), .white.opacity(0.25)],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                ),
                                                 lineWidth: 1.2
                                             )
                                     }
                                 )
                                 .shadow(color: .black.opacity(0.3), radius: 10)
-                            }
-                            .buttonStyle(.plain)
-
-                            Button {
-                                showsCoffeeStore = true
-                            } label: {
-                                HStack(spacing: 12) {
-                                    Text("☕️")
-                                        .font(isCompactLandscape ? .subheadline : .title3)
-                                    Text("INVITAR UN CAFÉ")
-                                        .font(isCompactLandscape ? .subheadline.bold() : .headline.bold())
-                                }
-                                .foregroundStyle(.yellow)
-                                .frame(maxWidth: isCompactLandscape ? 320 : 340, minHeight: isCompactLandscape ? 44 : 58)
-                                .background(
-                                    ZStack {
-                                        RoundedRectangle(cornerRadius: isCompactLandscape ? 16 : 22)
-                                            .fill(Color.yellow.opacity(0.18))
-                                            .background(Color.black.opacity(0.35), in: RoundedRectangle(cornerRadius: isCompactLandscape ? 16 : 22))
-
-                                        RoundedRectangle(cornerRadius: isCompactLandscape ? 16 : 22)
-                                            .stroke(
-                                                LinearGradient(colors: [.yellow.opacity(0.90), .orange.opacity(0.50)], startPoint: .topLeading, endPoint: .bottomTrailing),
-                                                lineWidth: 1.2
-                                            )
-                                    }
-                                )
-                                .shadow(color: .yellow.opacity(0.40), radius: 10)
                             }
                             .buttonStyle(.plain)
 

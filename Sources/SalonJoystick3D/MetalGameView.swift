@@ -112,6 +112,11 @@ struct MetalGameView: UIViewRepresentable {
                     )
                 }
             }
+            renderer.onLocalPlayerTransformUpdate = { [weak model] pos, yaw in
+                Task { @MainActor in
+                    model?.updateLocalTransform(position: pos, yaw: yaw)
+                }
+            }
             view.delegate = renderer
         } catch {
             if let onFallbackRequested {
@@ -133,7 +138,10 @@ struct MetalGameView: UIViewRepresentable {
         context.coordinator.renderer?.onFPSUpdate = model.showsFPS
             ? context.coordinator.onFPSUpdate
             : nil
-        context.coordinator.renderer?.isSplitScreenMode = model.multiplayer.isConnected && model.multiplayer.role == .full3DRender
+        context.coordinator.renderer?.isSplitScreenMode = false
+        context.coordinator.renderer?.isRemotePlayerConnected = model.isAnyMultiplayerConnected
+        context.coordinator.renderer?.remotePlayerPosition = model.remotePlayerPosition
+        context.coordinator.renderer?.remotePlayerYaw = model.remotePlayerYaw
         let isPaused = model.gameState != .playing
         context.coordinator.renderer?.setInput(
             joystick: model.joystick,
