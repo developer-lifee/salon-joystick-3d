@@ -147,7 +147,7 @@ final class GameCenterManager: NSObject, ObservableObject {
     func sendPacket(_ packet: LocalMatchPacket) {
         guard let activeMatch, isInMatch,
               let data = try? JSONEncoder().encode(packet) else { return }
-        let mode: GKMatch.SendDataMode = (packet.kind == .state || packet.kind == .controllerInput) ? .unreliable : .reliable
+        let mode: GKMatch.SendDataMode = (packet.kind == .state || packet.kind == .controllerInput || packet.kind == .enemySync) ? .unreliable : .reliable
         do {
             try activeMatch.sendData(toAllPlayers: data, with: mode)
         } catch {

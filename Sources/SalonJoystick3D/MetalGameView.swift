@@ -117,6 +117,39 @@ struct MetalGameView: UIViewRepresentable {
                     model?.updateLocalTransform(position: pos, yaw: yaw)
                 }
             }
+            renderer.isAuthorityForNPCs = model.isHost
+            renderer.onNPCSyncUpdate = { [weak model] positions, healths, wave, remaining, total, isIntermission, intermissionTime in
+                Task { @MainActor in
+                    model?.broadcastEnemySync(
+                        positions: positions,
+                        healths: healths,
+                        wave: wave,
+                        remaining: remaining,
+                        total: total,
+                        isIntermission: isIntermission,
+                        intermissionTime: intermissionTime
+                    )
+                }
+            }
+            renderer.onClientNPCHit = { [weak model] botIndex, damage in
+                Task { @MainActor in
+                    model?.sendEnemyHit(index: botIndex, damage: damage)
+                }
+            }
+            model.onRemoteNPCSyncReceived = { [weak renderer] pos, healths, wave, rem, tot, inter, interTime in
+                renderer?.applyRemoteNPCSync(
+                    positions: pos,
+                    healths: healths,
+                    wave: wave,
+                    remaining: rem,
+                    total: tot,
+                    isIntermission: inter,
+                    intermissionTime: interTime
+                )
+            }
+            model.onRemoteNPCHitReceived = { [weak renderer] botIndex, damage in
+                renderer?.applyRemoteNPCDamage(index: botIndex, damage: damage)
+            }
             view.delegate = renderer
         } catch {
             if let onFallbackRequested {
@@ -139,6 +172,7 @@ struct MetalGameView: UIViewRepresentable {
             ? context.coordinator.onFPSUpdate
             : nil
         context.coordinator.renderer?.isSplitScreenMode = false
+        context.coordinator.renderer?.isAuthorityForNPCs = model.isHost
         context.coordinator.renderer?.isRemotePlayerConnected = model.isAnyMultiplayerConnected
         context.coordinator.renderer?.remotePlayerPosition = model.remotePlayerPosition
         context.coordinator.renderer?.remotePlayerYaw = model.remotePlayerYaw

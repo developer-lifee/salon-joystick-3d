@@ -986,6 +986,67 @@ final class GameModel: ObservableObject {
         multiplayer.isConnected || gameCenter.isInMatch
     }
 
+    var isHost: Bool {
+        if multiplayer.isConnected {
+            return multiplayer.isHosting
+        }
+        if gameCenter.isInMatch {
+            guard let firstRemote = gameCenter.connectedPlayerNames.first else { return true }
+            return gameCenter.localPlayerAlias <= firstRemote
+        }
+        return true
+    }
+
+    var onRemoteNPCSyncReceived: (([SIMD3<Float>], [Float], Int, Int, Int, Bool, Float) -> Void)?
+    var onRemoteNPCHitReceived: ((Int, Float) -> Void)?
+
+    func broadcastEnemySync(
+        positions: [SIMD3<Float>],
+        healths: [Float],
+        wave: Int,
+        remaining: Int,
+        total: Int,
+        isIntermission: Bool,
+        intermissionTime: Float
+    ) {
+        guard isAnyMultiplayerConnected && isHost else { return }
+        let packet = LocalMatchPacket(
+            kind: .enemySync,
+            peerID: multiplayer.localPeer.displayName,
+            timestamp: Date().timeIntervalSince1970,
+            enemyPositions: positions,
+            enemyHealths: healths,
+            wave: wave,
+            botsRemaining: remaining,
+            totalBots: total,
+            isIntermission: isIntermission,
+            intermissionTime: intermissionTime
+        )
+        if multiplayer.isConnected {
+            multiplayer.send(packet)
+        }
+        if gameCenter.isInMatch {
+            gameCenter.sendPacket(packet)
+        }
+    }
+
+    func sendEnemyHit(index: Int, damage: Float) {
+        guard isAnyMultiplayerConnected && !isHost else { return }
+        let packet = LocalMatchPacket(
+            kind: .enemyHit,
+            peerID: multiplayer.localPeer.displayName,
+            timestamp: Date().timeIntervalSince1970,
+            hitEnemyIndex: index,
+            hitDamage: damage
+        )
+        if multiplayer.isConnected {
+            multiplayer.send(packet)
+        }
+        if gameCenter.isInMatch {
+            gameCenter.sendPacket(packet)
+        }
+    }
+
     var activePeerDisplayName: String {
         if multiplayer.isConnected, let localPeer = multiplayer.peers.first?.displayName {
             return localPeer
@@ -1132,6 +1193,32 @@ final class GameModel: ObservableObject {
                 playerHealth = min(100.0, playerHealth + 10.0)
                 playerScore += 25
                 broadcastLocalState()
+            }
+
+        case .enemySync:
+            if !isHost {
+                if let positions = packet.enemyPositions,
+                   let healths = packet.enemyHealths,
+                   let wave = packet.wave,
+                   let remaining = packet.botsRemaining,
+                   let total = packet.totalBots {
+                    let intermission = packet.isIntermission ?? false
+                    let intermissionTime = packet.intermissionTime ?? 0
+                    self.npcHealths = healths
+                    self.currentWave = wave
+                    self.botsRemainingInWave = remaining
+                    self.totalBotsInWave = total
+                    self.isWaveIntermission = intermission
+                    self.waveIntermissionTime = intermissionTime
+                    onRemoteNPCSyncReceived?(positions, healths, wave, remaining, total, intermission, intermissionTime)
+                }
+            }
+
+        case .enemyHit:
+            if isHost {
+                if let botIndex = packet.hitEnemyIndex, let damage = packet.hitDamage {
+                    onRemoteNPCHitReceived?(botIndex, damage)
+                }
             }
 
         case .hello:

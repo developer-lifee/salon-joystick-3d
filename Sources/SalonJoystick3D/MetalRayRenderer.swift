@@ -877,6 +877,14 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private var smoothedRemotePos: SIMD3<Float> = SIMD3<Float>(-3.8, 0, 3.8)
     private var netSyncTimer: Float = 0
 
+    // Sincronización multijugador autoritativa de enemigos
+    var isAuthorityForNPCs: Bool = true
+    var onNPCSyncUpdate: (([SIMD3<Float>], [Float], Int, Int, Int, Bool, Float) -> Void)?
+    var onClientNPCHit: ((Int, Float) -> Void)?
+    private var playerLaserHitCooldowns = [Float](repeating: 0, count: 5)
+    private var npcNetworkSyncCountdown: Float = 0
+    private var syncedNPCNetworkPositions: [SIMD3<Float>]?
+
     private var currentWave: Int = 1
     private var botsKilledInCurrentWave: Int = 0
     private var botsSpawnedInCurrentWave: Int = 5
@@ -1466,7 +1474,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         updateToolTimers(dt: dt)
         updateNPCSimulation(dt: dt, rawDt: rawDt)
         flushDamageReport(rawDt: rawDt)
-        checkCombatHits()
+        checkCombatHits(dt: dt)
         onNPCHealthsUpdate?(npcHealths)
 
         if isRemotePlayerConnected {
@@ -2054,6 +2062,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             let displayedRemaining = max(activeAliveBots, remainingQuota)
             onWaveUpdate?(currentWave, displayedRemaining, totalBotsInWave, false, 0)
         }
+
+        if isAuthorityForNPCs {
+            let displayedRemaining = (remainingQuota <= 0 && activeAliveBots == 0) ? 0 : max(activeAliveBots, remainingQuota)
+            onNPCSyncUpdate?(npcPositions, npcHealths, currentWave, displayedRemaining, totalBotsInWave, isWaveIntermission, max(0, intermissionTimeRemaining))
+        }
     }
 
     private func handleNPCElimination(index: Int) {
@@ -2071,10 +2084,98 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         npcPositions[index].y = -10
         audio.playLightsaberDefeatSound()
         recordBotElimination()
+
+        if isAuthorityForNPCs {
+            let activeAliveBots = npcPositions.indices.filter({ npcHealths[$0] > 0 && npcRespawnTimers[$0] <= 0 }).count
+            let remainingQuota = max(0, totalBotsInWave - botsKilledInCurrentWave)
+            let remaining = max(activeAliveBots, remainingQuota)
+            onNPCSyncUpdate?(npcPositions, npcHealths, currentWave, remaining, totalBotsInWave, isWaveIntermission, max(0, intermissionTimeRemaining))
+        }
+    }
+
+    func applyRemoteNPCSync(
+        positions: [SIMD3<Float>],
+        healths: [Float],
+        wave: Int,
+        remaining: Int,
+        total: Int,
+        isIntermission: Bool,
+        intermissionTime: Float
+    ) {
+        guard !isAuthorityForNPCs else { return }
+        self.syncedNPCNetworkPositions = positions
+        for i in 0..<min(healths.count, npcHealths.count) {
+            let prevHealth = npcHealths[i]
+            npcHealths[i] = healths[i]
+            if healths[i] <= 0 {
+                npcRespawnTimers[i] = 9999.0
+                npcPositions[i].y = -10
+                if prevHealth > 0 {
+                    audio.playLightsaberDefeatSound()
+                }
+            } else {
+                npcRespawnTimers[i] = 0
+            }
+        }
+        self.currentWave = wave
+        self.totalBotsInWave = total
+        self.isWaveIntermission = isIntermission
+        self.intermissionTimeRemaining = intermissionTime
+        onNPCHealthsUpdate?(npcHealths)
+        onWaveUpdate?(wave, remaining, total, isIntermission, intermissionTime)
+    }
+
+    func applyRemoteNPCDamage(index: Int, damage: Float) {
+        guard isAuthorityForNPCs else { return }
+        guard index >= 0 && index < npcPositions.count else { return }
+        guard npcHealths[index] > 0 && npcRespawnTimers[index] <= 0 else { return }
+        npcHealths[index] = max(0, npcHealths[index] - damage)
+        onNPCHealthsUpdate?(npcHealths)
+        if npcHealths[index] <= 0 {
+            audio.playLaserPlayerHitSound()
+            onScoreUpdate?(250)
+            handleNPCElimination(index: index)
+        } else {
+            audio.playLaserPlayerHitSound()
+        }
     }
 
     private func updateNPCSimulation(dt: Float, rawDt: Float) {
         let results = laserResultBuffer.contents().assumingMemoryBound(to: RTLaserResult.self)
+
+        // Sincronización periódica de red (Host -> Cliente) a ~12 Hz
+        if isAuthorityForNPCs {
+            npcNetworkSyncCountdown -= dt
+            if npcNetworkSyncCountdown <= 0 {
+                npcNetworkSyncCountdown = 0.08
+                let activeAliveBots = npcPositions.indices.filter({ npcHealths[$0] > 0 && npcRespawnTimers[$0] <= 0 }).count
+                let remainingQuota = max(0, totalBotsInWave - botsKilledInCurrentWave)
+                let remaining = max(activeAliveBots, remainingQuota)
+                onNPCSyncUpdate?(npcPositions, npcHealths, currentWave, remaining, totalBotsInWave, isWaveIntermission, max(0, intermissionTimeRemaining))
+            }
+        } else {
+            // Cliente: interpolar suavemente posiciones recibidas del Host y reflejar estados
+            if isWaveIntermission {
+                for index in npcPositions.indices {
+                    npcPositions[index].y = -10
+                }
+            } else if let netPositions = syncedNPCNetworkPositions {
+                for index in npcPositions.indices {
+                    if npcHealths[index] <= 0 {
+                        npcPositions[index].y = -10
+                    } else if index < netPositions.count {
+                        let target = netPositions[index]
+                        let interp = min(1.0, dt * 18.0)
+                        npcPositions[index] += (target - npcPositions[index]) * interp
+                        let toPlayer = playerPosition - npcPositions[index]
+                        if simd_length_squared(SIMD2<Float>(toPlayer.x, toPlayer.z)) > 0.04 {
+                            npcYaws[index] = atan2(toPlayer.x, toPlayer.z)
+                        }
+                    }
+                }
+            }
+            return
+        }
 
         // Periodic wave status HUD sync
         waveStatusReportCountdown -= dt
@@ -2169,9 +2270,19 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 continue
             }
 
+            // En multijugador, el bot persigue al jugador más cercano
+            let targetPos: SIMD3<Float>
+            if isRemotePlayerConnected {
+                let dLocal = simd_distance_squared(npcPositions[index], playerPosition)
+                let dRemote = simd_distance_squared(npcPositions[index], remotePlayerPosition)
+                targetPos = (dLocal < dRemote) ? playerPosition : remotePlayerPosition
+            } else {
+                targetPos = playerPosition
+            }
+
             let offset = SIMD2<Float>(
-                playerPosition.x - npcPositions[index].x,
-                playerPosition.z - npcPositions[index].z
+                targetPos.x - npcPositions[index].x,
+                targetPos.z - npcPositions[index].z
             )
             let distance = simd_length(offset)
             let rawDirection = distance > 0.001 ? offset / distance : SIMD2<Float>(0, 1)
@@ -2431,7 +2542,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
     }
 
-    private func checkCombatHits() {
+    private func checkCombatHits(dt: Float) {
+        for i in playerLaserHitCooldowns.indices {
+            if playerLaserHitCooldowns[i] > 0 {
+                playerLaserHitCooldowns[i] = max(0, playerLaserHitCooldowns[i] - dt)
+            }
+        }
+
         guard !isPlayerDead, heldTool == .laser, laserActiveRemaining > 0 else { return }
 
         let origin: SIMD3<Float>
@@ -2456,16 +2573,23 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             closestDistance = alongRay
         }
 
-        if let closestIndex {
+        if let closestIndex, playerLaserHitCooldowns[closestIndex] <= 0 {
+            playerLaserHitCooldowns[closestIndex] = 0.20
             let damage: Float = 35.0
-            npcHealths[closestIndex] = max(0, npcHealths[closestIndex] - damage)
-            onNPCHealthsUpdate?(npcHealths)
+            if isAuthorityForNPCs {
+                npcHealths[closestIndex] = max(0, npcHealths[closestIndex] - damage)
+                onNPCHealthsUpdate?(npcHealths)
 
-            if npcHealths[closestIndex] <= 0 {
-                onScoreUpdate?(250)
-                handleNPCElimination(index: closestIndex)
+                if npcHealths[closestIndex] <= 0 {
+                    audio.playLaserPlayerHitSound()
+                    onScoreUpdate?(250)
+                    handleNPCElimination(index: closestIndex)
+                } else {
+                    audio.playLaserPlayerHitSound()
+                }
             } else {
                 audio.playLaserPlayerHitSound()
+                onClientNPCHit?(closestIndex, damage)
             }
         }
 
@@ -2501,15 +2625,22 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             reflectedTarget = index
             closestReflectedDistance = alongRay
         }
-        if let reflectedTarget {
+        if let reflectedTarget, playerLaserHitCooldowns[reflectedTarget] <= 0 {
+            playerLaserHitCooldowns[reflectedTarget] = 0.20
             let damage: Float = 50.0
-            npcHealths[reflectedTarget] = max(0, npcHealths[reflectedTarget] - damage)
-            audio.playLanding(intensity: 0.85)
-            onNPCHealthsUpdate?(npcHealths)
+            if isAuthorityForNPCs {
+                npcHealths[reflectedTarget] = max(0, npcHealths[reflectedTarget] - damage)
+                audio.playLanding(intensity: 0.85)
+                onNPCHealthsUpdate?(npcHealths)
 
-            if npcHealths[reflectedTarget] <= 0 {
-                onScoreUpdate?(350)
-                handleNPCElimination(index: reflectedTarget)
+                if npcHealths[reflectedTarget] <= 0 {
+                    audio.playLaserPlayerHitSound()
+                    onScoreUpdate?(350)
+                    handleNPCElimination(index: reflectedTarget)
+                }
+            } else {
+                audio.playLanding(intensity: 0.85)
+                onClientNPCHit?(reflectedTarget, damage)
             }
         }
     }

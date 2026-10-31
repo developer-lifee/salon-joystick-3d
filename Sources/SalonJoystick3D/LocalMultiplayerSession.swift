@@ -23,6 +23,8 @@ struct LocalMatchPacket: Codable {
         case hit
         case start
         case controllerInput
+        case enemySync
+        case enemyHit
     }
 
     var kind: Kind
@@ -39,6 +41,19 @@ struct LocalMatchPacket: Codable {
     var role: String?
     var health: Float?
     var score: Int?
+
+    // Sincronización autoritativa de enemigos (Host -> Cliente)
+    var enemyPositions: [SIMD3<Float>]?
+    var enemyHealths: [Float]?
+    var wave: Int?
+    var botsRemaining: Int?
+    var totalBots: Int?
+    var isIntermission: Bool?
+    var intermissionTime: Float?
+
+    // Daño colaborativo a enemigos (Cliente -> Host)
+    var hitEnemyIndex: Int?
+    var hitDamage: Float?
 }
 
 enum LocalDeviceRole: String, Codable, CaseIterable, Identifiable {
@@ -183,7 +198,7 @@ final class LocalMultiplayerSession: NSObject, ObservableObject {
     func send(_ packet: LocalMatchPacket) {
         guard !session.connectedPeers.isEmpty,
               let data = try? JSONEncoder().encode(packet) else { return }
-        let mode: MCSessionSendDataMode = (packet.kind == .state || packet.kind == .controllerInput) ? .unreliable : .reliable
+        let mode: MCSessionSendDataMode = (packet.kind == .state || packet.kind == .controllerInput || packet.kind == .enemySync) ? .unreliable : .reliable
         do {
             try session.send(data, toPeers: session.connectedPeers, with: mode)
         } catch {
