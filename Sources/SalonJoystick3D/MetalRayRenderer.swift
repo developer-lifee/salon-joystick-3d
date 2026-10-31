@@ -1759,12 +1759,12 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         resolveRockCollisions(position: &proposed)
         proposed.x = max(-17.0, min(17.0, proposed.x))
         proposed.z = max(-17.0, min(17.0, proposed.z))
-        let willBeInPool = isInsidePoolXZ(proposed) && proposed.y < -0.15 && proposed.y > -4.75
+        let willBeInPool = isInsidePoolXZ(proposed) && proposed.y <= 0.35 && proposed.y > -4.75
         let nextGroundHeight = groundHeight(at: proposed, insidePool: willBeInPool)
         let willBeOnFloat = willBeInPool && nextGroundHeight > -0.1
         let wasGrounded = playerPosition.y <= currentGroundHeight + 0.05
 
-        // Smooth Auto-Step Up for Pool Edge, Stairs & Ramps (step height up to 0.50m)
+        // Smooth Auto-Step Up for Stairs & Ramps (step height up to 0.50m)
         if (!currentlyInPool || playerPosition.y >= -0.40) && nextGroundHeight > currentGroundHeight && (nextGroundHeight - currentGroundHeight) <= 0.50 {
             if playerPosition.y <= currentGroundHeight + 0.25 {
                 proposed.y = nextGroundHeight
@@ -1772,35 +1772,44 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
 
         let onTrampolineBoard = playerPosition.x >= 0.7 && playerPosition.x <= 2.1 && playerPosition.z >= -6.9 && playerPosition.z <= -3.7 && playerPosition.y >= 2.7
-        // Ángulo vertical de mirada para control de buceo 3D:
-        let divePitch: Float
-        if cameraMode == .firstPerson {
-            divePitch = firstPersonPitch
-        } else {
-            let diff = -(orbitPitch - 0.22)
-            divePitch = diff * 2.2
-        }
 
         if diveQueued {
             diveQueued = false
             if willBeInPool || currentlyInPool {
-                verticalVelocity = -3.2 // Impulso inmediato de inmersión / buceo hacia el fondo
+                verticalVelocity = -3.8 // Impulso inmediato de inmersión / buceo hacia el fondo
                 audio.playSwimStrokeSound(intensity: 0.95)
                 pendingWaterImpulse = SIMD4<Float>(playerPosition.x, playerPosition.z, -1.35, 1)
             }
         }
 
+        // 🏊‍♂️ Detección de cercanía al borde de la piscina para salir al deck
+        let isNearPoolRim = (currentlyInPool || willBeInPool) && playerPosition.y >= -0.85 && (proposed.x <= -5.05 || proposed.x >= 2.05 || proposed.z <= -3.85 || proposed.z >= 0.85)
+
         if jumpQueued {
             jumpQueued = false
             if (willBeInPool || currentlyInPool) && !willBeOnFloat {
-                if proposed.y <= -0.55 {
+                if isNearPoolRim {
+                    // 🚀 Salto propulsado fuera del agua hacia el deck
+                    var exitDir = desiredDirection
+                    if simd_length_squared(exitDir) < 0.01 {
+                        if proposed.x <= -5.05 { exitDir = SIMD2<Float>(-1, 0) }
+                        else if proposed.x >= 2.05 { exitDir = SIMD2<Float>(1, 0) }
+                        else if proposed.z <= -3.85 { exitDir = SIMD2<Float>(0, -1) }
+                        else { exitDir = SIMD2<Float>(0, 1) }
+                    }
+                    verticalVelocity = 5.2
+                    horizontalVelocity = exitDir * 4.2
+                    audio.playLanding(intensity: 0.35)
+                    pendingWaterImpulse = SIMD4<Float>(playerPosition.x, playerPosition.z, -1.80, 1)
+                } else if proposed.y <= -0.55 {
                     // En inmersión profunda o reino subterráneo: brazada potente hacia arriba
-                    verticalVelocity = 3.8
-                    audio.playSwimStrokeSound(intensity: 0.85)
+                    verticalVelocity = 4.2
+                    audio.playSwimStrokeSound(intensity: 0.90)
                     pendingWaterImpulse = SIMD4<Float>(playerPosition.x, playerPosition.z, -0.90, 1)
                 } else {
-                    // En superficie: impulso para salir del agua y subir al deck
-                    verticalVelocity = 4.5
+                    // En superficie en medio del agua: salto con impulso hacia arriba
+                    verticalVelocity = 4.8
+                    horizontalVelocity = desiredDirection * 2.5
                     audio.playWaterDisturbance(intensity: 0.85)
                     pendingWaterImpulse = SIMD4<Float>(playerPosition.x, playerPosition.z, -1.60, 1)
                 }
@@ -1810,47 +1819,66 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             } else if wasGrounded || playerPosition.y <= currentGroundHeight + 0.18 {
                 verticalVelocity = 5.4
             }
+        } else if isNearPoolRim && magnitude > 0.30 && playerPosition.y >= -0.55 {
+            // 🧗 Mantling automático: salir caminando fluidamente contra el borde de la piscina
+            var exitDir = desiredDirection
+            if simd_length_squared(exitDir) < 0.01 {
+                if proposed.x <= -5.05 { exitDir = SIMD2<Float>(-1, 0) }
+                else if proposed.x >= 2.05 { exitDir = SIMD2<Float>(1, 0) }
+                else if proposed.z <= -3.85 { exitDir = SIMD2<Float>(0, -1) }
+                else { exitDir = SIMD2<Float>(0, 1) }
+            }
+            proposed.x += exitDir.x * 0.45
+            proposed.z += exitDir.y * 0.45
+            proposed.y = 0.20
+            verticalVelocity = 1.5
+            horizontalVelocity = exitDir * 2.2
+            audio.playLanding(intensity: 0.25)
         }
 
         if (willBeInPool || currentlyInPool) && !willBeOnFloat {
-            // 🤿 Piscina profunda con nado y buceo fluido 3D
+            // 🤿 Piscina profunda con flotabilidad natural y nado libre
             let isSwimming = magnitude > 0.08
-            let isDeepUnderwater = proposed.y < -0.55
-            let isDivingDown = divePitch < -0.08 || verticalVelocity < -0.3
+            let isFirstPersonDiving = (cameraMode == .firstPerson) && firstPersonPitch < -0.28
+            let isActivelyDiving = isFirstPersonDiving || verticalVelocity < -0.6
 
-            if isDivingDown && isSwimming {
-                // Inmersión fluida hacia el fondo de la piscina
-                let targetVerticalSwim = sin(divePitch) * movementSpeed * magnitude * 1.30
-                verticalVelocity += (targetVerticalSwim - verticalVelocity) * min(1.0, dt * 5.5)
-
+            if isActivelyDiving {
+                // Durante buceo activo: descender suavemente con resistencia del agua
+                if isFirstPersonDiving && isSwimming {
+                    let targetVerticalSwim = sin(firstPersonPitch) * movementSpeed * magnitude * 1.25
+                    verticalVelocity += (targetVerticalSwim - verticalVelocity) * min(1.0, dt * 5.0)
+                } else {
+                    verticalVelocity *= exp(-dt * 2.0)
+                }
                 swimStrokeTimer -= dt
                 if swimStrokeTimer <= 0 {
-                    audio.playSwimStrokeSound(intensity: 0.70 * magnitude)
+                    audio.playSwimStrokeSound(intensity: 0.65 * magnitude)
                     swimStrokeTimer = 0.45
                 }
-            } else if isSwimming {
-                let targetVerticalSwim = sin(divePitch) * movementSpeed * magnitude * 0.95
-                verticalVelocity += (targetVerticalSwim - verticalVelocity) * min(1.0, dt * 4.8)
-
-                swimStrokeTimer -= dt
-                if swimStrokeTimer <= 0 {
-                    let strokeIntensity = isDeepUnderwater ? 0.65 * magnitude : 0.45 * magnitude
-                    audio.playSwimStrokeSound(intensity: strokeIntensity)
-                    swimStrokeTimer = 0.50
-                }
             } else {
-                if isDeepUnderwater || isDivingDown {
-                    verticalVelocity *= exp(-dt * 2.5)
+                // 🌊 Flotabilidad hidrodinámica: el agua te sostiene suavemente a flote en el pecho (-0.12m)
+                let surfaceY: Float = -0.12
+                if proposed.y < surfaceY {
+                    let depth = surfaceY - proposed.y
+                    verticalVelocity += min(4.2, depth * 3.8 + 1.2) * dt
+                    verticalVelocity *= exp(-dt * 2.2)
                 } else {
-                    // Flotación suave a nivel del pecho en la superficie (-0.22m)
-                    let targetY: Float = -0.22
-                    let diff = targetY - proposed.y
-                    verticalVelocity += diff * 2.5 * dt
-                    verticalVelocity *= exp(-dt * 2.5)
+                    let diff = surfaceY - proposed.y
+                    verticalVelocity += diff * 4.0 * dt
+                    verticalVelocity *= exp(-dt * 3.5)
                 }
-                swimStrokeTimer = min(swimStrokeTimer, 0.12)
+
+                if isSwimming {
+                    swimStrokeTimer -= dt
+                    if swimStrokeTimer <= 0 {
+                        audio.playSwimStrokeSound(intensity: 0.45 * magnitude)
+                        swimStrokeTimer = 0.50
+                    }
+                } else {
+                    swimStrokeTimer = min(swimStrokeTimer, 0.12)
+                }
             }
-            horizontalVelocity *= exp(-dt * 2.0)
+            horizontalVelocity *= exp(-dt * 1.8)
         } else if isCoverActive {
             verticalVelocity = 0
         } else {

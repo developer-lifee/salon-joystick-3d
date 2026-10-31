@@ -3469,8 +3469,9 @@ final class ChiptuneAudioEngine {
         return buffer
     }
 
+    // 🛡️ Desenfundar Escudo Metálico (Captain America / Vibranium Shield Unsheath & Metallic Ring)
     private func makeLaserReflectionBuffer() -> AVAudioPCMBuffer? {
-        let duration = 0.22
+        let duration = 0.55
         let frameCount = AVAudioFrameCount(format.sampleRate * duration)
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
               let channels = buffer.floatChannelData else {
@@ -3478,14 +3479,57 @@ final class ChiptuneAudioEngine {
         }
         buffer.frameLength = frameCount
 
+        var lpNoise = 0.0
         for frame in 0..<Int(frameCount) {
             let t = Double(frame) / format.sampleRate
             let progress = t / duration
-            let freq = 1200.0 + progress * 1200.0
-            let phase = 2.0 * Double.pi * freq * t
-            let envelope = sin(progress * Double.pi) * exp(-progress * 3.0)
-            let synth = (sin(phase) + 0.30 * sin(phase * 2.0)) * envelope
-            channels[0][frame] = Float(synth * 0.75)
+
+            // 1. Friction Scrape / Unsheath Slit (0ms a 75ms: fricción metálica rápida al desenfundar)
+            let scrapeEnv = min(1.0, t * 140.0) * exp(-t * 32.0)
+            let scrapeFreq = 1650.0 + 1800.0 * min(1.0, t * 24.0)
+            let rawNoise = Double.random(in: -1.0...1.0)
+            lpNoise = lpNoise * 0.75 + rawNoise * 0.25
+            let scrapeNoise = lpNoise * scrapeEnv * 0.45
+            let scrapeTone = sin(2.0 * .pi * scrapeFreq * t) * scrapeEnv * 0.55
+
+            // 2. Heavy Clank Body / Mechanical Lock (10ms a 60ms: peso sólido de aleación metálica)
+            let clankEnv = min(1.0, t * 180.0) * exp(-t * 26.0)
+            let clankBody = sin(2.0 * .pi * 210.0 * t) * clankEnv * 0.65
+
+            // 3. Vibranium Resonant Ring / Resonancia Metálica Brillante (Armónicos puros de campana / plato de vibranio)
+            let ringEnv = min(1.0, t * 160.0) * exp(-t * 5.8)
+            // Frecuencias armónicas: Fundamental 587.3Hz (D5), 1174.6Hz (D6), 1760Hz (A6), 2349Hz (D7), 3520Hz (A7)
+            let f0 = 587.33
+            let f1 = 1174.66
+            let f2 = 1760.00
+            let f3 = 2349.32
+            let f4 = 3520.00
+
+            // Modulación sutil de vibrato metálico
+            let ringVib = 1.0 + 0.008 * sin(2.0 * .pi * 8.5 * t)
+
+            let h0_L = sin(2.0 * .pi * (f0 * ringVib) * t) * 0.55
+            let h1_L = sin(2.0 * .pi * (f1 * ringVib) * t) * 0.40
+            let h2_L = sin(2.0 * .pi * (f2 * ringVib) * t) * 0.28
+            let h3_L = sin(2.0 * .pi * (f3 * ringVib) * t) * 0.18
+            let h4_L = sin(2.0 * .pi * (f4 * ringVib) * t) * 0.10
+
+            // Canal R con ligerísimo batimiento estéreo (detuning +1.5 Hz) para espacialidad y grosor
+            let h0_R = sin(2.0 * .pi * (f0 * ringVib + 1.4) * t) * 0.55
+            let h1_R = sin(2.0 * .pi * (f1 * ringVib + 2.2) * t) * 0.40
+            let h2_R = sin(2.0 * .pi * (f2 * ringVib + 3.1) * t) * 0.28
+            let h3_R = sin(2.0 * .pi * (f3 * ringVib + 4.0) * t) * 0.18
+            let h4_R = sin(2.0 * .pi * (f4 * ringVib + 5.2) * t) * 0.10
+
+            let vibraniumRingL = (h0_L + h1_L + h2_L + h3_L + h4_L) * ringEnv
+            let vibraniumRingR = (h0_R + h1_R + h2_R + h3_R + h4_R) * ringEnv
+
+            let fadeOut = min(1.0, (1.0 - progress) * 8.0)
+            let mixedL = (scrapeNoise + scrapeTone + clankBody + vibraniumRingL) * fadeOut
+            let mixedR = (scrapeNoise * 0.85 + scrapeTone + clankBody + vibraniumRingR) * fadeOut
+
+            channels[0][frame] = Float(tanh(mixedL * 1.35) * 0.90)
+            channels[1][frame] = Float(tanh(mixedR * 1.35) * 0.90)
         }
         return buffer
     }
