@@ -879,8 +879,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
     // Sincronización multijugador autoritativa de enemigos
     var isAuthorityForNPCs: Bool = true
+    var isVersusMode: Bool = false
+    var initialSpawnPosition: SIMD3<Float> = SIMD3<Float>(3.8, 0, 3.8)
+    var initialSpawnYaw: Float = .pi
     var onNPCSyncUpdate: (([SIMD3<Float>], [Float], Int, Int, Int, Bool, Float) -> Void)?
     var onClientNPCHit: ((Int, Float) -> Void)?
+    var onRemotePlayerHit: ((Float) -> Void)?
+    private var remotePlayerHitCooldown: Float = 0
     private var playerLaserHitCooldowns = [Float](repeating: 0, count: 5)
     private var npcNetworkSyncCountdown: Float = 0
     private var syncedNPCNetworkPositions: [SIMD3<Float>]?
@@ -1191,11 +1196,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private var diveQueued = false
 
     func resetSimulation() {
-        playerPosition = SIMD3<Float>(3.8, 0, 3.8)
+        playerPosition = initialSpawnPosition
         horizontalVelocity = .zero
         verticalVelocity = 0
-        playerYaw = .pi
-        cameraYaw = 0
+        playerYaw = initialSpawnYaw
+        cameraYaw = initialSpawnYaw - .pi
         orbitPitch = 0.22
         firstPersonPitch = 0
         isSlidingOnToboggan = false
@@ -2141,6 +2146,16 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     }
 
     private func updateNPCSimulation(dt: Float, rawDt: Float) {
+        if isVersusMode {
+            // En modo Versus no hay bots; es un combate 1 vs 1 directo entre jugadores
+            for index in npcPositions.indices {
+                npcPositions[index] = SIMD3<Float>(0, -500, 0)
+                npcHealths[index] = 0
+                npcRespawnTimers[index] = 99999.0
+            }
+            return
+        }
+
         let results = laserResultBuffer.contents().assumingMemoryBound(to: RTLaserResult.self)
 
         // Sincronización periódica de red (Host -> Cliente) a ~12 Hz
@@ -2593,6 +2608,21 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
         }
 
+        // Detección de impacto de láser sobre el otro jugador (1v1 Versus o cooperativo)
+        if isRemotePlayerConnected {
+            remotePlayerHitCooldown = max(0, remotePlayerHitCooldown - dt)
+            let remoteCenter = remotePlayerPosition + SIMD3<Float>(0, 0.85, 0)
+            let alongRay = simd_dot(remoteCenter - origin, direction)
+            if alongRay > 0 && alongRay < 35.0 {
+                let closestPoint = origin + direction * alongRay
+                if simd_distance(remoteCenter, closestPoint) < 0.75 && remotePlayerHitCooldown <= 0 {
+                    remotePlayerHitCooldown = 0.22
+                    audio.playLaserPlayerHitSound()
+                    onRemotePlayerHit?(15.0)
+                }
+            }
+        }
+
         // The rear wall mirror can send the player's own beam back at them.
         let mirrorZ: Float = -17.55
         guard direction.z < -0.001 else { return }
@@ -2641,6 +2671,21 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             } else {
                 audio.playLanding(intensity: 0.85)
                 onClientNPCHit?(reflectedTarget, damage)
+            }
+        }
+
+        // Reflejo en espejo impactando al jugador rival
+        if isRemotePlayerConnected && remotePlayerHitCooldown <= 0 {
+            let remoteCenter = remotePlayerPosition + SIMD3<Float>(0, 0.85, 0)
+            let toRemote = remoteCenter - mirrorPoint
+            let reflectedDist = simd_dot(toRemote, reflected)
+            if reflectedDist > 0 && reflectedDist < 22.0 {
+                let reflectedClosest = mirrorPoint + reflected * reflectedDist
+                if simd_distance(remoteCenter, reflectedClosest) < 0.65 {
+                    remotePlayerHitCooldown = 0.22
+                    audio.playLaserPlayerHitSound()
+                    onRemotePlayerHit?(25.0)
+                }
             }
         }
     }

@@ -150,6 +150,11 @@ struct MetalGameView: UIViewRepresentable {
             model.onRemoteNPCHitReceived = { [weak renderer] botIndex, damage in
                 renderer?.applyRemoteNPCDamage(index: botIndex, damage: damage)
             }
+            renderer.onRemotePlayerHit = { [weak model] damage in
+                Task { @MainActor in
+                    model?.sendHitToRemotePlayer(damage: damage)
+                }
+            }
             view.delegate = renderer
         } catch {
             if let onFallbackRequested {
@@ -173,6 +178,12 @@ struct MetalGameView: UIViewRepresentable {
             : nil
         context.coordinator.renderer?.isSplitScreenMode = false
         context.coordinator.renderer?.isAuthorityForNPCs = model.isHost
+        let isVersus = model.isAnyMultiplayerConnected && (model.multiplayer.mode == .versus)
+        context.coordinator.renderer?.isVersusMode = isVersus
+        let spawnPos = model.isHost ? SIMD3<Float>(3.8, 0, 3.8) : SIMD3<Float>(-3.8, 0, -3.8)
+        let spawnYaw = model.isHost ? Float.pi * 1.25 : Float.pi * 0.25
+        context.coordinator.renderer?.initialSpawnPosition = spawnPos
+        context.coordinator.renderer?.initialSpawnYaw = spawnYaw
         context.coordinator.renderer?.isRemotePlayerConnected = model.isAnyMultiplayerConnected
         context.coordinator.renderer?.remotePlayerPosition = model.remotePlayerPosition
         context.coordinator.renderer?.remotePlayerYaw = model.remotePlayerYaw

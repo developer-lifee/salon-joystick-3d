@@ -162,6 +162,48 @@ struct ContentView: View {
                                 model.respawnPlayer()
                             })
                             .transition(.opacity)
+                        } else if model.isAnyMultiplayerConnected && model.multiplayer.mode == .versus && model.remotePlayerHealth <= 0 {
+                            VStack(spacing: 12) {
+                                Image(systemName: "trophy.fill")
+                                    .font(.system(size: 46))
+                                    .foregroundStyle(
+                                        LinearGradient(colors: [.yellow, .orange], startPoint: .top, endPoint: .bottom)
+                                    )
+                                    .shadow(color: .orange.opacity(0.8), radius: 10)
+
+                                Text("¡VICTORIA!")
+                                    .font(.system(size: 34, weight: .black, design: .rounded))
+                                    .foregroundStyle(
+                                        LinearGradient(colors: [.white, .yellow], startPoint: .top, endPoint: .bottom)
+                                    )
+                                    .shadow(color: .yellow.opacity(0.8), radius: 10)
+
+                                Text("DERROTASTE A \(model.remotePlayerName.isEmpty ? "TU RIVAL" : model.remotePlayerName)")
+                                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(.white.opacity(0.9))
+
+                                Button(action: {
+                                    model.startGame(fromNetwork: false)
+                                }) {
+                                    Text("REVANCHA")
+                                        .font(.system(size: 14, weight: .black, design: .monospaced))
+                                        .foregroundStyle(.black)
+                                        .padding(.horizontal, 28)
+                                        .padding(.vertical, 12)
+                                        .background(Capsule().fill(Color.yellow))
+                                        .shadow(color: .yellow.opacity(0.6), radius: 8)
+                                }
+                                .padding(.top, 6)
+                            }
+                            .padding(.horizontal, 36)
+                            .padding(.vertical, 24)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                    .stroke(LinearGradient(colors: [.yellow.opacity(0.8), .orange.opacity(0.4)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 2)
+                            )
+                            .shadow(color: .black.opacity(0.5), radius: 20)
+                            .transition(.scale.combined(with: .opacity))
                         }
                     }
 
@@ -247,9 +289,41 @@ struct ContentView: View {
             .padding(.top, 48)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
-            // 🧟 Call of Duty Zombies-Style Wave / Round HUD Banner
+            // 🧟 Call of Duty Zombies-Style Wave / Round HUD Banner o Duelo Versus 1v1
             VStack(spacing: 4) {
-                if model.isWaveIntermission {
+                if model.isAnyMultiplayerConnected && model.multiplayer.mode == .versus {
+                    HStack(spacing: 12) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "cross.fill")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.red)
+
+                            Text("MODO VERSUS 1V1")
+                                .font(.system(size: 13, weight: .black, design: .monospaced))
+                                .foregroundStyle(
+                                    LinearGradient(colors: [.white, .red], startPoint: .top, endPoint: .bottom)
+                                )
+                        }
+
+                        Divider()
+                            .frame(height: 18)
+                            .background(Color.white.opacity(0.4))
+
+                        HStack(spacing: 6) {
+                            Text("RIVAL HP: \(Int(max(0, model.remotePlayerHealth)))%")
+                                .font(.system(size: 12, weight: .black, design: .monospaced))
+                                .foregroundStyle(model.remotePlayerHealth > 30 ? Color.green : Color.red)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(LinearGradient(colors: [.red.opacity(0.85), .purple.opacity(0.60)], startPoint: .leading, endPoint: .trailing), lineWidth: 1.5)
+                    )
+                    .shadow(color: .red.opacity(0.35), radius: 8, x: 0, y: 4)
+                } else if model.isWaveIntermission {
                     VStack(spacing: 2) {
                         Text("¡OLEADA COMPLETADA!")
                             .font(.system(size: 16, weight: .black, design: .monospaced))
@@ -315,39 +389,41 @@ struct ContentView: View {
                     .shadow(color: .black.opacity(0.20), radius: 8, x: 0, y: 4)
                 }
 
-                // Active 5 Mobile NPCs Health Meters HUD with Class Tiers
-                HStack(spacing: 5) {
-                    let botNames = ["SCOUT", "SOLDIER", "GUARD", "HEAVY", "TITAN"]
-                    ForEach(0..<5, id: \.self) { idx in
-                        let maxHp = idx < model.npcMaxHealths.count ? model.npcMaxHealths[idx] : 100.0
-                        let hp = idx < model.npcHealths.count ? model.npcHealths[idx] : maxHp
-                        let fraction = max(0, min(1.0, hp / maxHp))
-                        let borderCol: Color = hp <= 0 ? Color.gray.opacity(0.3) : (idx == 4 ? Color.purple : Color.red.opacity(0.6))
+                // Active 5 Mobile NPCs Health Meters HUD with Class Tiers (solo en cooperativo o singleplayer)
+                if !(model.isAnyMultiplayerConnected && model.multiplayer.mode == .versus) {
+                    HStack(spacing: 5) {
+                        let botNames = ["SCOUT", "SOLDIER", "GUARD", "HEAVY", "TITAN"]
+                        ForEach(0..<5, id: \.self) { idx in
+                            let maxHp = idx < model.npcMaxHealths.count ? model.npcMaxHealths[idx] : 100.0
+                            let hp = idx < model.npcHealths.count ? model.npcHealths[idx] : maxHp
+                            let fraction = max(0, min(1.0, hp / maxHp))
+                            let borderCol: Color = hp <= 0 ? Color.gray.opacity(0.3) : (idx == 4 ? Color.purple : Color.red.opacity(0.6))
 
-                        HStack(spacing: 3) {
-                            Text(botNames[idx])
-                                .font(.system(size: 8, weight: .black, design: .monospaced))
-                                .foregroundStyle(hp > 0 ? .white : .secondary)
+                            HStack(spacing: 3) {
+                                Text(botNames[idx])
+                                    .font(.system(size: 8, weight: .black, design: .monospaced))
+                                    .foregroundStyle(hp > 0 ? .white : .secondary)
 
-                            GeometryReader { p in
-                                ZStack(alignment: .leading) {
-                                    Rectangle()
-                                        .fill(.black.opacity(0.6))
-                                    Rectangle()
-                                        .fill(fraction > 0.5 ? Color.green : (fraction > 0.25 ? Color.yellow : Color.red))
-                                        .frame(width: p.size.width * CGFloat(fraction))
+                                GeometryReader { p in
+                                    ZStack(alignment: .leading) {
+                                        Rectangle()
+                                            .fill(.black.opacity(0.6))
+                                        Rectangle()
+                                            .fill(fraction > 0.5 ? Color.green : (fraction > 0.25 ? Color.yellow : Color.red))
+                                            .frame(width: p.size.width * CGFloat(fraction))
+                                    }
                                 }
+                                .frame(width: 24, height: 5)
+                                .cornerRadius(2.5)
                             }
-                            .frame(width: 24, height: 5)
-                            .cornerRadius(2.5)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 3)
+                            .background(.black.opacity(0.65), in: Capsule())
+                            .overlay(Capsule().stroke(borderCol, lineWidth: 1))
                         }
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 3)
-                        .background(.black.opacity(0.65), in: Capsule())
-                        .overlay(Capsule().stroke(borderCol, lineWidth: 1))
                     }
+                    .padding(.top, 2)
                 }
-                .padding(.top, 2)
 
                 if model.heldTool == .mirror && model.toolStatus.activeRemaining > 0 {
                     HStack(spacing: 12) {
@@ -1047,6 +1123,25 @@ final class GameModel: ObservableObject {
         }
     }
 
+    func sendHitToRemotePlayer(damage: Float) {
+        guard isAnyMultiplayerConnected else { return }
+        let packet = LocalMatchPacket(
+            kind: .hit,
+            peerID: multiplayer.localPeer.displayName,
+            mode: multiplayer.mode,
+            timestamp: Date().timeIntervalSince1970,
+            health: playerHealth,
+            score: playerScore,
+            hitDamage: damage
+        )
+        if multiplayer.isConnected {
+            multiplayer.send(packet)
+        }
+        if gameCenter.isInMatch {
+            gameCenter.sendPacket(packet)
+        }
+    }
+
     var activePeerDisplayName: String {
         if multiplayer.isConnected, let localPeer = multiplayer.peers.first?.displayName {
             return localPeer
@@ -1114,8 +1209,17 @@ final class GameModel: ObservableObject {
         botsRemainingInWave = 5
         totalBotsInWave = 5
         isWaveIntermission = false
-        heldTool = .none
+        heldTool = .laser
         showsMultiplayerSheet = false
+
+        // Spawns opuestos en extremos de la arena para evitar encimarse
+        let spawnPos = isHost ? SIMD3<Float>(3.8, 0, 3.8) : SIMD3<Float>(-3.8, 0, -3.8)
+        let spawnYaw = isHost ? Float.pi * 1.25 : Float.pi * 0.25
+        self.localPlayerPosition = spawnPos
+        self.localPlayerYaw = spawnYaw
+        self.remotePlayerPosition = isHost ? SIMD3<Float>(-3.8, 0, -3.8) : SIMD3<Float>(3.8, 0, 3.8)
+        self.remotePlayerYaw = isHost ? Float.pi * 0.25 : Float.pi * 1.25
+
         resetRequestID += 1
         gameState = .playing
 
@@ -1186,7 +1290,9 @@ final class GameModel: ObservableObject {
 
         case .hit, .laser:
             if multiplayer.mode == .versus {
-                takeDamage(12.0, broadcast: false)
+                let dmg = packet.hitDamage ?? 15.0
+                takeDamage(dmg, broadcast: true)
+                audio.playLaserPlayerHitSound()
                 UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
             } else {
                 // En modo Cooperativo: curación/escudo compartido + puntos de equipo
