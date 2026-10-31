@@ -872,7 +872,7 @@ struct ContentView: View {
             .safeAreaPadding(.top, 8)
 
             if model.isAnyMultiplayerConnected {
-                HStack(spacing: 10) {
+                HStack(spacing: 8) {
                     Circle()
                         .fill(Color.green)
                         .frame(width: 8, height: 8)
@@ -880,25 +880,14 @@ struct ContentView: View {
                         Text("ENLAZADO: \(model.activePeerDisplayName)")
                             .font(.system(size: 11, weight: .black, design: .monospaced))
                             .foregroundStyle(.green)
-                        Text("HP Aliado: \(Int(model.remotePlayerHealth))% • Score: \(model.remotePlayerScore)")
+                        Text(model.multiplayer.mode == .versus
+                             ? "HP Rival: \(Int(model.remotePlayerHealth))% • Score: \(model.remotePlayerScore)"
+                             : "HP Aliado: \(Int(model.remotePlayerHealth))% • Score: \(model.remotePlayerScore)")
                             .font(.system(size: 10, weight: .bold, design: .monospaced))
                             .foregroundStyle(.white.opacity(0.85))
                     }
-                    Button {
-                        model.sendMultiplayerActionPulse()
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "bolt.horizontal.fill")
-                            Text("PULSO 2P")
-                        }
-                        .font(.system(size: 10, weight: .black, design: .monospaced))
-                        .foregroundStyle(.black)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .background(Color.cyan, in: Capsule())
-                    }
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 14)
                 .padding(.vertical, 7)
                 .background(.black.opacity(0.75), in: Capsule())
                 .overlay(Capsule().stroke(Color.green.opacity(0.6), lineWidth: 1.2))
@@ -1423,30 +1412,6 @@ final class GameModel: ObservableObject {
         if gameCenter.isInMatch {
             gameCenter.sendPacket(pkt)
         }
-    }
-
-    func sendMultiplayerActionPulse() {
-        guard isAnyMultiplayerConnected else { return }
-        let pkt = LocalMatchPacket(
-            kind: .hit,
-            peerID: multiplayer.localPeer.displayName,
-            mode: multiplayer.mode,
-            position: localPlayerPosition,
-            yaw: localPlayerYaw,
-            timestamp: Date().timeIntervalSince1970,
-            health: playerHealth,
-            score: playerScore,
-            isRecovering: isRecoveringInChamber,
-            recoveryProgress: isRecoveringInChamber ? max(0, min(1.0, 1.0 - recoveryTimeRemaining / 12.0)) : 1.0
-        )
-        if multiplayer.isConnected {
-            multiplayer.send(pkt)
-        }
-        if gameCenter.isInMatch {
-            gameCenter.sendPacket(pkt)
-        }
-        audio.playLaserIgnition()
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }
 
     func returnToMainMenu() {

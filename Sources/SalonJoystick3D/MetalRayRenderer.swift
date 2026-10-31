@@ -2692,12 +2692,28 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             remotePlayerHitCooldown = max(0, remotePlayerHitCooldown - dt)
             let remoteCenter = remotePlayerPosition + SIMD3<Float>(0, 0.85, 0)
             let alongRay = simd_dot(remoteCenter - origin, direction)
-            if alongRay > 0 && alongRay < 35.0 {
+            if alongRay > 0.4 && alongRay < 35.0 {
                 let closestPoint = origin + direction * alongRay
-                if simd_distance(remoteCenter, closestPoint) < 0.75 && remotePlayerHitCooldown <= 0 {
-                    remotePlayerHitCooldown = 0.22
-                    audio.playLaserPlayerHitSound()
-                    onRemotePlayerHit?(15.0)
+                if simd_distance(remoteCenter, closestPoint) < 0.70 && remotePlayerHitCooldown <= 0 {
+                    var hitRock = false
+                    for rock in rtRiverRocks {
+                        let center = rock.center
+                        let radius = max(rock.radii.x, rock.radii.z)
+                        let toCenter = center - origin
+                        let proj = simd_dot(toCenter, direction)
+                        if proj > 0.1 && proj < alongRay {
+                            let closestPointOnRay = origin + direction * proj
+                            if simd_distance(center, closestPointOnRay) < (radius + 0.35) {
+                                hitRock = true
+                                break
+                            }
+                        }
+                    }
+                    if !hitRock {
+                        remotePlayerHitCooldown = 0.45
+                        audio.playLaserPlayerHitSound()
+                        onRemotePlayerHit?(12.0)
+                    }
                 }
             }
         }
@@ -2761,9 +2777,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             if reflectedDist > 0 && reflectedDist < 22.0 {
                 let reflectedClosest = mirrorPoint + reflected * reflectedDist
                 if simd_distance(remoteCenter, reflectedClosest) < 0.65 {
-                    remotePlayerHitCooldown = 0.22
+                    remotePlayerHitCooldown = 0.45
                     audio.playLaserPlayerHitSound()
-                    onRemotePlayerHit?(25.0)
+                    onRemotePlayerHit?(18.0)
                 }
             }
         }
