@@ -26,6 +26,8 @@ struct LocalMatchPacket: Codable {
         case enemySync
         case enemyHit
         case reviveTeammate
+        case teamDefeat
+        case teamRestart
     }
 
     var kind: Kind

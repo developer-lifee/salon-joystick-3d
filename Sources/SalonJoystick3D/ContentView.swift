@@ -159,7 +159,11 @@ struct ContentView: View {
                     .overlay {
                         if model.isDefeated {
                             DefeatOverlayView(isTeamDefeat: model.isTeamDefeated, onRespawn: {
-                                model.respawnPlayer()
+                                if model.isTeamDefeated {
+                                    model.restartCooperativeMatch()
+                                } else {
+                                    model.respawnPlayer()
+                                }
                             })
                             .transition(.opacity)
                         } else if model.isRecoveringInChamber {
@@ -327,7 +331,7 @@ struct ContentView: View {
                     )
                     .shadow(color: .red.opacity(0.35), radius: 8, x: 0, y: 4)
                 } else if model.isWaveIntermission {
-                    VStack(spacing: 2) {
+                    VStack(spacing: 4) {
                         Text("¡OLEADA COMPLETADA!")
                             .font(.system(size: 16, weight: .black, design: .monospaced))
                             .foregroundStyle(
@@ -343,9 +347,32 @@ struct ContentView: View {
                             .font(.system(size: 13, weight: .bold, design: .monospaced))
                             .foregroundStyle(.white)
 
-                        Text("+25 HP REGENERADOS")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.green)
+                        if model.isAnyMultiplayerConnected && model.multiplayer.mode == .cooperative && model.remotePlayerIsRecovering {
+                            Button {
+                                model.reviveTeammate(fromIntermission: true)
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "bolt.heart.fill")
+                                        .font(.system(size: 14, weight: .black))
+                                    Text("REVIVIR A \(model.remotePlayerName.isEmpty ? "COMPAÑERO" : model.remotePlayerName.uppercased())")
+                                        .font(.system(size: 12, weight: .black, design: .rounded))
+                                }
+                                .foregroundStyle(.black)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 7)
+                                .background(
+                                    Capsule()
+                                        .fill(LinearGradient(colors: [.cyan, .green], startPoint: .leading, endPoint: .trailing))
+                                )
+                                .shadow(color: .cyan.opacity(0.8), radius: 8)
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.top, 2)
+                        } else {
+                            Text("+25 HP REGENERADOS")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.green)
+                        }
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
@@ -961,6 +988,9 @@ struct ContentView: View {
             .sheet(isPresented: $model.showsSettingsSheet) {
                 GameOptionsSheet(model: model)
             }
+            .onAppear {
+                UIApplication.shared.isIdleTimerDisabled = true
+            }
         }
     }
 }
@@ -1046,11 +1076,18 @@ final class GameModel: ObservableObject {
     @Published private(set) var requestedWarpPosition = SIMD3<Float>.zero
 
     func updateWaveStatus(wave: Int, remaining: Int, total: Int, intermission: Bool, intermissionTime: Float) {
+        let justEnteredIntermission = !self.isWaveIntermission && intermission
+        let justEndedIntermission = self.isWaveIntermission && !intermission
         self.currentWave = wave
         self.botsRemainingInWave = remaining
         self.totalBotsInWave = total
         self.isWaveIntermission = intermission
         self.waveIntermissionTime = intermissionTime
+
+        // Si el jugador local estaba en la cámara de recuperación y la oleada se completó, auto-reanimar para el descanso
+        if (justEnteredIntermission || justEndedIntermission) && isRecoveringInChamber {
+            completeRecovery(wasRevivedByTeammate: true)
+        }
     }
 
     func toggleSlowMotion() {
@@ -1357,6 +1394,12 @@ final class GameModel: ObservableObject {
                 self.completeRecovery(wasRevivedByTeammate: true)
             }
 
+        case .teamDefeat:
+            self.triggerTeamDefeat(fromNetwork: true)
+
+        case .teamRestart:
+            self.restartCooperativeMatch(fromNetwork: true)
+
         case .hit, .laser:
             if multiplayer.mode == .versus {
                 let dmg = packet.hitDamage ?? 15.0
@@ -1461,7 +1504,7 @@ final class GameModel: ObservableObject {
         if playerHealth <= 0 && !isDefeated && !isRecoveringInChamber {
             if isAnyMultiplayerConnected && multiplayer.mode == .cooperative {
                 if remotePlayerIsRecovering {
-                    triggerTeamDefeat()
+                    triggerTeamDefeat(fromNetwork: false)
                 } else {
                     enterRecoveryChamber()
                 }
@@ -1470,8 +1513,10 @@ final class GameModel: ObservableObject {
                 isTeamDefeated = false
                 heldTool = .none
                 audio.playRobloxOofDefeatSound()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
-                    self?.respawnPlayer()
+                if !isAnyMultiplayerConnected {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+                        self?.respawnPlayer()
+                    }
                 }
             }
         }
@@ -1513,10 +1558,13 @@ final class GameModel: ObservableObject {
         broadcastLocalState()
     }
 
-    func reviveTeammate() {
-        guard isAnyMultiplayerConnected, remotePlayerIsRecovering, isNearRecoveryConsole else { return }
+    func reviveTeammate(fromIntermission: Bool = false) {
+        guard isAnyMultiplayerConnected, remotePlayerIsRecovering else { return }
+        if !fromIntermission {
+            guard isNearRecoveryConsole else { return }
+        }
         audio.playTeammateRevivePulseSound()
-        playerScore += 50
+        playerScore += 100
         let packet = LocalMatchPacket(
             kind: .reviveTeammate,
             peerID: multiplayer.localPeer.displayName,
@@ -1533,7 +1581,7 @@ final class GameModel: ObservableObject {
         remotePlayerHealth = 100.0
     }
 
-    func triggerTeamDefeat() {
+    func triggerTeamDefeat(fromNetwork: Bool = false) {
         guard !isDefeated else { return }
         isDefeated = true
         isTeamDefeated = true
@@ -1541,8 +1589,47 @@ final class GameModel: ObservableObject {
         remotePlayerIsRecovering = false
         heldTool = .none
         audio.playRobloxOofDefeatSound()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) { [weak self] in
-            self?.respawnPlayer()
+
+        if !fromNetwork && isAnyMultiplayerConnected {
+            let packet = LocalMatchPacket(
+                kind: .teamDefeat,
+                peerID: multiplayer.localPeer.displayName,
+                mode: multiplayer.mode,
+                timestamp: Date().timeIntervalSince1970
+            )
+            if multiplayer.isConnected { multiplayer.send(packet) }
+            if gameCenter.isInMatch { gameCenter.sendPacket(packet) }
+        }
+    }
+
+    func restartCooperativeMatch(fromNetwork: Bool = false) {
+        playerHealth = 100.0
+        playerScore = 0
+        remotePlayerHealth = 100.0
+        remotePlayerScore = 0
+        isDefeated = false
+        isTeamDefeated = false
+        isRecoveringInChamber = false
+        remotePlayerIsRecovering = false
+        recoveryTimeRemaining = 0
+        currentWave = 1
+        botsRemainingInWave = 5
+        totalBotsInWave = 5
+        isWaveIntermission = false
+        heldTool = .laser
+        remotePlayerHeldTool = .laser
+        resetRequestID &+= 1
+        respawnRequestID &+= 1
+
+        if !fromNetwork && isAnyMultiplayerConnected {
+            let packet = LocalMatchPacket(
+                kind: .teamRestart,
+                peerID: multiplayer.localPeer.displayName,
+                mode: multiplayer.mode,
+                timestamp: Date().timeIntervalSince1970
+            )
+            if multiplayer.isConnected { multiplayer.send(packet) }
+            if gameCenter.isInMatch { gameCenter.sendPacket(packet) }
         }
     }
 
@@ -5222,7 +5309,7 @@ struct DefeatOverlayView: View {
                             .font(.system(size: 18, weight: .bold))
                             .foregroundStyle(.white)
 
-                        Text("REINTENTAR (OLEADA 1)")
+                        Text(isTeamDefeat ? "REINTENTAR JUNTOS" : "REINTENTAR (OLEADA 1)")
                             .font(.system(size: 13, weight: .black, design: .rounded))
                             .tracking(1.5)
                             .foregroundStyle(.white)
@@ -5325,9 +5412,12 @@ struct RecoveryChamberOverlayView: View {
                             .foregroundStyle(.yellow)
                     }
                 } else {
-                    Text("Tu compañero \(model.remotePlayerName.isEmpty ? "aliado" : model.remotePlayerName) sigue en combate en la arena")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.75))
+                    Text("En estasis médico • Tu compañero puede reanimarte o despejar la oleada")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.cyan.opacity(0.90))
+                    Text("Soporte vital asegurado dentro de la cápsula")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.70))
                 }
             }
             .padding(.horizontal, 24)

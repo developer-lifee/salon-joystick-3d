@@ -1516,10 +1516,12 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
             let remoteDist = simd_distance(smoothedRemotePos, SIMD3<Float>(0.0, 0.45, 5.8))
             let teammateBoosting = isRemotePlayerConnected && !remotePlayerIsRecovering && remoteDist < 3.2
-            let recoveryRate: Float = teammateBoosting ? 4.0 : 1.0
-            recoveryTimeRemaining = max(0, recoveryTimeRemaining - dt * recoveryRate)
+            let recoveryRate: Float = teammateBoosting ? 4.0 : 0.0
+            if teammateBoosting {
+                recoveryTimeRemaining = max(0, recoveryTimeRemaining - dt * recoveryRate)
+            }
             onRecoveryProgressUpdate?(recoveryTimeRemaining, teammateBoosting)
-            if recoveryTimeRemaining <= 0 {
+            if recoveryTimeRemaining <= 0 && teammateBoosting {
                 onRecoveryCompleted?()
             }
             return
@@ -2310,6 +2312,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 totalBotsInWave = 5 + (currentWave - 1) * 3
                 botsSpawnedInCurrentWave = min(totalBotsInWave, npcPositions.count)
                 audio.playLaserIgnition()
+                if isRecoveringInChamber {
+                    isRecoveringInChamber = false
+                    recoveryTimeRemaining = 0
+                    onRecoveryCompleted?()
+                }
                 for i in npcPositions.indices {
                     npcPositions[i] = npcSpawnPositions[i % npcSpawnPositions.count]
                     npcHealths[i] = npcMaxHealths[i]
