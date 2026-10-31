@@ -147,7 +147,6 @@ enum GameRenderResolution: String, CaseIterable, Identifiable {
 struct ContentView: View {
     @StateObject private var model = GameModel()
     @State private var dimmerFixture: GameLightFixture?
-    @State private var showsCoffeeStore = false
 
     var body: some View {
         if model.multiplayer.isConnected && model.multiplayer.role == .remoteController {
@@ -167,7 +166,7 @@ struct ContentView: View {
                     }
 
                 if model.gameState == .mainMenu {
-                    MainMenuView(model: model, showsCoffeeStore: $showsCoffeeStore)
+                    MainMenuView(model: model)
                 } else {
 
             // GTA-Style Aim Crosshair Overlay
@@ -853,209 +852,7 @@ struct ContentView: View {
             .sheet(isPresented: $model.showsSettingsSheet) {
                 GameOptionsSheet(model: model)
             }
-            .sheet(isPresented: $showsCoffeeStore) {
-                CoffeeTipView()
-            }
         }
-    }
-}
-
-private struct CoffeeTipView: View {
-    static let productID = "com.estebanavila.RtPruebas.tip.coffee"
-
-    @Environment(\.dismiss) private var dismiss
-    @State private var product: Product?
-    @State private var isLoading = true
-    @State private var errorMessage: String?
-    @State private var isPurchasing = false
-    @State private var purchaseSuccess = false
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                Color(uiColor: .systemGroupedBackground)
-                    .ignoresSafeArea()
-
-                VStack(spacing: 20) {
-                    if purchaseSuccess {
-                        VStack(spacing: 16) {
-                            Image(systemName: "checkmark.seal.fill")
-                                .font(.system(size: 60))
-                                .foregroundStyle(.green)
-                            Text("¡Muchas gracias!")
-                                .font(.title2.bold())
-                            Text("Tu apoyo hace posible seguir mejorando el motor de Ray Tracing y las próximas actualizaciones.")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal)
-                            Button("Cerrar") {
-                                dismiss()
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .padding(.top, 10)
-                        }
-                        .padding()
-                    } else if isLoading {
-                        VStack(spacing: 16) {
-                            ProgressView()
-                                .scaleEffect(1.2)
-                            Text("Conectando con App Store...")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else if let product = product {
-                        VStack(spacing: 18) {
-                            HStack(spacing: 16) {
-                                Text("☕️")
-                                    .font(.system(size: 42))
-                                    .frame(width: 60, height: 60)
-                                    .background(Color.orange.opacity(0.15), in: RoundedRectangle(cornerRadius: 14))
-
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(product.displayName.isEmpty ? "Invitar un café" : product.displayName)
-                                        .font(.headline)
-                                    Text(product.description.isEmpty ? "Propina opcional para apoyar el desarrollo independiente del juego." : product.description)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                            }
-                            .padding(14)
-                            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
-
-                            if let error = errorMessage {
-                                Text(error)
-                                    .font(.caption)
-                                    .foregroundStyle(.red)
-                                    .multilineTextAlignment(.center)
-                            }
-
-                            Button {
-                                Task {
-                                    await purchase(product)
-                                }
-                            } label: {
-                                HStack {
-                                    if isPurchasing {
-                                        ProgressView()
-                                            .tint(.white)
-                                    } else {
-                                        Image(systemName: "heart.fill")
-                                        Text("Invitar por \(product.displayPrice)")
-                                            .bold()
-                                    }
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(isPurchasing)
-                        }
-                        .padding(20)
-                    } else {
-                        // Estado cuando App Store no devuelve el producto (offline, sandbox en revisión o IAP no sincronizado)
-                        VStack(spacing: 16) {
-                            Text("☕️")
-                                .font(.system(size: 48))
-
-                            Text("Invitar un café al desarrollador")
-                                .font(.headline)
-
-                            Text("Esta función permite enviar una propina opcional para apoyar futuras actualizaciones y optimizaciones de Laser Tracer 3D.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 20)
-
-                            VStack(spacing: 8) {
-                                Label("No se pudo cargar la opción de compra en este momento.", systemImage: "exclamationmark.triangle")
-                                    .font(.caption)
-                                    .foregroundStyle(.orange)
-
-                                Button {
-                                    Task {
-                                        await loadProduct()
-                                    }
-                                } label: {
-                                    Label("Reintentar conexión", systemImage: "arrow.clockwise")
-                                        .font(.subheadline.bold())
-                                }
-                                .buttonStyle(.bordered)
-                                .padding(.top, 4)
-                            }
-                            .padding(12)
-                            .frame(maxWidth: .infinity)
-                            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
-                            .padding(.horizontal, 20)
-                        }
-                        .padding(.vertical, 10)
-                    }
-                }
-            }
-            .navigationTitle("Invitarme un café")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .accessibilityLabel("Cerrar")
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-        .task {
-            await loadProduct()
-        }
-    }
-
-    private func loadProduct() async {
-        isLoading = true
-        errorMessage = nil
-        do {
-            let products = try await Product.products(for: [Self.productID])
-            if let first = products.first {
-                self.product = first
-            } else {
-                self.product = nil
-            }
-        } catch {
-            self.errorMessage = error.localizedDescription
-            self.product = nil
-        }
-        isLoading = false
-    }
-
-    private func purchase(_ product: Product) async {
-        isPurchasing = true
-        errorMessage = nil
-        do {
-            let result = try await product.purchase()
-            switch result {
-            case .success(let verification):
-                switch verification {
-                case .verified(let transaction):
-                    await transaction.finish()
-                    purchaseSuccess = true
-                case .unverified(_, let error):
-                    errorMessage = error.localizedDescription
-                }
-            case .userCancelled:
-                break
-            case .pending:
-                break
-            @unknown default:
-                break
-            }
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-        isPurchasing = false
     }
 }
 
@@ -4639,7 +4436,6 @@ struct MirrorShieldJoystickButton: View {
 
 struct MainMenuView: View {
     @ObservedObject var model: GameModel
-    @Binding var showsCoffeeStore: Bool
 
     var body: some View {
         ZStack {
