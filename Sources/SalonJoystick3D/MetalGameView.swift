@@ -168,6 +168,7 @@ struct MetalGameView: UIViewRepresentable {
             renderer.onRemotePlayerHit = { [weak model] damage in
                 Task { @MainActor in
                     model?.sendHitToRemotePlayer(damage: damage)
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 }
             }
             view.delegate = renderer
@@ -206,6 +207,7 @@ struct MetalGameView: UIViewRepresentable {
         context.coordinator.renderer?.isRemotePlayerConnected = model.isAnyMultiplayerConnected
         context.coordinator.renderer?.remotePlayerPosition = model.remotePlayerPosition
         context.coordinator.renderer?.remotePlayerYaw = model.remotePlayerYaw
+        context.coordinator.renderer?.remotePlayerHeldTool = model.remotePlayerHeldTool
         let isPaused = model.gameState != .playing
         context.coordinator.renderer?.setInput(
             joystick: model.joystick,

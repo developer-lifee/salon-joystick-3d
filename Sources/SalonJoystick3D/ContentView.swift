@@ -992,7 +992,11 @@ final class GameModel: ObservableObject {
         didSet { }
     }
     @Published var renderResolution = GameRenderResolution.balanced
-    @Published var heldTool = GameHeldTool.flashlight
+    @Published var heldTool = GameHeldTool.flashlight {
+        didSet {
+            broadcastLocalState()
+        }
+    }
     @Published var lightStates = GameLightStates()
     @Published private(set) var nearbyLight: GameLightFixture?
     @Published var showsFPS = false
@@ -1094,6 +1098,7 @@ final class GameModel: ObservableObject {
     @Published var remotePlayerScore: Int = 0
     @Published var remotePlayerPosition = SIMD3<Float>(-3.8, 0, 3.8)
     @Published var remotePlayerYaw: Float = .pi
+    @Published var remotePlayerHeldTool: GameHeldTool = .laser
     private var localPlayerPosition = SIMD3<Float>(3.8, 0, 3.8)
     private var localPlayerYaw: Float = .pi
     private var cancellables = Set<AnyCancellable>()
@@ -1250,6 +1255,7 @@ final class GameModel: ObservableObject {
         totalBotsInWave = 5
         isWaveIntermission = false
         heldTool = .laser
+        remotePlayerHeldTool = .laser
         showsMultiplayerSheet = false
         isRecoveringInChamber = false
         recoveryTimeRemaining = 0
@@ -1333,6 +1339,9 @@ final class GameModel: ObservableObject {
             if let y = packet.yaw {
                 self.remotePlayerYaw = y
             }
+            if let t = packet.tool, let remoteTool = GameHeldTool(rawValue: t) {
+                self.remotePlayerHeldTool = remoteTool
+            }
             if let isRec = packet.isRecovering {
                 self.remotePlayerIsRecovering = isRec
                 if let prog = packet.recoveryProgress {
@@ -1400,6 +1409,7 @@ final class GameModel: ObservableObject {
             mode: multiplayer.mode,
             position: localPlayerPosition,
             yaw: localPlayerYaw,
+            tool: heldTool.rawValue,
             timestamp: Date().timeIntervalSince1970,
             health: playerHealth,
             score: playerScore,
@@ -1590,7 +1600,7 @@ final class GameModel: ObservableObject {
             guard let self else { return }
             if self.toolStatus != status {
                 self.toolStatus = status
-                if status.activeRemaining <= 0 && status.cooldownRemaining > 0 && self.heldTool != .flashlight {
+                if self.heldTool == .mirror && status.activeRemaining <= 0 && status.cooldownRemaining > 0 {
                     self.heldTool = .none
                 }
             }

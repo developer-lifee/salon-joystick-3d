@@ -881,6 +881,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     var isRemotePlayerConnected: Bool = false
     var remotePlayerPosition: SIMD3<Float> = SIMD3<Float>(-3.8, 0, 3.8)
     var remotePlayerYaw: Float = .pi
+    var remotePlayerHeldTool: GameHeldTool = .laser
     private var smoothedRemotePos: SIMD3<Float> = SIMD3<Float>(-3.8, 0, 3.8)
     private var netSyncTimer: Float = 0
 
@@ -2049,8 +2050,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         if heldTool != lastHeldTool {
             lastHeldTool = heldTool
-            if heldTool == .laser && laserCooldownRemaining <= 0 {
-                laserActiveRemaining = 4.0
+            if heldTool == .laser {
+                laserActiveRemaining = 10.0
                 laserPropagationDistance = 0.0
                 audio.playLaserIgnition()
             } else if heldTool == .mirror && mirrorCooldownRemaining <= 0 {
@@ -2059,14 +2060,16 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
         }
 
-        if heldTool == .laser && laserActiveRemaining > 0 {
-            laserActiveRemaining = max(0, laserActiveRemaining - dt)
-            if laserActiveRemaining == 0 { laserCooldownRemaining = 6.0 }
-
-            if isSlowMotionActive {
-                laserPropagationDistance += dt * 14.0
+        if heldTool == .laser {
+            if laserCooldownRemaining > 0 {
+                laserActiveRemaining = 0
             } else {
-                laserPropagationDistance = 100.0
+                laserActiveRemaining = 10.0
+                if isSlowMotionActive {
+                    laserPropagationDistance += dt * 14.0
+                } else {
+                    laserPropagationDistance = 100.0
+                }
             }
 
             let origin = smoothedCameraTarget
@@ -2102,7 +2105,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             let cooldown: Float
             switch heldTool {
             case .laser:
-                active = laserActiveRemaining; cooldown = laserCooldownRemaining
+                active = 10.0; cooldown = laserCooldownRemaining
             case .mirror:
                 active = mirrorActiveRemaining; cooldown = mirrorCooldownRemaining
             default:
@@ -2111,7 +2114,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             let label: String
             if cooldown > 0.01 {
                 label = String(format: "Recarga %.1f s", cooldown)
-            } else if active > 0.01 {
+            } else if heldTool == .mirror && active > 0.01 {
                 label = String(format: "Activo %.1f s", active)
             } else {
                 label = ""
@@ -2225,6 +2228,24 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 npcHealths[index] = 0
                 npcRespawnTimers[index] = 99999.0
             }
+            let results = laserResultBuffer.contents().assumingMemoryBound(to: RTLaserResult.self)
+            if isRemotePlayerConnected && remotePlayerHeldTool == .laser && !remotePlayerIsRecovering {
+                let rPos = smoothedRemotePos
+                let rYaw = remotePlayerYaw
+                let rForward = SIMD3<Float>(sin(rYaw), 0, cos(rYaw))
+                let rRight = SIMD3<Float>(cos(rYaw), 0, -sin(rYaw))
+                let rOrigin = rPos + SIMD3<Float>(0, 1.15, 0) + rRight * 0.28 + rForward * 0.35
+                let rEnd = rOrigin + rForward * 32.0
+                results.pointee.bot0Start = SIMD4<Float>(rOrigin, 1.0)
+                results.pointee.bot0End = SIMD4<Float>(rEnd, 1.0)
+            } else {
+                results.pointee.bot0Start = .zero
+                results.pointee.bot0End = .zero
+            }
+            results.pointee.bot1Start = .zero; results.pointee.bot1End = .zero
+            results.pointee.bot2Start = .zero; results.pointee.bot2End = .zero
+            results.pointee.bot3Start = .zero; results.pointee.bot3End = .zero
+            results.pointee.bot4Start = .zero; results.pointee.bot4End = .zero
             return
         }
 
@@ -2690,11 +2711,16 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         // Detección de impacto de láser sobre el otro jugador (1v1 Versus o cooperativo)
         if isRemotePlayerConnected {
             remotePlayerHitCooldown = max(0, remotePlayerHitCooldown - dt)
-            let remoteCenter = remotePlayerPosition + SIMD3<Float>(0, 0.85, 0)
-            let alongRay = simd_dot(remoteCenter - origin, direction)
+            let alongRay = simd_dot((remotePlayerPosition + SIMD3<Float>(0, 0.95, 0)) - origin, direction)
             if alongRay > 0.4 && alongRay < 35.0 {
                 let closestPoint = origin + direction * alongRay
-                if simd_distance(remoteCenter, closestPoint) < 0.70 && remotePlayerHitCooldown <= 0 {
+                
+                // Hitbox humanoide completa: segmento vertical desde pies hasta cabeza
+                let clampedY = max(remotePlayerPosition.y + 0.15, min(remotePlayerPosition.y + 1.85, closestPoint.y))
+                let segmentPoint = SIMD3<Float>(remotePlayerPosition.x, clampedY, remotePlayerPosition.z)
+                let distToBody = simd_distance(closestPoint, segmentPoint)
+                
+                if distToBody < 0.75 && remotePlayerHitCooldown <= 0 {
                     var hitRock = false
                     for rock in rtRiverRocks {
                         let center = rock.center
@@ -2710,9 +2736,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                         }
                     }
                     if !hitRock {
-                        remotePlayerHitCooldown = 0.45
+                        remotePlayerHitCooldown = 0.35
                         audio.playLaserPlayerHitSound()
-                        onRemotePlayerHit?(12.0)
+                        onRemotePlayerHit?(15.0)
                     }
                 }
             }
@@ -2734,7 +2760,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let reflectedClosestPoint = mirrorPoint + reflected * reflectedDistance
         if simd_distance(playerCenter, reflectedClosestPoint) < 0.52 {
             laserActiveRemaining = 0
-            laserCooldownRemaining = 6.0
+            laserCooldownRemaining = 1.0
         }
 
         // A reflected beam is still a gameplay beam: it can tag any rival
@@ -2771,13 +2797,14 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         // Reflejo en espejo impactando al jugador rival
         if isRemotePlayerConnected && remotePlayerHitCooldown <= 0 {
-            let remoteCenter = remotePlayerPosition + SIMD3<Float>(0, 0.85, 0)
-            let toRemote = remoteCenter - mirrorPoint
+            let toRemote = (remotePlayerPosition + SIMD3<Float>(0, 0.95, 0)) - mirrorPoint
             let reflectedDist = simd_dot(toRemote, reflected)
-            if reflectedDist > 0 && reflectedDist < 22.0 {
+            if reflectedDist > 0 && reflectedDist < 25.0 {
                 let reflectedClosest = mirrorPoint + reflected * reflectedDist
-                if simd_distance(remoteCenter, reflectedClosest) < 0.65 {
-                    remotePlayerHitCooldown = 0.45
+                let clampedY = max(remotePlayerPosition.y + 0.15, min(remotePlayerPosition.y + 1.85, reflectedClosest.y))
+                let segmentPoint = SIMD3<Float>(remotePlayerPosition.x, clampedY, remotePlayerPosition.z)
+                if simd_distance(reflectedClosest, segmentPoint) < 0.75 {
+                    remotePlayerHitCooldown = 0.35
                     audio.playLaserPlayerHitSound()
                     onRemotePlayerHit?(18.0)
                 }
