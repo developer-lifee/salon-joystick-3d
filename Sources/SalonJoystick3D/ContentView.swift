@@ -158,10 +158,13 @@ struct ContentView: View {
                     .ignoresSafeArea(.all)
                     .overlay {
                         if model.isDefeated {
-                            DefeatOverlayView(onRespawn: {
+                            DefeatOverlayView(isTeamDefeat: model.isTeamDefeated, onRespawn: {
                                 model.respawnPlayer()
                             })
                             .transition(.opacity)
+                        } else if model.isRecoveringInChamber {
+                            RecoveryChamberOverlayView(model: model)
+                                .transition(.opacity)
                         } else if model.isAnyMultiplayerConnected && model.multiplayer.mode == .versus && model.remotePlayerHealth <= 0 {
                             VStack(spacing: 12) {
                                 Image(systemName: "trophy.fill")
@@ -444,6 +447,23 @@ struct ContentView: View {
                     .shadow(color: .cyan.opacity(0.45), radius: 6)
                     .padding(.top, 3)
                 }
+
+                if model.isAnyMultiplayerConnected && model.multiplayer.mode == .cooperative && model.remotePlayerIsRecovering {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.yellow)
+                        Text("¡COMPAÑERO EN CÁMARA MÉDICA! (\(Int(ceil(model.remotePlayerRecoveryTime)))s)")
+                            .font(.system(size: 11, weight: .black, design: .monospaced))
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .overlay(Capsule().stroke(Color.yellow.opacity(0.85), lineWidth: 1.5))
+                    .shadow(color: .yellow.opacity(0.4), radius: 8)
+                    .padding(.top, 3)
+                }
             }
             .padding(.top, 46)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -594,6 +614,30 @@ struct ContentView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Menú Radial de Teletransporte")
+
+                    if model.isNearRecoveryConsole && model.remotePlayerIsRecovering {
+                        Button {
+                            model.reviveTeammate()
+                        } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: "bolt.heart.fill")
+                                    .font(.system(size: 13, weight: .black))
+                                Text("Reanimar")
+                                    .font(.system(size: 11, weight: .black))
+                            }
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(
+                                LinearGradient(colors: [.green, .cyan], startPoint: .leading, endPoint: .trailing),
+                                in: Capsule()
+                            )
+                            .overlay(Capsule().stroke(Color.white, lineWidth: 1.5))
+                            .shadow(color: .green.opacity(0.8), radius: 8)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Reanimar Compañero en Cámara Médica")
+                    }
 
                     if model.isNearCoverRock || model.isCoverActive {
                         Button {
@@ -990,6 +1034,13 @@ final class GameModel: ObservableObject {
     @Published var isCoverActive = false
     @Published private(set) var isNearCoverRock = false
     @Published var isDefeated = false
+    @Published var isRecoveringInChamber = false
+    @Published var recoveryTimeRemaining: Float = 0
+    @Published var isTeammateBoostingRecovery = false
+    @Published var remotePlayerIsRecovering = false
+    @Published var remotePlayerRecoveryTime: Float = 0
+    @Published var isNearRecoveryConsole = false
+    @Published var isTeamDefeated = false
     @Published var npcMaxHealths: [Float] = [80, 120, 180, 250, 350]
     @Published var npcHealths: [Float] = [80, 120, 180, 250, 350]
     @Published private(set) var respawnRequestID = 0
@@ -1211,6 +1262,12 @@ final class GameModel: ObservableObject {
         isWaveIntermission = false
         heldTool = .laser
         showsMultiplayerSheet = false
+        isRecoveringInChamber = false
+        recoveryTimeRemaining = 0
+        isTeammateBoostingRecovery = false
+        remotePlayerIsRecovering = false
+        remotePlayerRecoveryTime = 0
+        isTeamDefeated = false
 
         // Spawns opuestos en extremos de la arena para evitar encimarse
         let spawnPos = isHost ? SIMD3<Float>(3.8, 0, 3.8) : SIMD3<Float>(-3.8, 0, -3.8)
@@ -1287,6 +1344,20 @@ final class GameModel: ObservableObject {
             if let y = packet.yaw {
                 self.remotePlayerYaw = y
             }
+            if let isRec = packet.isRecovering {
+                self.remotePlayerIsRecovering = isRec
+                if let prog = packet.recoveryProgress {
+                    self.remotePlayerRecoveryTime = max(0, 12.0 * (1.0 - prog))
+                }
+                if isRec && self.isRecoveringInChamber {
+                    self.triggerTeamDefeat()
+                }
+            }
+
+        case .reviveTeammate:
+            if self.isRecoveringInChamber {
+                self.completeRecovery(wasRevivedByTeammate: true)
+            }
 
         case .hit, .laser:
             if multiplayer.mode == .versus {
@@ -1342,7 +1413,9 @@ final class GameModel: ObservableObject {
             yaw: localPlayerYaw,
             timestamp: Date().timeIntervalSince1970,
             health: playerHealth,
-            score: playerScore
+            score: playerScore,
+            isRecovering: isRecoveringInChamber,
+            recoveryProgress: isRecoveringInChamber ? max(0, min(1.0, 1.0 - recoveryTimeRemaining / 12.0)) : 1.0
         )
         if multiplayer.isConnected {
             multiplayer.send(pkt)
@@ -1362,7 +1435,9 @@ final class GameModel: ObservableObject {
             yaw: localPlayerYaw,
             timestamp: Date().timeIntervalSince1970,
             health: playerHealth,
-            score: playerScore
+            score: playerScore,
+            isRecovering: isRecoveringInChamber,
+            recoveryProgress: isRecoveringInChamber ? max(0, min(1.0, 1.0 - recoveryTimeRemaining / 12.0)) : 1.0
         )
         if multiplayer.isConnected {
             multiplayer.send(pkt)
@@ -1408,13 +1483,91 @@ final class GameModel: ObservableObject {
         if broadcast {
             broadcastLocalState()
         }
-        if playerHealth <= 0 && !isDefeated {
-            isDefeated = true
-            heldTool = .none
-            audio.playRobloxOofDefeatSound()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
-                self?.respawnPlayer()
+        if playerHealth <= 0 && !isDefeated && !isRecoveringInChamber {
+            if isAnyMultiplayerConnected && multiplayer.mode == .cooperative {
+                if remotePlayerIsRecovering {
+                    triggerTeamDefeat()
+                } else {
+                    enterRecoveryChamber()
+                }
+            } else {
+                isDefeated = true
+                isTeamDefeated = false
+                heldTool = .none
+                audio.playRobloxOofDefeatSound()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+                    self?.respawnPlayer()
+                }
             }
+        }
+    }
+
+    func enterRecoveryChamber() {
+        guard !isRecoveringInChamber else { return }
+        isRecoveringInChamber = true
+        recoveryTimeRemaining = 12.0
+        playerHealth = 0
+        heldTool = .none
+        audio.playRecoveryChamberEnterSound()
+        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+
+        let podX: Float = isHost ? -0.95 : 0.95
+        localPlayerPosition = SIMD3<Float>(podX, 0.45, 6.2)
+        localPlayerYaw = Float.pi
+        broadcastLocalState()
+    }
+
+    func updateRecoveryProgress(remaining: Float, isBoosting: Bool) {
+        self.recoveryTimeRemaining = remaining
+        self.isTeammateBoostingRecovery = isBoosting
+    }
+
+    func completeRecovery(wasRevivedByTeammate: Bool = false) {
+        guard isRecoveringInChamber else { return }
+        isRecoveringInChamber = false
+        playerHealth = 100.0
+        recoveryTimeRemaining = 0
+        isTeammateBoostingRecovery = false
+        audio.playRecoveryCompleteSound()
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+
+        let podX: Float = isHost ? -0.95 : 0.95
+        localPlayerPosition = SIMD3<Float>(podX, 0.45, 4.8)
+        localPlayerYaw = Float.pi
+
+        broadcastLocalState()
+    }
+
+    func reviveTeammate() {
+        guard isAnyMultiplayerConnected, remotePlayerIsRecovering, isNearRecoveryConsole else { return }
+        audio.playTeammateRevivePulseSound()
+        playerScore += 50
+        let packet = LocalMatchPacket(
+            kind: .reviveTeammate,
+            peerID: multiplayer.localPeer.displayName,
+            mode: multiplayer.mode,
+            timestamp: Date().timeIntervalSince1970
+        )
+        if multiplayer.isConnected {
+            multiplayer.send(packet)
+        }
+        if gameCenter.isInMatch {
+            gameCenter.sendPacket(packet)
+        }
+        remotePlayerIsRecovering = false
+        remotePlayerHealth = 100.0
+    }
+
+    func triggerTeamDefeat() {
+        guard !isDefeated else { return }
+        isDefeated = true
+        isTeamDefeated = true
+        isRecoveringInChamber = false
+        remotePlayerIsRecovering = false
+        heldTool = .none
+        audio.playRobloxOofDefeatSound()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) { [weak self] in
+            self?.respawnPlayer()
         }
     }
 
@@ -1422,6 +1575,10 @@ final class GameModel: ObservableObject {
         playerHealth = 100.0
         playerScore = 0
         isDefeated = false
+        isTeamDefeated = false
+        isRecoveringInChamber = false
+        remotePlayerIsRecovering = false
+        recoveryTimeRemaining = 0
         heldTool = .none
         currentWave = 1
         botsRemainingInWave = 5
@@ -3125,6 +3282,9 @@ final class ChiptuneAudioEngine {
     private var slowMoDeactivationBuffer: AVAudioPCMBuffer?
     private var subterraneanPortalBuffer: AVAudioPCMBuffer?
     private var swimStrokeBuffer: AVAudioPCMBuffer?
+    private var recoveryChamberEnterBuffer: AVAudioPCMBuffer?
+    private var recoveryCompleteBuffer: AVAudioPCMBuffer?
+    private var teammateRevivePulseBuffer: AVAudioPCMBuffer?
     private var nextSplash = 0
     private var nextLanding = 0
     private var nodesAttached = false
@@ -3190,6 +3350,9 @@ final class ChiptuneAudioEngine {
                 slowMoDeactivationBuffer = makeSlowMotionDeactivationBuffer()
                 subterraneanPortalBuffer = makeSubterraneanPortalBuffer()
                 swimStrokeBuffer = makeSwimStrokeBuffer()
+                recoveryChamberEnterBuffer = makeRecoveryChamberEnterBuffer()
+                recoveryCompleteBuffer = makeRecoveryCompleteBuffer()
+                teammateRevivePulseBuffer = makeTeammateRevivePulseBuffer()
             }
 
             let session = AVAudioSession.sharedInstance()
@@ -3337,6 +3500,39 @@ final class ChiptuneAudioEngine {
                 self.effectsNode.stop()
                 self.effectsNode.volume = 1.0
                 self.effectsNode.scheduleBuffer(buffer)
+                self.effectsNode.play()
+            }
+        }
+    }
+
+    func playRecoveryChamberEnterSound() {
+        audioQueue.async { [weak self] in
+            guard let self, self.started, self.effectsEnabled, let buffer = self.recoveryChamberEnterBuffer else { return }
+            self.effectsNode.volume = 0.95
+            self.effectsNode.scheduleBuffer(buffer)
+            if !self.effectsNode.isPlaying {
+                self.effectsNode.play()
+            }
+        }
+    }
+
+    func playRecoveryCompleteSound() {
+        audioQueue.async { [weak self] in
+            guard let self, self.started, self.effectsEnabled, let buffer = self.recoveryCompleteBuffer else { return }
+            self.effectsNode.volume = 1.0
+            self.effectsNode.scheduleBuffer(buffer)
+            if !self.effectsNode.isPlaying {
+                self.effectsNode.play()
+            }
+        }
+    }
+
+    func playTeammateRevivePulseSound() {
+        audioQueue.async { [weak self] in
+            guard let self, self.started, self.effectsEnabled, let buffer = self.teammateRevivePulseBuffer else { return }
+            self.effectsNode.volume = 1.0
+            self.effectsNode.scheduleBuffer(buffer)
+            if !self.effectsNode.isPlaying {
                 self.effectsNode.play()
             }
         }
@@ -3793,6 +3989,110 @@ final class ChiptuneAudioEngine {
 
             channels[0][frame] = sample
             channels[1][frame] = sample * 0.96
+        }
+        return buffer
+    }
+
+    private func makeRecoveryChamberEnterBuffer() -> AVAudioPCMBuffer? {
+        let duration = 0.60
+        let frameCount = AVAudioFrameCount(format.sampleRate * duration)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
+              let channels = buffer.floatChannelData else {
+            return nil
+        }
+        buffer.frameLength = frameCount
+
+        var lpNoise: Double = 0
+        for frame in 0..<Int(frameCount) {
+            let t = Double(frame) / format.sampleRate
+            let attack = min(1.0, t * 35.0)
+            let decay = exp(-t * 3.2)
+            let env = attack * decay
+
+            // Tono profundo de activación de escudo stasis (D3 + A3 sin sweeps)
+            let toneD3 = sin(2.0 * .pi * 146.83 * t)
+            let toneA3 = sin(2.0 * .pi * 220.00 * t) * 0.65
+            let subBass = sin(2.0 * .pi * 73.41 * t) * 0.45
+
+            let rawNoise = Double.random(in: -1.0...1.0)
+            lpNoise = lpNoise * 0.80 + rawNoise * 0.20
+            let fieldSnap = lpNoise * exp(-t * 22.0) * 0.35
+
+            let wave = (toneD3 + toneA3 + subBass + fieldSnap) * env
+            let sample = Float(tanh(wave * 1.3) * 0.88)
+            channels[0][frame] = sample
+            if format.channelCount > 1 {
+                channels[1][frame] = sample * 0.95
+            }
+        }
+        return buffer
+    }
+
+    private func makeRecoveryCompleteBuffer() -> AVAudioPCMBuffer? {
+        let duration = 0.90
+        let frameCount = AVAudioFrameCount(format.sampleRate * duration)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
+              let channels = buffer.floatChannelData else {
+            return nil
+        }
+        buffer.frameLength = frameCount
+
+        let chimeNotes: [Double] = [523.25, 659.25, 783.99, 1046.50]
+        let noteSpacing = 0.055
+
+        for frame in 0..<Int(frameCount) {
+            let t = Double(frame) / format.sampleRate
+            var leftAcc = 0.0
+            var rightAcc = 0.0
+
+            for (idx, freq) in chimeNotes.enumerated() {
+                let noteStart = Double(idx) * noteSpacing
+                if t >= noteStart {
+                    let noteT = t - noteStart
+                    let noteEnv = min(1.0, noteT * 80.0) * exp(-noteT * 3.6)
+                    let tone = (sin(2.0 * .pi * freq * noteT) +
+                                sin(2.0 * .pi * freq * 2.0 * noteT) * 0.22) * noteEnv
+                    let pan = Double(idx) / Double(chimeNotes.count - 1)
+                    leftAcc += tone * (1.0 - pan * 0.6)
+                    rightAcc += tone * (0.4 + pan * 0.6)
+                }
+            }
+
+            let fadeOut = min(1.0, (duration - t) * 6.0)
+            let sampleL = Float(tanh(leftAcc * 1.2) * fadeOut * 0.90)
+            let sampleR = Float(tanh(rightAcc * 1.2) * fadeOut * 0.90)
+
+            channels[0][frame] = sampleL
+            if format.channelCount > 1 {
+                channels[1][frame] = sampleR
+            }
+        }
+        return buffer
+    }
+
+    private func makeTeammateRevivePulseBuffer() -> AVAudioPCMBuffer? {
+        let duration = 0.40
+        let frameCount = AVAudioFrameCount(format.sampleRate * duration)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
+              let channels = buffer.floatChannelData else {
+            return nil
+        }
+        buffer.frameLength = frameCount
+
+        for frame in 0..<Int(frameCount) {
+            let t = Double(frame) / format.sampleRate
+            let attack = min(1.0, t * 50.0)
+            let decay = exp(-t * 6.5)
+            let env = attack * decay
+
+            // Pulso de energía médica de alta velocidad (A5 + A6)
+            let pulse = (sin(2.0 * .pi * 880.0 * t) +
+                         sin(2.0 * .pi * 1760.0 * t) * 0.45) * env
+            let sample = Float(tanh(pulse * 1.4) * 0.92)
+            channels[0][frame] = sample
+            if format.channelCount > 1 {
+                channels[1][frame] = sample
+            }
         }
         return buffer
     }
@@ -4870,6 +5170,7 @@ struct MainMenuView: View {
 }
 
 struct DefeatOverlayView: View {
+    var isTeamDefeat: Bool = false
     var onRespawn: () -> Void
 
     @State private var animateIn = false
@@ -4886,14 +5187,14 @@ struct DefeatOverlayView: View {
                 //  iOS 18 Focus Pill Liquid Glass Floating Banner Card
                 VStack(spacing: 8) {
                     HStack(spacing: 8) {
-                        Image(systemName: "moon.fill")
+                        Image(systemName: isTeamDefeat ? "cross.fill" : "moon.fill")
                             .font(.system(size: 20, weight: .bold))
                             .foregroundStyle(
-                                LinearGradient(colors: [.white, .cyan, .orange], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                LinearGradient(colors: isTeamDefeat ? [.white, .red, .orange] : [.white, .cyan, .orange], startPoint: .topLeading, endPoint: .bottomTrailing)
                             )
 
-                        Text("MORIDO :v")
-                            .font(.system(size: 38, weight: .black, design: .rounded))
+                        Text(isTeamDefeat ? "MISIÓN FALLIDA" : "MORIDO :v")
+                            .font(.system(size: isTeamDefeat ? 30 : 38, weight: .black, design: .rounded))
                             .tracking(3)
                             .foregroundStyle(
                                 LinearGradient(colors: [.white, Color(red: 1.0, green: 0.38, blue: 0.38), .orange], startPoint: .top, endPoint: .bottom)
@@ -4901,7 +5202,7 @@ struct DefeatOverlayView: View {
                             .shadow(color: .red.opacity(0.8), radius: 12)
                     }
 
-                    Text("OLEADA RESTABLECIDA A OLEADA 1")
+                    Text(isTeamDefeat ? "AMBOS AGENTES HAN CAÍDO EN COMBATE" : "OLEADA RESTABLECIDA A OLEADA 1")
                         .font(.system(size: 11, weight: .bold, design: .monospaced))
                         .tracking(2.0)
                         .foregroundStyle(.white.opacity(0.92))
@@ -4985,6 +5286,92 @@ struct DefeatOverlayView: View {
             withAnimation(.spring(response: 0.45, dampingFraction: 0.70)) {
                 animateIn = true
             }
+        }
+    }
+}
+
+struct RecoveryChamberOverlayView: View {
+    @ObservedObject var model: GameModel
+
+    var body: some View {
+        VStack {
+            Spacer()
+
+            VStack(spacing: 10) {
+                HStack(spacing: 8) {
+                    Image(systemName: "cross.case.fill")
+                        .font(.system(size: 20, weight: .black))
+                        .foregroundStyle(Color.cyan)
+
+                    Text("CÁMARA DE RECUPERACIÓN")
+                        .font(.system(size: 20, weight: .black, design: .rounded))
+                        .tracking(2.0)
+                        .foregroundStyle(
+                            LinearGradient(colors: [.white, .cyan], startPoint: .leading, endPoint: .trailing)
+                        )
+                }
+
+                let progress = max(0, min(1.0, 1.0 - model.recoveryTimeRemaining / 12.0))
+                VStack(spacing: 6) {
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(Color.black.opacity(0.55))
+
+                            Capsule()
+                                .fill(
+                                    LinearGradient(colors: [.cyan, .green], startPoint: .leading, endPoint: .trailing)
+                                )
+                                .frame(width: max(6, geo.size.width * CGFloat(progress)))
+                        }
+                    }
+                    .frame(height: 12)
+
+                    HStack {
+                        Text("REGENERANDO SISTEMAS VITALES (\(Int(progress * 100))%)")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.92))
+
+                        Spacer()
+
+                        Text("\(Int(ceil(model.recoveryTimeRemaining)))s")
+                            .font(.system(size: 12, weight: .black, design: .monospaced))
+                            .foregroundStyle(.cyan)
+                    }
+                }
+                .frame(width: 290)
+
+                if model.isTeammateBoostingRecovery {
+                    HStack(spacing: 6) {
+                        Image(systemName: "bolt.fill")
+                            .foregroundStyle(.yellow)
+                        Text("¡COMPAÑERO EN CONSOLA! (+300% VELOCIDAD)")
+                            .font(.system(size: 11, weight: .black, design: .rounded))
+                            .foregroundStyle(.yellow)
+                    }
+                } else {
+                    Text("Tu compañero \(model.remotePlayerName.isEmpty ? "aliado" : model.remotePlayerName) sigue en combate en la arena")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.75))
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
+            .background(
+                ZStack {
+                    Capsule()
+                        .fill(Color.black.opacity(0.55))
+                        .background(.ultraThinMaterial, in: Capsule())
+
+                    Capsule()
+                        .stroke(
+                            LinearGradient(colors: [.cyan.opacity(0.85), .green.opacity(0.50)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                            lineWidth: 1.5
+                        )
+                }
+            )
+            .shadow(color: .cyan.opacity(0.35), radius: 16, x: 0, y: 6)
+            .padding(.bottom, 24)
         }
     }
 }

@@ -136,6 +136,21 @@ struct MetalGameView: UIViewRepresentable {
                     model?.sendEnemyHit(index: botIndex, damage: damage)
                 }
             }
+            renderer.onNearRecoveryConsoleUpdate = { [weak model] isNear in
+                Task { @MainActor in
+                    model?.isNearRecoveryConsole = isNear
+                }
+            }
+            renderer.onRecoveryProgressUpdate = { [weak model] remaining, isBoosting in
+                Task { @MainActor in
+                    model?.updateRecoveryProgress(remaining: remaining, isBoosting: isBoosting)
+                }
+            }
+            renderer.onRecoveryCompleted = { [weak model] in
+                Task { @MainActor in
+                    model?.completeRecovery(wasRevivedByTeammate: false)
+                }
+            }
             model.onRemoteNPCSyncReceived = { [weak renderer] pos, healths, wave, rem, tot, inter, interTime in
                 renderer?.applyRemoteNPCSync(
                     positions: pos,
@@ -172,7 +187,11 @@ struct MetalGameView: UIViewRepresentable {
     func updateUIView(_ view: MTKView, context: Context) {
         (view as? PointResolutionMTKView)?.renderScale = model.renderResolution.scale
         context.coordinator.invertsCameraY = model.invertsCameraY
-        context.coordinator.renderer?.isPlayerDead = (model.playerHealth <= 0 || model.isDefeated)
+        context.coordinator.renderer?.isPlayerDead = (model.playerHealth <= 0 || model.isDefeated) && !model.isRecoveringInChamber
+        context.coordinator.renderer?.isHost = model.isHost
+        context.coordinator.renderer?.isRecoveringInChamber = model.isRecoveringInChamber
+        context.coordinator.renderer?.remotePlayerIsRecovering = model.remotePlayerIsRecovering
+        context.coordinator.renderer?.recoveryTimeRemaining = model.recoveryTimeRemaining
         context.coordinator.renderer?.onFPSUpdate = model.showsFPS
             ? context.coordinator.onFPSUpdate
             : nil

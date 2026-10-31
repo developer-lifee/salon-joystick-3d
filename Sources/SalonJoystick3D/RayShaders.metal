@@ -439,6 +439,32 @@ inline AnalyticalHit analyticalPatioIntersect(ray r) {
         }
     }
 
+    // 7.5. Bio-Stasis Recovery Pods (x = -0.95, z = 6.2 and x = 0.95, z = 6.2)
+    float2 podPositions[2] = { float2(-0.95f, 6.2f), float2(0.95f, 6.2f) };
+    for (int p = 0; p < 2; ++p) {
+        float2 ocPod = r.origin.xz - podPositions[p];
+        float aPod = dot(r.direction.xz, r.direction.xz);
+        if (aPod > 0.0001f) {
+            float bPod = dot(ocPod, r.direction.xz);
+            float cPod = dot(ocPod, ocPod) - 0.58f * 0.58f;
+            float discPod = bPod * bPod - aPod * cPod;
+            if (discPod > 0.0f) {
+                float tPod = (-bPod - sqrt(discPod)) / aPod;
+                if (tPod > 0.01f && tPod < result.distance) {
+                    float yHit = r.origin.y + r.direction.y * tPod;
+                    if (yHit >= 0.12f && yHit <= 2.25f) {
+                        result.hit = true;
+                        result.distance = tPod;
+                        result.position = r.origin + r.direction * tPod;
+                        result.normal = normalize(float3(result.position.x - podPositions[p].x, 0.0f, result.position.z - podPositions[p].y));
+                        result.albedo = float3(0.08f, 0.78f, 0.92f);
+                        result.kind = 1.0f; // Glass stasis reflection
+                    }
+                }
+            }
+        }
+    }
+
     // 8. Ceiling Plane (y = 8.5f)
     if (r.direction.y > 0.001f) {
         float tCeil = (8.5f - r.origin.y) / r.direction.y;

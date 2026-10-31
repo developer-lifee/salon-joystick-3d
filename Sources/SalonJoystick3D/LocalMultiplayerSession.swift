@@ -25,6 +25,7 @@ struct LocalMatchPacket: Codable {
         case controllerInput
         case enemySync
         case enemyHit
+        case reviveTeammate
     }
 
     var kind: Kind
@@ -54,6 +55,10 @@ struct LocalMatchPacket: Codable {
     // Daño colaborativo a enemigos (Cliente -> Host)
     var hitEnemyIndex: Int?
     var hitDamage: Float?
+
+    // Cámara de Recuperación Cooperativa
+    var isRecovering: Bool?
+    var recoveryProgress: Float?
 }
 
 enum LocalDeviceRole: String, Codable, CaseIterable, Identifiable {
