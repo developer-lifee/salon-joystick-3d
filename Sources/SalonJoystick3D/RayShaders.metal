@@ -511,7 +511,11 @@ kernel void traceToolLaser(
     result.primaryStart = float4(origin, 1.0f);
     result.primaryEnd = float4(origin, 0.0f);
     result.reflectedEnd = float4(origin, 0.0f);
-    if (uniforms.toolParameters.x < 1.5f || uniforms.toolParameters.x > 2.5f) {
+
+    bool isLaserGun = (uniforms.toolParameters.x > 1.5f && uniforms.toolParameters.x < 2.5f);
+    bool isMirrorReflecting = (uniforms.toolParameters.x > 2.5f && uniforms.toolParameters.y > 1.5f);
+
+    if (!isLaserGun && !isMirrorReflecting) {
         return;
     }
 
@@ -1119,6 +1123,12 @@ kernel void raytracePatio(
             float laserSpot = max(primarySpot, reflectedSpot * 0.82f);
             emission += float3(7.5f, 0.018f, 0.006f) * laserSpot;
             direct += albedo * float3(2.8f, 0.012f, 0.004f) * laserSpot;
+        } else if (uniforms.toolParameters.x > 2.5f && uniforms.toolParameters.y > 1.5f) {
+            float mirrorSpot = laserResult.primaryEnd.w > 0.5f
+                ? 1.0f - smoothstep(0.025f, 0.16f, distance(position, laserResult.primaryEnd.xyz))
+                : 0.0f;
+            emission += float3(0.12f, 8.5f, 6.8f) * mirrorSpot;
+            direct += albedo * float3(0.08f, 3.2f, 2.5f) * mirrorSpot;
         }
 
         // Six fixed samples approximate the box emitter without temporal noise.
@@ -1412,6 +1422,26 @@ kernel void raytracePatio(
                          + float3(18.0f, 1.2f, 0.3f) * photonPulse
                          + float3(4.5f, 0.4f, 0.1f) * photonGlow;
         }
+    } else if (uniforms.toolParameters.x > 2.5f && uniforms.toolParameters.y > 1.5f && laserResult.primaryEnd.w > 0.5f) {
+        // 🛡️⚡ Rayo Reflejado por el Escudo Espejo (SOLO cuando un láser enemigo rebota contra el espejo!)
+        float3 mStart = laserResult.primaryStart.xyz;
+        float3 mEnd = laserResult.primaryEnd.xyz;
+        float mirrorBeam = laserBeamIntensity(
+            primaryOrigin,
+            primaryDirection,
+            firstSurfaceDistance,
+            mStart,
+            mEnd
+        );
+        float3 hitPoint = primaryOrigin + primaryDirection * firstSurfaceDistance;
+        float distToTarget = distance(hitPoint, mEnd);
+        float impactSpot = 1.0f - smoothstep(0.03f, 0.28f, distToTarget);
+        float impactGlow = 1.0f - smoothstep(0.02f, 0.72f, distToTarget);
+
+        // Rayo reflejado sobrecargado cian-esmeralda vibrante
+        accumulated += float3(0.18f, 11.5f, 9.2f) * (mirrorBeam * 1.15f)
+                     + float3(0.45f, 20.0f, 15.0f) * impactSpot
+                     + float3(0.12f, 5.5f, 4.8f) * impactGlow;
     }
 
     if (laserResult.bot0End.w > 0.5f) {
