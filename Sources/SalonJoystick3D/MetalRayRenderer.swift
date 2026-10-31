@@ -1531,7 +1531,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         // 🪜 Escaleras Verticales: Escalera de la Pared (Z = -16.85) y Escalera Blanca de la Piscina (X = 2.20)
         let nearWallLadder = ladderCooldown <= 0 && playerPosition.x >= -4.60 && playerPosition.x <= -3.00 && playerPosition.z >= -17.2 && playerPosition.z <= -14.8 && playerPosition.y <= 5.85
-        let nearPoolLadder = ladderCooldown <= 0 && playerPosition.x >= 1.45 && playerPosition.x <= 2.45 && playerPosition.z >= -2.60 && playerPosition.z <= -1.25 && playerPosition.y >= -4.55 && playerPosition.y <= 0.45
+        let nearPoolLadder = ladderCooldown <= 0 && playerPosition.x >= 1.45 && playerPosition.x <= 2.45 && playerPosition.z >= -2.60 && playerPosition.z <= -1.25 && playerPosition.y >= -0.85 && playerPosition.y <= 0.45
 
         if nearWallLadder {
             let isAtTopPlatform = playerPosition.y >= 5.10
@@ -3123,8 +3123,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             (SIMD3<Float>(-5.40, -4.60, -4.20), SIMD3<Float>(-5.25, 0.15, 1.20)), // Pared Oeste
             (SIMD3<Float>(2.25, -4.60, -4.20), SIMD3<Float>(2.40, 0.15, 1.20)),  // Pared Este
             (SIMD3<Float>(-5.40, -4.65, -4.20), SIMD3<Float>(2.40, -4.42, 1.20)), // Piso Piscina
-            // Escalera metálica blanca de la piscina (X: 2.10..2.30, Y: -4.5..0.2, Z: -2.35..-1.45)
-            (SIMD3<Float>(2.10, -4.50, -2.35), SIMD3<Float>(2.30, 0.20, -1.45)),
+            // Escalera metálica blanca de la piscina (X: 2.10..2.30, Y: -0.85..0.35, Z: -2.35..-1.45)
+            (SIMD3<Float>(2.10, -0.85, -2.35), SIMD3<Float>(2.30, 0.35, -1.45)),
             // Deck que rodea la piscina a Y = -0.12 (evita atravesar el suelo exterior al rotar en el agua)
             (SIMD3<Float>(-17.2, -0.30, -17.2), SIMD3<Float>(17.2, 0.05, -4.08)),
             (SIMD3<Float>(-17.2, -0.30, 1.08), SIMD3<Float>(17.2, 0.05, 17.2)),
@@ -3968,13 +3968,18 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             )
         }
 
-        // Escalera metálica de la piscina extendida hasta el fondo (-4.50m)
-        builder.addBox(center: SIMD3<Float>(2.20, -2.05, -2.25), size: SIMD3<Float>(0.10, 4.90, 0.10), material: metal)
-        builder.addBox(center: SIMD3<Float>(2.20, -2.05, -1.55), size: SIMD3<Float>(0.10, 4.90, 0.10), material: metal)
-        for level in 0..<14 {
+        // 🪜 Escalera metálica de la piscina (Exclusivamente en la superficie: del deck a -0.75m en el agua)
+        builder.addBox(center: SIMD3<Float>(2.20, -0.20, -2.25), size: SIMD3<Float>(0.08, 1.10, 0.08), material: metal)
+        builder.addBox(center: SIMD3<Float>(2.20, -0.20, -1.55), size: SIMD3<Float>(0.08, 1.10, 0.08), material: metal)
+        // Pasamanos curvados sobre el deck (Y = 0.20 a 0.38m)
+        builder.addBox(center: SIMD3<Float>(2.32, 0.36, -2.25), size: SIMD3<Float>(0.24, 0.08, 0.08), material: metal)
+        builder.addBox(center: SIMD3<Float>(2.32, 0.36, -1.55), size: SIMD3<Float>(0.24, 0.08, 0.08), material: metal)
+        // 3 peldaños metálicos sumergidos en la superficie del agua
+        let poolRungHeights: [Float] = [-0.60, -0.35, -0.10]
+        for rY in poolRungHeights {
             builder.addBox(
-                center: SIMD3<Float>(2.20, -4.30 + Float(level) * 0.33, -1.90),
-                size: SIMD3<Float>(0.10, 0.08, 0.70),
+                center: SIMD3<Float>(2.20, rY, -1.90),
+                size: SIMD3<Float>(0.08, 0.06, 0.65),
                 material: metal
             )
         }

@@ -485,7 +485,7 @@ kernel void traceToolLaser(
     result.primaryStart = float4(origin, 1.0f);
     result.primaryEnd = float4(origin, 0.0f);
     result.reflectedEnd = float4(origin, 0.0f);
-    if (uniforms.toolParameters.x < 1.5f) {
+    if (uniforms.toolParameters.x < 1.5f || uniforms.toolParameters.x > 2.5f) {
         return;
     }
 
@@ -1083,7 +1083,7 @@ kernel void raytracePatio(
             float3 flashlightHalf = normalize(-toolToSurface - currentRay.direction);
             float flashlightGloss = pow(saturate(dot(normal, flashlightHalf)), 180.0f);
             direct += flashlightColor * flashlightPower * cone * flashlightGloss * 0.32f;
-        } else if (uniforms.toolParameters.x > 1.5f) {
+        } else if (uniforms.toolParameters.x > 1.5f && uniforms.toolParameters.x < 2.5f) {
             float primarySpot = laserResult.primaryEnd.w > 0.5f
                 ? 1.0f - smoothstep(0.025f, 0.14f, distance(position, laserResult.primaryEnd.xyz))
                 : 0.0f;
@@ -1385,31 +1385,6 @@ kernel void raytracePatio(
             accumulated += float3(7.8f, 0.25f, 0.05f) * (primaryBeam * 0.85f + reflectedBeam * 0.65f)
                          + float3(18.0f, 1.2f, 0.3f) * photonPulse
                          + float3(4.5f, 0.4f, 0.1f) * photonGlow;
-        }
-    } else if (uniforms.toolParameters.x > 2.5f && laserResult.primaryEnd.w > 0.5f) {
-        // 🛡️✨ Haz Táctico del Espejo: Línea guía cian + Rayo Reflejado Sobrecargado Cian-Esmeralda
-        float3 mStart = laserResult.primaryStart.xyz;
-        float3 mEnd = laserResult.primaryEnd.xyz;
-        float mirrorBeam = laserBeamIntensity(
-            primaryOrigin,
-            primaryDirection,
-            firstSurfaceDistance,
-            mStart,
-            mEnd
-        );
-        float3 hitPoint = primaryOrigin + primaryDirection * firstSurfaceDistance;
-        float distToTarget = distance(hitPoint, mEnd);
-        float impactSpot = 1.0f - smoothstep(0.03f, 0.28f, distToTarget);
-        float impactGlow = 1.0f - smoothstep(0.02f, 0.72f, distToTarget);
-        bool isDeflecting = (uniforms.toolParameters.y > 1.5f);
-
-        if (isDeflecting) {
-            accumulated += float3(0.18f, 11.5f, 9.2f) * (mirrorBeam * 1.15f)
-                         + float3(0.45f, 20.0f, 15.0f) * impactSpot
-                         + float3(0.12f, 5.5f, 4.8f) * impactGlow;
-        } else {
-            accumulated += float3(0.08f, 3.6f, 5.2f) * (mirrorBeam * 0.58f)
-                         + float3(0.15f, 7.5f, 9.5f) * impactSpot;
         }
     }
 
