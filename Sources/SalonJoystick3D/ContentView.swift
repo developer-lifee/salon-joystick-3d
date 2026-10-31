@@ -898,28 +898,22 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             .safeAreaPadding(.top, 8)
 
-            if model.isAnyMultiplayerConnected {
+            if model.showConnectedToast {
                 HStack(spacing: 8) {
                     Circle()
                         .fill(Color.green)
                         .frame(width: 8, height: 8)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("ENLAZADO: \(model.activePeerDisplayName)")
-                            .font(.system(size: 11, weight: .black, design: .monospaced))
-                            .foregroundStyle(.green)
-                        Text(model.multiplayer.mode == .versus
-                             ? "HP Rival: \(Int(model.remotePlayerHealth))% • Score: \(model.remotePlayerScore)"
-                             : "HP Aliado: \(Int(model.remotePlayerHealth))% • Score: \(model.remotePlayerScore)")
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.85))
-                    }
+                    Text("¡ENLAZADO CON \(model.activePeerDisplayName.uppercased())!")
+                        .font(.system(size: 11, weight: .black, design: .monospaced))
+                        .foregroundStyle(.green)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
-                .background(.black.opacity(0.75), in: Capsule())
-                .overlay(Capsule().stroke(Color.green.opacity(0.6), lineWidth: 1.2))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(.black.opacity(0.80), in: Capsule())
+                .overlay(Capsule().stroke(Color.green.opacity(0.8), lineWidth: 1.2))
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .safeAreaPadding(.top, 8)
+                .safeAreaPadding(.top, 56)
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
 
             if model.gameState == .paused {
@@ -1090,11 +1084,23 @@ final class GameModel: ObservableObject {
         }
     }
 
-    func toggleSlowMotion() {
+    func toggleSlowMotion(fromNetwork: Bool = false) {
         isSlowMotionActive.toggle()
         audio.setSlowMotion(isSlowMotionActive)
         let impact = UIImpactFeedbackGenerator(style: isSlowMotionActive ? .heavy : .medium)
         impact.impactOccurred()
+
+        if !fromNetwork && isAnyMultiplayerConnected {
+            let pkt = LocalMatchPacket(
+                kind: .slowMotion,
+                peerID: multiplayer.localPeer.displayName,
+                mode: multiplayer.mode,
+                timestamp: Date().timeIntervalSince1970,
+                isSlowMotion: isSlowMotionActive
+            )
+            if multiplayer.isConnected { multiplayer.send(pkt) }
+            if gameCenter.isInMatch { gameCenter.sendPacket(pkt) }
+        }
     }
 
     func toggleCover() {
@@ -1136,6 +1142,7 @@ final class GameModel: ObservableObject {
     @Published var remotePlayerPosition = SIMD3<Float>(-3.8, 0, 3.8)
     @Published var remotePlayerYaw: Float = .pi
     @Published var remotePlayerHeldTool: GameHeldTool = .laser
+    @Published var showConnectedToast: Bool = false
     private var localPlayerPosition = SIMD3<Float>(3.8, 0, 3.8)
     private var localPlayerYaw: Float = .pi
     private var cancellables = Set<AnyCancellable>()
@@ -1146,7 +1153,8 @@ final class GameModel: ObservableObject {
 
     var isHost: Bool {
         if multiplayer.isConnected {
-            return multiplayer.isHosting
+            guard let remotePeer = multiplayer.peers.first else { return true }
+            return multiplayer.localPeer.displayName < remotePeer.displayName
         }
         if gameCenter.isInMatch {
             guard let firstRemote = gameCenter.connectedPlayerNames.first else { return true }
@@ -1256,7 +1264,13 @@ final class GameModel: ObservableObject {
             guard let self else { return }
             self.remotePlayerName = self.multiplayer.peers.first?.displayName ?? "Jugador 2"
             self.audio.playLaserIgnition()
+            self.showConnectedToast = true
             UINotificationFeedbackGenerator().notificationOccurred(.success)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) { [weak self] in
+                withAnimation(.easeOut(duration: 0.35)) {
+                    self?.showConnectedToast = false
+                }
+            }
         }
 
         multiplayer.onPacketReceived = { [weak self] packet in
@@ -1291,8 +1305,9 @@ final class GameModel: ObservableObject {
         botsRemainingInWave = 5
         totalBotsInWave = 5
         isWaveIntermission = false
-        heldTool = .laser
-        remotePlayerHeldTool = .laser
+        heldTool = .none
+        remotePlayerHeldTool = .none
+        isSlowMotionActive = false
         showsMultiplayerSheet = false
         isRecoveringInChamber = false
         recoveryTimeRemaining = 0
@@ -1379,6 +1394,10 @@ final class GameModel: ObservableObject {
             if let t = packet.tool, let remoteTool = GameHeldTool(rawValue: t) {
                 self.remotePlayerHeldTool = remoteTool
             }
+            if let sm = packet.isSlowMotion, self.isSlowMotionActive != sm {
+                self.isSlowMotionActive = sm
+                self.audio.setSlowMotion(sm)
+            }
             if let isRec = packet.isRecovering {
                 self.remotePlayerIsRecovering = isRec
                 if let prog = packet.recoveryProgress {
@@ -1399,6 +1418,14 @@ final class GameModel: ObservableObject {
 
         case .teamRestart:
             self.restartCooperativeMatch(fromNetwork: true)
+
+        case .slowMotion:
+            if let sm = packet.isSlowMotion, self.isSlowMotionActive != sm {
+                self.isSlowMotionActive = sm
+                self.audio.setSlowMotion(sm)
+                let impact = UIImpactFeedbackGenerator(style: sm ? .heavy : .medium)
+                impact.impactOccurred()
+            }
 
         case .hit, .laser:
             if multiplayer.mode == .versus {
@@ -1456,6 +1483,7 @@ final class GameModel: ObservableObject {
             timestamp: Date().timeIntervalSince1970,
             health: playerHealth,
             score: playerScore,
+            isSlowMotion: isSlowMotionActive,
             isRecovering: isRecoveringInChamber,
             recoveryProgress: isRecoveringInChamber ? max(0, min(1.0, 1.0 - recoveryTimeRemaining / 12.0)) : 1.0
         )
@@ -1616,8 +1644,9 @@ final class GameModel: ObservableObject {
         botsRemainingInWave = 5
         totalBotsInWave = 5
         isWaveIntermission = false
-        heldTool = .laser
-        remotePlayerHeldTool = .laser
+        heldTool = .none
+        remotePlayerHeldTool = .none
+        isSlowMotionActive = false
         resetRequestID &+= 1
         respawnRequestID &+= 1
 
@@ -4604,6 +4633,18 @@ struct PauseMenuView: View {
                             LinearGradient(colors: [.white, .cyan], startPoint: .leading, endPoint: .trailing)
                         )
                         .shadow(color: .cyan.opacity(0.8), radius: 12)
+                }
+
+                if model.isAnyMultiplayerConnected {
+                    HStack(spacing: 8) {
+                        Circle().fill(Color.green).frame(width: 8, height: 8)
+                        Text("ENLAZADO: \(model.activePeerDisplayName.uppercased())")
+                            .font(.system(size: 11, weight: .black, design: .monospaced))
+                            .foregroundStyle(.green)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(Color.black.opacity(0.55), in: Capsule())
                 }
 
                 VStack(spacing: 14) {

@@ -28,6 +28,7 @@ struct LocalMatchPacket: Codable {
         case reviveTeammate
         case teamDefeat
         case teamRestart
+        case slowMotion
     }
 
     var kind: Kind
@@ -44,6 +45,7 @@ struct LocalMatchPacket: Codable {
     var role: String?
     var health: Float?
     var score: Int?
+    var isSlowMotion: Bool?
 
     // Sincronización autoritativa de enemigos (Host -> Cliente)
     var enemyPositions: [SIMD3<Float>]?

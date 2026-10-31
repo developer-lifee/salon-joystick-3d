@@ -2844,12 +2844,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if distance < 0.84 && position.y >= floatTop - 0.10 {
             return floatTop
         }
-        // 🌀 Portal abisal en el centro del fondo de la piscina (X: -2.8..-0.2, Z: -2.6..-0.4)
-        let overAbyssPortal = position.x >= -2.8 && position.x <= -0.2 && position.z >= -2.6 && position.z <= -0.4
-        if overAbyssPortal {
-            return -11.0 // Acceso abierto directo al reino subterráneo abisal!
-        }
-        return -4.50 // Fondo cerámico de la piscina profunda (-4.5m)
+        return -4.50 // Fondo cerámico sólido de la piscina profunda (-4.5m) - Solo se entra al easter egg por el tobogán
     }
 
     private func isStandingOnFloat(_ position: SIMD3<Float>) -> Bool {
