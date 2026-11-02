@@ -495,7 +495,7 @@ kernel void updateWaterVertices(
         0.0f,
         1.0f
     );
-    position.y = -0.07f + waterState.sample(waterSampler, uv).r;
+    position.y = 0.00f + waterState.sample(waterSampler, uv).r;
     vertices[tid] = position;
 }
 

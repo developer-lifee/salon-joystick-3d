@@ -1876,42 +1876,36 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             let isSwimming = magnitude > 0.08
 
             if !isDeepInWater {
-                // 🌊 En la superficie: Posito de 10 cm de agua
-                // El jugador camina y corre normalmente con el agua en los tobillos (-0.10m)
-                if proposed.y < -0.10 {
-                    proposed.y = -0.10
+                // 🌊 En la superficie: Posito de 14 cm de agua
+                // El jugador camina y corre normalmente con el agua cubriendo los pies y tobillos
+                if proposed.y < -0.14 {
+                    proposed.y = -0.14
                 }
                 verticalVelocity = 0
             } else {
-                // 🏊‍♂️ En la piscina profunda / reino subterráneo: Nado 3D libre y ascenso a la superficie
-                let isFirstPersonDiving = (cameraMode == .firstPerson) && firstPersonPitch < -0.28
-
-                if isFirstPersonDiving {
-                    // Buceo hacia el fondo
-                    let targetVerticalSwim = sin(firstPersonPitch) * movementSpeed * magnitude * 1.25
-                    verticalVelocity += (targetVerticalSwim - verticalVelocity) * min(1.0, dt * 5.0)
-                } else {
-                    // 🌊 Flotabilidad hidrodinámica: te eleva suavemente hacia el posito de 10 cm en la superficie
-                    let surfaceY: Float = -0.10
-                    if proposed.y < surfaceY {
-                        verticalVelocity += min(6.0, 3.8 + (surfaceY - proposed.y) * 0.8) * dt
-                        verticalVelocity *= exp(-dt * 1.6)
-
-                        // Nado propulsado hacia arriba al avanzar en el agua
-                        if isSwimming {
-                            let upwardBias: Float = (cameraMode == .firstPerson) ? max(0, -sin(firstPersonPitch)) : 0.85
-                            verticalVelocity += upwardBias * 3.2 * dt
-                        }
-                    } else {
-                        verticalVelocity = 0
+                // 🏊‍♂️ En la piscina profunda / reino subterráneo: Nado 3D libre y flotabilidad neutra
+                // NO te hala hacia arriba: tienes flotabilidad neutra para nadar a donde tú quieras libremente
+                if cameraMode == .firstPerson && isSwimming {
+                    // En 1ra persona: nadas en la dirección exacta donde apuntas con la cámara
+                    let targetVerticalSwim = sin(firstPersonPitch) * movementSpeed * magnitude * 1.20
+                    verticalVelocity += (targetVerticalSwim - verticalVelocity) * min(1.0, dt * 4.0)
+                } else if cameraMode == .thirdPerson && isSwimming {
+                    // En 3ra persona: si inclinas la vista arriba o abajo mientras nadas, subes o bajas
+                    let pitchDelta = orbitPitch - 0.22
+                    if abs(pitchDelta) > 0.12 {
+                        let targetVerticalSwim = -sin(pitchDelta) * movementSpeed * magnitude * 0.85
+                        verticalVelocity += (targetVerticalSwim - verticalVelocity) * min(1.0, dt * 3.0)
                     }
                 }
+
+                // Amortiguación suave hidrodinámica (flotabilidad neutra sin empuje forzado)
+                verticalVelocity *= exp(-dt * 1.8)
 
                 if isSwimming {
                     swimStrokeTimer -= dt
                     if swimStrokeTimer <= 0 {
-                        audio.playSwimStrokeSound(intensity: 0.55 * magnitude)
-                        swimStrokeTimer = 0.45
+                        audio.playSwimStrokeSound(intensity: 0.38 * magnitude)
+                        swimStrokeTimer = 0.50
                     }
                 } else {
                     swimStrokeTimer = min(swimStrokeTimer, 0.12)
@@ -2027,20 +2021,24 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     -1.45,
                     1
                 )
-                playerWaterWakeCountdown = 0.09
-                audio.playWaterDisturbance(intensity: min(1.0, max(0.40, speed / 1.5)))
+                playerWaterWakeCountdown = 0.38 // Cadencia realista de pasos en agua
+                audio.playWaterDisturbance(intensity: min(0.60, max(0.20, speed / 2.0)))
             }
-        } else if !currentlyInPool {
+        } else {
             playerWaterWakeCountdown = 0
         }
         let floatWaterMovement = min(0.72, max(0, (simd_length(floatVelocity) - 0.04) / 0.95))
-        let waterMovementIntensity = max(currentlyInPool ? min(1.0, speed / 1.5) : 0, floatWaterMovement)
+        let waterMovementIntensity: Float = currentlyInPool ? max(min(1.0, speed / 1.5), floatWaterMovement) : 0
         let waterStateChanged = (waterMovementIntensity > 0.01) !=
             (lastSubmittedWaterMovementIntensity > 0.01)
         if waterStateChanged ||
             abs(waterMovementIntensity - lastSubmittedWaterMovementIntensity) >= 0.025 {
             lastSubmittedWaterMovementIntensity = waterMovementIntensity
             audio.setWaterMovementIntensity(waterMovementIntensity)
+        }
+        if !currentlyInPool && lastSubmittedWaterMovementIntensity > 0 {
+            lastSubmittedWaterMovementIntensity = 0
+            audio.setWaterMovementIntensity(0)
         }
         let glideIntensity: Float = (!willBeInPool || willBeOnFloat) && isGrounded
             ? min(1, speed / 3.6)
@@ -2869,7 +2867,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if enteredEasterEggViaToboggan || position.y < -0.30 {
             return -11.0
         } else {
-            return -0.10 // 🌊 Posito de 10 cm: puedes caminar normalmente sin hundirte
+            return -0.14 // 🌊 Posito de 14 cm: pies visiblemente sumergidos sin hundirse
         }
     }
 
@@ -3840,10 +3838,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 let z0 = minimum.y + size.y * Float(row) / Float(rows - 1)
                 let z1 = minimum.y + size.y * Float(row + 1) / Float(rows - 1)
                 builder.addQuad(
-                    SIMD3<Float>(x0, -0.07, z1),
-                    SIMD3<Float>(x1, -0.07, z1),
-                    SIMD3<Float>(x1, -0.07, z0),
-                    SIMD3<Float>(x0, -0.07, z0),
+                    SIMD3<Float>(x0, 0.00, z1),
+                    SIMD3<Float>(x1, 0.00, z1),
+                    SIMD3<Float>(x1, 0.00, z0),
+                    SIMD3<Float>(x0, 0.00, z0),
                     material: water
                 )
             }

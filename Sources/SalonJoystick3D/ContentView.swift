@@ -2773,7 +2773,7 @@ struct GameSceneView: UIViewRepresentable {
             let horizontalSpeed = hypot(velocity.x, velocity.z)
             let grounded = isPlayerGrounded(body)
             let playerPosition = player.presentation.position
-            let isInPool = playerPosition.x > -5.28 && playerPosition.x < 2.28 &&
+            let isInPool = playerPosition.y <= 0.05 && playerPosition.x > -5.28 && playerPosition.x < 2.28 &&
                 playerPosition.z > -4.08 && playerPosition.z < 1.08
             if isInPool && grounded && horizontalSpeed > 0.25 {
                 waterStepCountdown -= dt
