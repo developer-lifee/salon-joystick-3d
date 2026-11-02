@@ -1079,7 +1079,7 @@ final class GameModel: ObservableObject {
         self.waveIntermissionTime = intermissionTime
 
         // Si el jugador local estaba en la cámara de recuperación y la oleada se completó, auto-reanimar para el descanso
-        if (justEnteredIntermission || justEndedIntermission) && isRecoveringInChamber {
+        if (justEnteredIntermission || justEndedIntermission || intermission) && isRecoveringInChamber {
             completeRecovery(wasRevivedByTeammate: true)
         }
     }

@@ -1326,6 +1326,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
     func draw(in view: MTKView) {
+        if !UIApplication.shared.isIdleTimerDisabled {
+            UIApplication.shared.isIdleTimerDisabled = true
+        }
         autoreleasepool {
             _ = frameSemaphore.wait(timeout: .distantFuture)
             guard let drawable = view.currentDrawable,
@@ -1541,8 +1544,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             desiredDirection = simd_normalize(desiredDirection)
         }
 
-        // 🌊 Subterranean Easter Egg & Piscina Profunda (-4.50m)
-        let currentlyInPool = isInsidePoolXZ(playerPosition) && playerPosition.y <= 0.35 && playerPosition.y > -4.75
+        // 🌊 Subterranean Easter Egg & Piscina Realista (1.30m)
+        let currentlyInPool = isInsidePoolXZ(playerPosition) && playerPosition.y <= 0.35 && playerPosition.y > -2.0
         let isSubterranean = playerPosition.y <= -4.75
         let currentGroundHeight = isSubterranean ? -11.0 : groundHeight(at: playerPosition, insidePool: currentlyInPool)
         let currentlyOnFloat = currentlyInPool && isStandingOnFloat(playerPosition)
@@ -1562,9 +1565,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             ladderCooldown = max(0, ladderCooldown - dt)
         }
 
-        // 🪜 Escaleras Verticales: Escalera de la Pared (Z = -16.85) y Escalera Blanca de la Piscina (X = 2.20)
+        // 🪜 Escaleras Verticales: Escalera de la Pared (Z = -16.85) y Escalera Cromada de la Piscina (X = 2.22)
         let nearWallLadder = ladderCooldown <= 0 && playerPosition.x >= -4.60 && playerPosition.x <= -3.00 && playerPosition.z >= -17.2 && playerPosition.z <= -14.8 && playerPosition.y <= 5.85
-        let nearPoolLadder = ladderCooldown <= 0 && playerPosition.x >= 1.45 && playerPosition.x <= 2.45 && playerPosition.z >= -2.60 && playerPosition.z <= -1.25 && playerPosition.y >= -0.85 && playerPosition.y <= 0.45
+        let nearPoolLadder = ladderCooldown <= 0 && playerPosition.x >= 1.55 && playerPosition.x <= 2.45 && playerPosition.z >= -2.40 && playerPosition.z <= -1.40 && playerPosition.y >= -1.25 && playerPosition.y <= 0.45
 
         if nearWallLadder {
             let isAtTopPlatform = playerPosition.y >= 5.10
@@ -1793,7 +1796,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         resolveRockCollisions(position: &proposed)
         proposed.x = max(-17.0, min(17.0, proposed.x))
         proposed.z = max(-17.0, min(17.0, proposed.z))
-        let willBeInPool = isInsidePoolXZ(proposed) && proposed.y <= 0.35 && proposed.y > -4.75
+        let willBeInPool = isInsidePoolXZ(proposed) && proposed.y <= 0.35 && proposed.y > -2.0
         let nextGroundHeight = groundHeight(at: proposed, insidePool: willBeInPool)
         let willBeOnFloat = willBeInPool && nextGroundHeight > -0.1
         let wasGrounded = playerPosition.y <= currentGroundHeight + 0.05
@@ -1871,10 +1874,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
 
         if (willBeInPool || currentlyInPool) && !willBeOnFloat {
-            // 🤿 Piscina profunda con flotabilidad natural y nado libre
+            // 🤿 Piscina con flotabilidad natural y nado libre
             let isSwimming = magnitude > 0.08
             let isFirstPersonDiving = (cameraMode == .firstPerson) && firstPersonPitch < -0.28
-            let isActivelyDiving = isFirstPersonDiving || verticalVelocity < -0.6
+            let isActivelyDiving = isFirstPersonDiving
 
             if isActivelyDiving {
                 // Durante buceo activo: descender suavemente con resistencia del agua
@@ -1882,9 +1885,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     let targetVerticalSwim = sin(firstPersonPitch) * movementSpeed * magnitude * 1.25
                     verticalVelocity += (targetVerticalSwim - verticalVelocity) * min(1.0, dt * 5.0)
                 } else {
-                    // Resistencia hidrodinámica fuerte al caer desde altura (trampolín / plataforma)
-                    let drag: Float = verticalVelocity < -3.0 ? 5.5 : 2.0
-                    verticalVelocity *= exp(-dt * drag)
+                    verticalVelocity *= exp(-dt * 2.0)
                 }
                 swimStrokeTimer -= dt
                 if swimStrokeTimer <= 0 {
@@ -1896,8 +1897,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 let surfaceY: Float = -0.12
                 if proposed.y < surfaceY {
                     let depth = surfaceY - proposed.y
-                    verticalVelocity += min(4.2, depth * 3.8 + 1.2) * dt
-                    verticalVelocity *= exp(-dt * 2.2)
+                    verticalVelocity += min(5.0, depth * 4.5 + 1.8) * dt
+                    verticalVelocity *= exp(-dt * 2.5)
                 } else {
                     let diff = surfaceY - proposed.y
                     verticalVelocity += diff * 4.0 * dt
@@ -1923,7 +1924,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         var landingSpeed: Float = 0
         // 🛟 Red de seguridad: debajo del fondo de la piscina solo se puede estar si se entró por el tobogán
-        if playerPosition.y <= -4.75 && !enteredEasterEggViaToboggan && !isSlidingOnToboggan {
+        if playerPosition.y <= -2.0 && playerPosition.y > -4.75 && !enteredEasterEggViaToboggan && !isSlidingOnToboggan {
             let rescueX = max(-5.0, min(2.0, playerPosition.x))
             let rescueZ = max(-3.8, min(0.8, playerPosition.z))
             playerPosition = SIMD3<Float>(rescueX, -0.12, rescueZ)
@@ -2152,6 +2153,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             // Wave TRULY cleared! Trigger 10-second intermission rest
             isWaveIntermission = true
             intermissionTimeRemaining = 10.0
+            if isRecoveringInChamber {
+                isRecoveringInChamber = false
+                recoveryTimeRemaining = 0
+                onRecoveryCompleted?()
+            }
             audio.playLaserReflectionSound()
             onDamageTaken?(-25.0) // Health regen rest reward (+25 HP)
             onWaveUpdate?(currentWave, 0, totalBotsInWave, true, 10.0)
@@ -2859,7 +2865,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if distance < 0.84 && position.y >= floatTop - 0.10 {
             return floatTop
         }
-        return -4.50 // Fondo cerámico sólido de la piscina profunda (-4.5m) - Solo se entra al easter egg por el tobogán
+        return -1.30 // Fondo cerámico sólido de la piscina (1.30m de profundidad) - Solo se entra al easter egg por el tobogán
     }
 
     private func isStandingOnFloat(_ position: SIMD3<Float>) -> Bool {
@@ -3263,7 +3269,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     }
 
     private func writeUniforms(texture: MTLTexture, dt: Float) {
-        let currentlyInPool = isInsidePoolXZ(playerPosition) && playerPosition.y <= 0.35 && playerPosition.y > -4.75
+        let currentlyInPool = isInsidePoolXZ(playerPosition) && playerPosition.y <= 0.35 && playerPosition.y > -2.0
         let isSubterraneanTarget = playerPosition.y <= -4.75
         let isUnderwaterCamera = (currentlyInPool || isSubterraneanTarget) && playerPosition.y < -0.10
 
@@ -3389,7 +3395,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             toolDirection = cameraForward
         } else {
             // 🎯 En 3ra persona: anclar el origen EXACTAMENTE en la boca del arma en la mano derecha del personaje
-            let isGroundedInPool = currentlyInPool && (playerPosition.y <= -4.40)
+            let isGroundedInPool = currentlyInPool && (playerPosition.y <= -1.25)
             let isDeepSubmerged = (currentlyInPool || isSubterraneanTarget) && !isGroundedInPool && playerPosition.y <= -0.85
             let pPitch: Float
             if isPlayerDead {
@@ -3505,9 +3511,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     }
 
     private func writeInstanceDescriptors() {
-        let currentlyInPool = isInsidePoolXZ(playerPosition) && playerPosition.y <= 0.35 && playerPosition.y > -4.75
+        let currentlyInPool = isInsidePoolXZ(playerPosition) && playerPosition.y <= 0.35 && playerPosition.y > -2.0
         let isSubterraneanTarget = playerPosition.y <= -4.75
-        let isGroundedInPool = currentlyInPool && (playerPosition.y <= -4.40)
+        let isGroundedInPool = currentlyInPool && (playerPosition.y <= -1.25)
         let isDeepSubmerged = (currentlyInPool || isSubterraneanTarget) && !isGroundedInPool && playerPosition.y <= -0.85
         let isSwimmingInWater = (currentlyInPool || isSubterraneanTarget) && !isGroundedInPool && !isClimbingLadder && !isSlidingOnToboggan
         let isPlayerDead = self.isPlayerDead
@@ -3993,33 +3999,31 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         // Sunken Treasure Chest
         builder.addBox(center: SIMD3<Float>(2.8, -9.5, -1.8), size: SIMD3<Float>(1.2, 0.75, 0.85), material: treasureGold)
 
-        // 🏊‍♂️ Piscina Olímpica Ultra Profunda (-4.50m de profundidad real con revestimiento cerámico e iluminación subacuática)
-        // Piso profundo con apertura y marco del portal abisal en el centro
-        builder.addBox(center: SIMD3<Float>(-1.5, -4.56, -3.4), size: SIMD3<Float>(7.8, 0.14, 1.6), material: poolTile)
-        builder.addBox(center: SIMD3<Float>(-1.5, -4.56, 0.4), size: SIMD3<Float>(7.8, 0.14, 1.6), material: poolTile)
-        builder.addBox(center: SIMD3<Float>(-4.2, -4.56, -1.5), size: SIMD3<Float>(2.4, 0.14, 2.2), material: poolTile)
-        builder.addBox(center: SIMD3<Float>(1.2, -4.56, -1.5), size: SIMD3<Float>(2.4, 0.14, 2.2), material: poolTile)
-        // Portal abisal brillante en el fondo de la piscina (Vórtice al Easter Egg)
-        builder.addBox(center: SIMD3<Float>(-1.5, -4.54, -1.5), size: SIMD3<Float>(2.6, 0.06, 2.2), material: subWallNeonCyan)
+        // 🏊‍♂️ Piscina Olímpica Realista (Profundidad estándar 1.30m, piso cerámico sellado sin portales)
+        // Piso cerámico sólido y sellado (impide caer al vacío o al easter egg)
+        builder.addBox(center: SIMD3<Float>(-1.5, -1.36, -1.5), size: SIMD3<Float>(7.8, 0.14, 5.4), material: poolTile)
 
-        // Paredes cerámicas de la piscina profunda (4.6m de alto)
-        builder.addBox(center: SIMD3<Float>(-1.5, -2.25, -4.14), size: SIMD3<Float>(7.8, 4.60, 0.12), material: poolTile)
-        builder.addBox(center: SIMD3<Float>(-1.5, -2.25, 1.14), size: SIMD3<Float>(7.8, 4.60, 0.12), material: poolTile)
-        builder.addBox(center: SIMD3<Float>(-5.34, -2.25, -1.5), size: SIMD3<Float>(0.12, 4.60, 5.4), material: poolTile)
-        builder.addBox(center: SIMD3<Float>(2.34, -2.25, -1.5), size: SIMD3<Float>(0.12, 4.60, 5.4), material: poolTile)
+        // Paredes cerámicas de la piscina (1.40m de alto, desde fondo hasta borde)
+        builder.addBox(center: SIMD3<Float>(-1.5, -0.65, -4.14), size: SIMD3<Float>(7.8, 1.40, 0.12), material: poolTile)
+        builder.addBox(center: SIMD3<Float>(-1.5, -0.65, 1.14), size: SIMD3<Float>(7.8, 1.40, 0.12), material: poolTile)
+        builder.addBox(center: SIMD3<Float>(-5.34, -0.65, -1.5), size: SIMD3<Float>(0.12, 1.40, 5.4), material: poolTile)
+        builder.addBox(center: SIMD3<Float>(2.34, -0.65, -1.5), size: SIMD3<Float>(0.12, 1.40, 5.4), material: poolTile)
 
-        // Tiras LED subacuáticas de doble nivel en la piscina profunda:
-        // Nivel Medio (Cian a Y = -1.80m)
-        builder.addBox(center: SIMD3<Float>(-1.5, -1.80, -4.06), size: SIMD3<Float>(7.2, 0.06, 0.06), material: subWallNeonCyan)
-        builder.addBox(center: SIMD3<Float>(-1.5, -1.80, 1.06), size: SIMD3<Float>(7.2, 0.06, 0.06), material: subWallNeonCyan)
-        builder.addBox(center: SIMD3<Float>(-5.26, -1.80, -1.5), size: SIMD3<Float>(0.06, 0.06, 4.8), material: subWallNeonCyan)
-        builder.addBox(center: SIMD3<Float>(2.26, -1.80, -1.5), size: SIMD3<Float>(0.06, 0.06, 4.8), material: subWallNeonCyan)
+        // Tiras LED subacuáticas de la piscina (Y = -0.65m)
+        builder.addBox(center: SIMD3<Float>(-1.5, -0.65, -4.06), size: SIMD3<Float>(7.2, 0.06, 0.06), material: subWallNeonCyan)
+        builder.addBox(center: SIMD3<Float>(-1.5, -0.65, 1.06), size: SIMD3<Float>(7.2, 0.06, 0.06), material: subWallNeonCyan)
+        builder.addBox(center: SIMD3<Float>(-5.26, -0.65, -1.5), size: SIMD3<Float>(0.06, 0.06, 4.8), material: subWallNeonCyan)
+        builder.addBox(center: SIMD3<Float>(2.26, -0.65, -1.5), size: SIMD3<Float>(0.06, 0.06, 4.8), material: subWallNeonCyan)
 
-        // Nivel Profundo (Esmeralda a Y = -3.80m)
-        builder.addBox(center: SIMD3<Float>(-1.5, -3.80, -4.06), size: SIMD3<Float>(7.2, 0.06, 0.06), material: subWallNeonEmerald)
-        builder.addBox(center: SIMD3<Float>(-1.5, -3.80, 1.06), size: SIMD3<Float>(7.2, 0.06, 0.06), material: subWallNeonEmerald)
-        builder.addBox(center: SIMD3<Float>(-5.26, -3.80, -1.5), size: SIMD3<Float>(0.06, 0.06, 4.8), material: subWallNeonEmerald)
-        builder.addBox(center: SIMD3<Float>(2.26, -3.80, -1.5), size: SIMD3<Float>(0.06, 0.06, 4.8), material: subWallNeonEmerald)
+        // 🪜 Escalera Metálica Cromada de la Piscina (Postes y peldaños visibles bajo el agua y sobre el deck)
+        builder.addBox(center: SIMD3<Float>(2.22, -0.40, -2.15), size: SIMD3<Float>(0.05, 1.45, 0.05), material: metal)
+        builder.addBox(center: SIMD3<Float>(2.22, -0.40, -1.65), size: SIMD3<Float>(0.05, 1.45, 0.05), material: metal)
+        builder.addBox(center: SIMD3<Float>(2.35, 0.48, -2.15), size: SIMD3<Float>(0.26, 0.32, 0.05), material: metal)
+        builder.addBox(center: SIMD3<Float>(2.35, 0.48, -1.65), size: SIMD3<Float>(0.26, 0.32, 0.05), material: metal)
+        builder.addBox(center: SIMD3<Float>(2.20, -1.00, -1.90), size: SIMD3<Float>(0.06, 0.04, 0.46), material: metal)
+        builder.addBox(center: SIMD3<Float>(2.20, -0.70, -1.90), size: SIMD3<Float>(0.06, 0.04, 0.46), material: metal)
+        builder.addBox(center: SIMD3<Float>(2.20, -0.40, -1.90), size: SIMD3<Float>(0.06, 0.04, 0.46), material: metal)
+        builder.addBox(center: SIMD3<Float>(2.20, -0.10, -1.90), size: SIMD3<Float>(0.06, 0.04, 0.46), material: metal)
 
         builder.addBox(center: SIMD3<Float>(-1.5, 0.14, -4.38), size: SIMD3<Float>(8.1, 0.28, 0.34), material: coping)
         builder.addBox(center: SIMD3<Float>(-1.5, 0.14, 1.38), size: SIMD3<Float>(8.1, 0.28, 0.34), material: coping)
