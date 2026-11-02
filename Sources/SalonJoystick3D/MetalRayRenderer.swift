@@ -951,6 +951,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private var verticalVelocity: Float = 0
     private var playerYaw: Float = .pi
     private var isSlidingOnToboggan: Bool = false
+    private var enteredEasterEggViaToboggan: Bool = false
     private var isClimbingLadder: Bool = false
     private var ladderClimbTimer: Float = 0
     private var ladderCooldown: Float = 0
@@ -1718,6 +1719,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             playerPosition = SIMD3<Float>(-2.5, -5.5, -2.5)
             verticalVelocity = -0.8
             isSlidingOnToboggan = false
+            enteredEasterEggViaToboggan = true
             audio.setGlideIntensity(0)
             audio.setWaterMovementIntensity(0)
             audio.playSubterraneanPortalPlungeSound()
@@ -1880,7 +1882,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     let targetVerticalSwim = sin(firstPersonPitch) * movementSpeed * magnitude * 1.25
                     verticalVelocity += (targetVerticalSwim - verticalVelocity) * min(1.0, dt * 5.0)
                 } else {
-                    verticalVelocity *= exp(-dt * 2.0)
+                    // Resistencia hidrodinámica fuerte al caer desde altura (trampolín / plataforma)
+                    let drag: Float = verticalVelocity < -3.0 ? 5.5 : 2.0
+                    verticalVelocity *= exp(-dt * drag)
                 }
                 swimStrokeTimer -= dt
                 if swimStrokeTimer <= 0 {
@@ -1918,11 +1922,21 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
 
         var landingSpeed: Float = 0
+        // 🛟 Red de seguridad: debajo del fondo de la piscina solo se puede estar si se entró por el tobogán
+        if playerPosition.y <= -4.75 && !enteredEasterEggViaToboggan && !isSlidingOnToboggan {
+            let rescueX = max(-5.0, min(2.0, playerPosition.x))
+            let rescueZ = max(-3.8, min(0.8, playerPosition.z))
+            playerPosition = SIMD3<Float>(rescueX, -0.12, rescueZ)
+            proposed = playerPosition
+            verticalVelocity = 0
+        } else if playerPosition.y > -4.75 {
+            enteredEasterEggViaToboggan = false
+        }
         proposed.y += verticalVelocity * dt
         if isSlidingOnToboggan {
             proposed = playerPosition
-        } else if proposed.y <= -4.75 || playerPosition.y <= -4.75 {
-            // 🌊 CÁMARA SUBTERRÁNEA GIGANTE (Piso a -11.0m y Techo Sólido con salida por la piscina)
+        } else if playerPosition.y <= -4.75 {
+            // 🌊 CÁMARA SUBTERRÁNEA GIGANTE (solo accesible por el tobogán)
             proposed.y = max(-11.0, proposed.y)
 
             let insidePoolOpening = proposed.x >= -5.35 && proposed.x <= 2.35 && proposed.z >= -4.20 && proposed.z <= 1.20
@@ -1936,11 +1950,12 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 }
             }
         } else if currentlyInPool && !willBeOnFloat {
-            if proposed.y <= nextGroundHeight && proposed.y > -4.70 {
+            // 🧱 Fondo cerámico SÓLIDO: sin importar la velocidad de caída, nunca se atraviesa
+            if proposed.y <= nextGroundHeight {
                 proposed.y = nextGroundHeight
                 verticalVelocity = max(0, verticalVelocity)
             } else {
-                proposed.y = max(-11.0, min(1.5, proposed.y))
+                proposed.y = min(1.5, proposed.y)
             }
         } else if proposed.y <= nextGroundHeight {
             if !wasGrounded && !isCoverActive && verticalVelocity < -1.2 {
