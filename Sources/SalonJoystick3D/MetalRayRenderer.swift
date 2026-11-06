@@ -1470,6 +1470,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
     private var pendingDamageAccumulator: Float = 0
     private var damageReportTimer: Float = 0
+    private var playerMeltProgress: Float = 0
+    private var remotePlayerMeltProgress: Float = 0
 
     private func accumulateDamage(_ amount: Float) {
         pendingDamageAccumulator += amount
@@ -1508,6 +1510,20 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let floatDisplacement = updateFloatSimulation(dt: dt)
         if wasRidingFloat {
             playerPosition += floatDisplacement
+        }
+
+        let shouldPlayerMelt = isPlayerDead || isRecoveringInChamber
+        if shouldPlayerMelt {
+            playerMeltProgress = min(1.0, playerMeltProgress + rawDt * 1.6)
+        } else {
+            playerMeltProgress = max(0.0, playerMeltProgress - rawDt * 3.2)
+        }
+
+        let shouldRemoteMelt = remotePlayerIsRecovering
+        if shouldRemoteMelt {
+            remotePlayerMeltProgress = min(1.0, remotePlayerMeltProgress + rawDt * 1.6)
+        } else {
+            remotePlayerMeltProgress = max(0.0, remotePlayerMeltProgress - rawDt * 3.2)
         }
 
         // 🏥 Bio-Stasis Recovery Chamber System
@@ -1797,6 +1813,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         proposed.x = max(-17.0, min(17.0, proposed.x))
         proposed.z = max(-17.0, min(17.0, proposed.z))
         let willBeInPool = isInsidePoolXZ(proposed) && proposed.y <= 0.35
+        let isDeepInWater = playerPosition.y < -0.25 || enteredEasterEggViaToboggan || isSubterranean
+        let isInWater = (willBeInPool || currentlyInPool || isDeepInWater)
         let nextGroundHeight = groundHeight(at: proposed, insidePool: willBeInPool)
         let willBeOnFloat = willBeInPool && nextGroundHeight > -0.1
         let wasGrounded = playerPosition.y <= currentGroundHeight + 0.05
@@ -1812,7 +1830,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         if diveQueued {
             diveQueued = false
-            if willBeInPool || currentlyInPool {
+            if willBeInPool || currentlyInPool || isDeepInWater {
                 verticalVelocity = -3.8 // Impulso inmediato de inmersión / buceo hacia el fondo
                 audio.playSwimStrokeSound(intensity: 0.95)
                 pendingWaterImpulse = SIMD4<Float>(playerPosition.x, playerPosition.z, -1.35, 1)
@@ -1824,8 +1842,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         if jumpQueued {
             jumpQueued = false
-            if (willBeInPool || currentlyInPool) && !willBeOnFloat {
-                if playerPosition.y < -0.30 {
+            if isInWater && !willBeOnFloat {
+                if isDeepInWater {
                     // 🏊‍♂️ En la piscina profunda / abisal: brazada potente de ascenso hacia la superficie
                     verticalVelocity = 5.2
                     audio.playSwimStrokeSound(intensity: 0.95)
@@ -1871,8 +1889,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             audio.playLanding(intensity: 0.25)
         }
 
-        if (willBeInPool || currentlyInPool) && !willBeOnFloat {
-            let isDeepInWater = playerPosition.y < -0.25 || enteredEasterEggViaToboggan
+        if isInWater && !willBeOnFloat {
             let isSwimming = magnitude > 0.08
 
             if !isDeepInWater {
@@ -1887,19 +1904,19 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 // NO te hala hacia arriba: tienes flotabilidad neutra para nadar a donde tú quieras libremente
                 if cameraMode == .firstPerson && isSwimming {
                     // En 1ra persona: nadas en la dirección exacta donde apuntas con la cámara
-                    let targetVerticalSwim = sin(firstPersonPitch) * movementSpeed * magnitude * 1.20
-                    verticalVelocity += (targetVerticalSwim - verticalVelocity) * min(1.0, dt * 4.0)
+                    let targetVerticalSwim = sin(firstPersonPitch) * movementSpeed * magnitude * 1.30
+                    verticalVelocity += (targetVerticalSwim - verticalVelocity) * min(1.0, dt * 5.0)
                 } else if cameraMode == .thirdPerson && isSwimming {
                     // En 3ra persona: si inclinas la vista arriba o abajo mientras nadas, subes o bajas
                     let pitchDelta = orbitPitch - 0.22
-                    if abs(pitchDelta) > 0.12 {
-                        let targetVerticalSwim = -sin(pitchDelta) * movementSpeed * magnitude * 0.85
-                        verticalVelocity += (targetVerticalSwim - verticalVelocity) * min(1.0, dt * 3.0)
+                    if abs(pitchDelta) > 0.08 {
+                        let targetVerticalSwim = -sin(pitchDelta) * movementSpeed * magnitude * 1.15
+                        verticalVelocity += (targetVerticalSwim - verticalVelocity) * min(1.0, dt * 4.5)
                     }
                 }
 
-                // Amortiguación suave hidrodinámica (flotabilidad neutra sin empuje forzado)
-                verticalVelocity *= exp(-dt * 1.8)
+                // Amortiguación suave hidrodinámica (flotabilidad neutra sin gravedad forzada)
+                verticalVelocity *= exp(-dt * 2.0)
 
                 if isSwimming {
                     swimStrokeTimer -= dt
@@ -1938,6 +1955,18 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 if proposed.y >= -4.85 {
                     proposed.y = -4.85
                     verticalVelocity = min(0, verticalVelocity)
+                }
+                // Asistencia de orientación: si nada hacia arriba cerca del techo, guiar hacia el pozo (-1.5, -1.5)
+                if proposed.y >= -5.30 && verticalVelocity > 0 {
+                    let shaftCenter = SIMD2<Float>(-1.5, -1.5)
+                    let currentXZ = SIMD2<Float>(proposed.x, proposed.z)
+                    let diff = shaftCenter - currentXZ
+                    let dist = simd_length(diff)
+                    if dist > 0.2 {
+                        let dir = diff / dist
+                        proposed.x += dir.x * dt * 2.5
+                        proposed.z += dir.y * dt * 2.5
+                    }
                 }
             }
         } else if currentlyInPool && !willBeOnFloat {
@@ -2657,7 +2686,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                                 botImpactAudioCooldowns[index] = 0.45
                                 audio.playLaserPlayerHitSound()
                             }
-                            accumulateDamage(12.0 * rawDt)
+                            accumulateDamage(28.0 * rawDt)
                         }
                     }
                 }
@@ -3278,7 +3307,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         // 🎯 Elevación del punto de mira (lookAt) hacia la cabeza / hombro superior para evitar enfocar la espalda baja
         let targetOffsetY: Float
-        if isCoverActive {
+        if isPlayerDead || isRecoveringInChamber {
+            targetOffsetY = 0.20 // 🟢 Enfoque cinemático directo al charco de slime burbujeante derretido en el suelo
+        } else if isCoverActive {
             targetOffsetY = (cameraMode == .firstPerson ? 0.70 : 0.65)
         } else if currentlyInPool && cameraMode == .thirdPerson {
             targetOffsetY = 1.35
@@ -3523,22 +3554,42 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let isMirrorActive = (heldTool == .mirror && mirrorActiveRemaining > 0)
         let isMoving = hypot(joystick.dx, joystick.dy) > 0.15
 
+        let melt = playerMeltProgress
+        let wobble = sin(elapsedTime * 9.0) * 0.05 * melt
+        let pScale: SIMD3<Float>
         let pPitch: Float
-        if isPlayerDead {
-            // ☠️ MORIDO :v Death Animation: Fall flat face down on the floor (+90 deg pitch!)
+        if melt > 0.01 {
+            // 🟢 Slime Melting Death: Se derrite orgánicamente en un charco de slime verde burbujeante en el suelo
+            let scaleY = max(0.06, (1.0 - melt * 0.94) + wobble * 0.3)
+            let scaleXZ = 1.0 + melt * 1.30 + wobble
+            pScale = SIMD3<Float>(scaleXZ, scaleY, scaleXZ)
+            pPitch = 0.0 // Slime derretido apoyado horizontalmente sobre el suelo
+        } else if isPlayerDead {
+            // ☠️ Fallback si no ha comenzado el derretimiento: tumbado
+            pScale = SIMD3<Float>(1, 1, 1)
             pPitch = 1.57
         } else if isCoverActive || isClimbingLadder || isGroundedInPool {
             // 🧍 De pie / caminando en el fondo de la piscina o en cobertura/escalera: estrictamente vertical (0 pitch)
+            pScale = SIMD3<Float>(1, 1, 1)
             pPitch = 0
         } else if isSwimmingInWater {
             // 🏊‍♂️ Postura natural de nado: cuerpo inclinado horizontalmente cortando el agua
+            pScale = SIMD3<Float>(1, 1, 1)
             let swimTilt: Float = isMoving ? -0.42 : -0.12
             pPitch = swimTilt + max(-0.35, min(0.35, (orbitPitch - 0.22) * 0.8))
         } else if isSlidingOnToboggan {
+            pScale = SIMD3<Float>(1, 1, 1)
             pPitch = -0.62
         } else {
+            pScale = SIMD3<Float>(1, 1, 1)
             pPitch = 0
         }
+
+        let rMelt = remotePlayerMeltProgress
+        let rWobble = sin(elapsedTime * 9.0) * 0.05 * rMelt
+        let rScale: SIMD3<Float> = rMelt > 0.01
+            ? SIMD3<Float>(1.0 + rMelt * 1.30 + rWobble, max(0.06, (1.0 - rMelt * 0.94) + rWobble * 0.3), 1.0 + rMelt * 1.30 + rWobble)
+            : SIMD3<Float>(1, 1, 1)
 
         let pPos: SIMD3<Float> = isSlidingOnToboggan ? playerPosition + SIMD3<Float>(0, -0.15, 0) : playerPosition
         let effYaw = playerYaw + shieldYawOffset
@@ -3581,7 +3632,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         let descriptors = [
             Self.makeInstanceDescriptor(translation: .zero, yaw: 0, pitch: 0, mask: 0x01, accelerationStructureIndex: 0),
-            Self.makeInstanceDescriptor(translation: playerRenderPos, yaw: playerYaw, pitch: pPitch, mask: playerInstanceMask, accelerationStructureIndex: playerASIndex),
+            Self.makeInstanceDescriptor(translation: playerRenderPos, yaw: playerYaw, pitch: pPitch, scale: pScale, mask: playerInstanceMask, accelerationStructureIndex: playerASIndex),
             Self.makeInstanceDescriptor(translation: .zero, yaw: 0, pitch: 0, mask: 0x04, accelerationStructureIndex: 2),
             Self.makeInstanceDescriptor(translation: floatPosition, yaw: floatYaw, pitch: 0, mask: 0x01, accelerationStructureIndex: 3),
             Self.makeInstanceDescriptor(
@@ -3624,6 +3675,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 translation: isRemotePlayerConnected ? (remotePlayerIsRecovering ? SIMD3<Float>(isHost ? 0.95 : -0.95, 0.45, 6.2) : smoothedRemotePos) : SIMD3<Float>(0, -500, 0),
                 yaw: remotePlayerIsRecovering ? Float.pi : remotePlayerYaw,
                 pitch: 0,
+                scale: rScale,
                 mask: isRemotePlayerConnected ? 0x01 : 0x00,
                 accelerationStructureIndex: (simd_distance_squared(smoothedRemotePos, remotePlayerPosition) > 0.002 && !remotePlayerIsRecovering) ? 9 : 1
             )
@@ -3660,15 +3712,16 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         translation: SIMD3<Float>,
         yaw: Float,
         pitch: Float = 0,
+        scale: SIMD3<Float> = SIMD3<Float>(1, 1, 1),
         mask: UInt32,
         accelerationStructureIndex: UInt32
     ) -> MTLAccelerationStructureInstanceDescriptor {
         let cy = cos(yaw), sy = sin(yaw)
         let cp = cos(pitch), sp = sin(pitch)
         var descriptor = MTLAccelerationStructureInstanceDescriptor()
-        descriptor.transformationMatrix.columns.0 = MTLPackedFloat3Make(cy, 0, -sy)
-        descriptor.transformationMatrix.columns.1 = MTLPackedFloat3Make(-sy * sp, cp, -cy * sp)
-        descriptor.transformationMatrix.columns.2 = MTLPackedFloat3Make(sy * cp, sp, cy * cp)
+        descriptor.transformationMatrix.columns.0 = MTLPackedFloat3Make(cy * scale.x, 0, -sy * scale.x)
+        descriptor.transformationMatrix.columns.1 = MTLPackedFloat3Make(-sy * sp * scale.y, cp * scale.y, -cy * sp * scale.y)
+        descriptor.transformationMatrix.columns.2 = MTLPackedFloat3Make(sy * cp * scale.z, sp * scale.z, cy * cp * scale.z)
         descriptor.transformationMatrix.columns.3 = MTLPackedFloat3Make(translation.x, translation.y, translation.z)
         descriptor.options = .opaque
         descriptor.mask = mask

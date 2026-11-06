@@ -1434,10 +1434,7 @@ final class GameModel: ObservableObject {
                 audio.playLaserPlayerHitSound()
                 UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
             } else {
-                // En modo Cooperativo: curación/escudo compartido + puntos de equipo
-                playerHealth = min(100.0, playerHealth + 10.0)
-                playerScore += 25
-                broadcastLocalState()
+                // En modo Cooperativo: fuego amigo desactivado (sin daño, sin curación infinita ni puntos anómalos)
             }
 
         case .enemySync:
