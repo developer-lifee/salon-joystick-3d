@@ -1837,57 +1837,30 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
         }
 
-        // 🏊‍♂️ Detección de cercanía al borde de la piscina para salir al deck
-        let isNearPoolRim = (currentlyInPool || willBeInPool) && playerPosition.y >= -1.20 && (proposed.x <= -4.95 || proposed.x >= 1.95 || proposed.z <= -3.75 || proposed.z >= 0.75)
-
         if jumpQueued {
             jumpQueued = false
             if isInWater && !willBeOnFloat {
-                if isNearPoolRim {
-                    // 🚀 Salto propulsado fuera de la piscina hacia el deck del salón
-                    var exitDir = desiredDirection
-                    if simd_length_squared(exitDir) < 0.01 {
-                        if proposed.x <= -4.95 { exitDir = SIMD2<Float>(-1, 0) }
-                        else if proposed.x >= 1.95 { exitDir = SIMD2<Float>(1, 0) }
-                        else if proposed.z <= -3.75 { exitDir = SIMD2<Float>(0, -1) }
-                        else { exitDir = SIMD2<Float>(0, 1) }
-                    }
-                    proposed.y = max(0.15, proposed.y + 0.35)
-                    verticalVelocity = 5.4
-                    horizontalVelocity = exitDir * 3.8
-                    audio.playLanding(intensity: 0.35)
-                    pendingWaterImpulse = SIMD4<Float>(playerPosition.x, playerPosition.z, -1.80, 1)
-                } else if isDeepInWater {
+                if isDeepInWater {
                     // 🏊‍♂️ En la piscina profunda / abisal: brazada potente de ascenso continuo hacia la superficie
-                    verticalVelocity = 5.8
+                    verticalVelocity = 5.2
                     audio.playSwimStrokeSound(intensity: 0.95)
                     pendingWaterImpulse = SIMD4<Float>(playerPosition.x, playerPosition.z, -1.20, 1)
                 } else {
-                    // Salto normal en el posito de 14 cm
-                    verticalVelocity = 5.2
+                    // 🚀 Salto natural en el posito de 14 cm
+                    var jumpHVel = horizontalVelocity
+                    if simd_length(desiredDirection) > 0.08 {
+                        jumpHVel = desiredDirection * 3.4
+                    }
+                    verticalVelocity = 4.8
+                    horizontalVelocity = jumpHVel
                     audio.playWaterDisturbance(intensity: 0.5)
                 }
             } else if onTrampolineBoard {
                 verticalVelocity = 5.2
                 horizontalVelocity = SIMD2<Float>(0.0, 5.8)
             } else if wasGrounded || playerPosition.y <= currentGroundHeight + 0.18 {
-                verticalVelocity = 5.4
+                verticalVelocity = 5.0
             }
-        } else if isNearPoolRim && magnitude > 0.15 && playerPosition.y >= -0.85 {
-            // 🧗 Mantling automático: salir caminando o nadando fluidamente contra el borde de la piscina
-            var exitDir = desiredDirection
-            if simd_length_squared(exitDir) < 0.01 {
-                if proposed.x <= -4.95 { exitDir = SIMD2<Float>(-1, 0) }
-                else if proposed.x >= 1.95 { exitDir = SIMD2<Float>(1, 0) }
-                else if proposed.z <= -3.75 { exitDir = SIMD2<Float>(0, -1) }
-                else { exitDir = SIMD2<Float>(0, 1) }
-            }
-            proposed.x += exitDir.x * 0.40
-            proposed.z += exitDir.y * 0.40
-            proposed.y = 0.05
-            verticalVelocity = 2.0
-            horizontalVelocity = exitDir * 2.5
-            audio.playLanding(intensity: 0.25)
         }
 
         if isInWater && !willBeOnFloat {
@@ -1895,25 +1868,24 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
             if !isDeepInWater {
                 // 🌊 En la superficie: Posito de 14 cm de agua
-                // El jugador camina y corre normalmente. Si cae al fondo, reposa en -0.14m sin congelar saltos.
+                // El jugador camina y corre normalmente. Si cae al fondo, reposa en -0.14m.
                 if proposed.y < -0.14 {
                     proposed.y = -0.14
                     verticalVelocity = max(0, verticalVelocity)
                 } else if proposed.y > -0.14 {
-                    // Arco balístico natural de salto o emersión sobre el agua
+                    // Gravedad aérea estándar: cuando saltas, subes y caes de vuelta con física realista
                     verticalVelocity -= 9.8 * dt
                 }
             } else {
                 // 🏊‍♂️ En la piscina profunda / reino subterráneo: Nado 3D libre y flotabilidad neutra
                 if isSwimming {
-                    // En 1ra persona: si miras hacia arriba y avanzas, nadas hacia arriba con potencia
-                    let lookPitch = (cameraMode == .firstPerson) ? firstPersonPitch : -(orbitPitch - 0.22)
-                    let targetVerticalSwim = sin(lookPitch) * movementSpeed * magnitude * 1.65
-                    verticalVelocity += (targetVerticalSwim - verticalVelocity) * min(1.0, dt * 6.5)
+                    // En 1ra persona: nadas en la dirección a donde miras con la cámara
+                    let targetVerticalSwim = sin(firstPersonPitch) * movementSpeed * magnitude * 1.45
+                    verticalVelocity += (targetVerticalSwim - verticalVelocity) * min(1.0, dt * 5.0)
                 }
 
                 // Amortiguación suave hidrodinámica (flotabilidad neutra sin gravedad forzada)
-                verticalVelocity *= exp(-dt * 1.8)
+                verticalVelocity *= exp(-dt * 2.0)
 
                 if isSwimming {
                     swimStrokeTimer -= dt
@@ -1938,6 +1910,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             enteredEasterEggViaToboggan = false
         }
         proposed.y += verticalVelocity * dt
+
+        // 🧱 Techo sólido del salón (altura 6.5m): previene atravesar el techo
+        if proposed.y >= 6.40 {
+            proposed.y = 6.40
+            verticalVelocity = min(0, verticalVelocity)
+        }
+
         if isSlidingOnToboggan {
             proposed = playerPosition
         } else if playerPosition.y <= -4.75 {
@@ -1971,8 +1950,6 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             if proposed.y <= nextGroundHeight {
                 proposed.y = nextGroundHeight
                 verticalVelocity = max(0, verticalVelocity)
-            } else {
-                proposed.y = min(1.5, proposed.y)
             }
         } else if proposed.y <= nextGroundHeight {
             if !wasGrounded && !isCoverActive && verticalVelocity < -1.2 {
