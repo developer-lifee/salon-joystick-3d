@@ -496,18 +496,6 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
             VStack(alignment: .leading, spacing: 10) {
-                Picker("Cámara", selection: $model.cameraMode) {
-                    Label("3ª", systemImage: "person.fill")
-                        .tag(GameCameraMode.thirdPerson)
-                    Label("1ª", systemImage: "eye.fill")
-                        .tag(GameCameraMode.firstPerson)
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 140)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 9))
-                .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.white.opacity(0.4), lineWidth: 1))
-                .accessibilityLabel("Modo de cámara")
-
                 JoystickView(onChanged: { vector in
                     model.joystick = vector
                 }, isLiquidGlass: model.isLiquidGlassUIEnabled)
@@ -1012,7 +1000,7 @@ final class GameModel: ObservableObject {
     @Published var showsSettingsSheet = false
     @Published var showsMultiplayerSheet = false
 
-    @Published var cameraMode = GameCameraMode.thirdPerson {
+    @Published var cameraMode = GameCameraMode.firstPerson {
         didSet { }
     }
     @Published var renderResolution = GameRenderResolution.balanced
@@ -5007,11 +4995,12 @@ struct GameOptionsSheet: View {
         NavigationStack {
             Form {
                 Section("Cámara y Vista") {
-                    Picker("Modo de cámara", selection: $model.cameraMode) {
-                        Text("3ª Persona").tag(GameCameraMode.thirdPerson)
-                        Text("1ª Persona").tag(GameCameraMode.firstPerson)
+                    HStack {
+                        Label("Vista", systemImage: "eye.fill")
+                        Spacer()
+                        Text("1ª Persona")
+                            .foregroundStyle(.secondary)
                     }
-                    .pickerStyle(.segmented)
 
                     Toggle("Invertir eje Y", isOn: $model.invertsCameraY)
                     Toggle("Mostrar contador de FPS", isOn: $model.showsFPS)
