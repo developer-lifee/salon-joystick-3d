@@ -1704,7 +1704,9 @@ kernel void raytracePatio(
                      + float3(0.12f, 5.5f, 4.8f) * impactGlow;
     }
 
-    if (laserResult.bot0End.w > 0.5f) {
+    if (laserResult.bot0End.w > 0.5f && laserResult.bot0Start.w > 0.5f &&
+        length_squared(laserResult.bot0End.xyz - laserResult.bot0Start.xyz) > 0.04f &&
+        length_squared(laserResult.bot0Start.xyz) > 0.04f) {
         float botBeam = laserBeamIntensity(
             primaryOrigin,
             primaryDirection,
@@ -1718,7 +1720,9 @@ kernel void raytracePatio(
         accumulated += float3(9.5f, 0.08f, 0.02f) * (botBeam * 0.95f);
     }
 
-    if (laserResult.bot1End.w > 0.5f) {
+    if (laserResult.bot1End.w > 0.5f && laserResult.bot1Start.w > 0.5f &&
+        length_squared(laserResult.bot1End.xyz - laserResult.bot1Start.xyz) > 0.04f &&
+        length_squared(laserResult.bot1Start.xyz) > 0.04f) {
         float botBeam = laserBeamIntensity(
             primaryOrigin,
             primaryDirection,
@@ -1732,7 +1736,9 @@ kernel void raytracePatio(
         accumulated += float3(9.5f, 0.08f, 0.02f) * (botBeam * 0.95f);
     }
 
-    if (laserResult.bot2End.w > 0.5f) {
+    if (laserResult.bot2End.w > 0.5f && laserResult.bot2Start.w > 0.5f &&
+        length_squared(laserResult.bot2End.xyz - laserResult.bot2Start.xyz) > 0.04f &&
+        length_squared(laserResult.bot2Start.xyz) > 0.04f) {
         float botBeam = laserBeamIntensity(
             primaryOrigin,
             primaryDirection,
@@ -1746,7 +1752,9 @@ kernel void raytracePatio(
         accumulated += float3(9.2f, 0.14f, 4.5f) * (botBeam * 0.95f);
     }
 
-    if (laserResult.bot3End.w > 0.5f) {
+    if (laserResult.bot3End.w > 0.5f && laserResult.bot3Start.w > 0.5f &&
+        length_squared(laserResult.bot3End.xyz - laserResult.bot3Start.xyz) > 0.04f &&
+        length_squared(laserResult.bot3Start.xyz) > 0.04f) {
         float botBeam = laserBeamIntensity(
             primaryOrigin,
             primaryDirection,
@@ -1760,7 +1768,9 @@ kernel void raytracePatio(
         accumulated += float3(8.5f, 0.12f, 6.2f) * (botBeam * 0.95f);
     }
 
-    if (laserResult.bot4End.w > 0.5f) {
+    if (laserResult.bot4End.w > 0.5f && laserResult.bot4Start.w > 0.5f &&
+        length_squared(laserResult.bot4End.xyz - laserResult.bot4Start.xyz) > 0.04f &&
+        length_squared(laserResult.bot4Start.xyz) > 0.04f) {
         float botBeam = laserBeamIntensity(
             primaryOrigin,
             primaryDirection,

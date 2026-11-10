@@ -1408,7 +1408,16 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 botLaserCooldownTimers[i] = 9999.0
                 botTeleportReactionTimers[i] = 0
             }
+            currentBotLaserStarts[i] = .zero
+            currentBotLaserEnds[i] = .zero
+            botLaserPropagationDistances[i] = 0
         }
+        let results = laserResultBuffer.contents().assumingMemoryBound(to: RTLaserResult.self)
+        results.pointee.bot0Start = .zero; results.pointee.bot0End = .zero
+        results.pointee.bot1Start = .zero; results.pointee.bot1End = .zero
+        results.pointee.bot2Start = .zero; results.pointee.bot2End = .zero
+        results.pointee.bot3Start = .zero; results.pointee.bot3End = .zero
+        results.pointee.bot4Start = .zero; results.pointee.bot4End = .zero
         onNPCHealthsUpdate?(npcHealths)
     }
 
@@ -2313,6 +2322,19 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             // Wave TRULY cleared! Trigger 10-second intermission rest
             isWaveIntermission = true
             intermissionTimeRemaining = 10.0
+            for i in npcPositions.indices {
+                currentBotLaserStarts[i] = .zero
+                currentBotLaserEnds[i] = .zero
+                botLaserActiveTimers[i] = 0
+                botLaserPropagationDistances[i] = 0
+            }
+            let res = laserResultBuffer.contents().assumingMemoryBound(to: RTLaserResult.self)
+            res.pointee.bot0Start = .zero; res.pointee.bot0End = .zero
+            res.pointee.bot1Start = .zero; res.pointee.bot1End = .zero
+            res.pointee.bot2Start = .zero; res.pointee.bot2End = .zero
+            res.pointee.bot3Start = .zero; res.pointee.bot3End = .zero
+            res.pointee.bot4Start = .zero; res.pointee.bot4End = .zero
+
             if isRecoveringInChamber {
                 isRecoveringInChamber = false
                 recoveryTimeRemaining = 0
@@ -2339,6 +2361,21 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         // Guardar posición de muerte en el piso e iniciar animación de derretimiento líquido (Melt)
         npcDeathPositions[index] = SIMD3<Float>(npcPositions[index].x, max(0.0, npcPositions[index].y), npcPositions[index].z)
         npcMeltProgress[index] = 0.01
+
+        // Cortar de inmediato cualquier láser activo y limpiar coordenadas para que no floten en el aire
+        botLaserActiveTimers[index] = 0
+        botLaserPropagationDistances[index] = 0
+        currentBotLaserStarts[index] = .zero
+        currentBotLaserEnds[index] = .zero
+        let results = laserResultBuffer.contents().assumingMemoryBound(to: RTLaserResult.self)
+        switch index {
+        case 0: results.pointee.bot0Start = .zero; results.pointee.bot0End = .zero
+        case 1: results.pointee.bot1Start = .zero; results.pointee.bot1End = .zero
+        case 2: results.pointee.bot2Start = .zero; results.pointee.bot2End = .zero
+        case 3: results.pointee.bot3Start = .zero; results.pointee.bot3End = .zero
+        case 4: results.pointee.bot4Start = .zero; results.pointee.bot4End = .zero
+        default: break
+        }
 
         // Ensure dead NPC health is zeroed and notified to HUD
         npcHealths[index] = 0
@@ -2402,6 +2439,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if let starts = laserStarts, let ends = laserEnds {
             let makeLaserVec: (Int) -> (SIMD4<Float>, SIMD4<Float>) = { idx in
                 guard idx < starts.count, idx < ends.count else { return (.zero, .zero) }
+                // Si estamos en intermisión o el bot está muerto/inactivo en el cliente, jamás renderizar su láser
+                if isIntermission || (idx < self.npcHealths.count && self.npcHealths[idx] <= 0) {
+                    return (.zero, .zero)
+                }
                 let s = starts[idx]
                 let e = ends[idx]
                 // Validar que el rayo tenga origen real no en el origen nulo (0,0,0) y longitud visible (> 0.2m)
@@ -2595,6 +2636,18 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         // Handle Intermission Rest State between waves
         if isWaveIntermission {
             intermissionTimeRemaining -= dt
+            for i in npcPositions.indices {
+                currentBotLaserStarts[i] = .zero
+                currentBotLaserEnds[i] = .zero
+                botLaserActiveTimers[i] = 0
+                botLaserPropagationDistances[i] = 0
+            }
+            results.pointee.bot0Start = .zero; results.pointee.bot0End = .zero
+            results.pointee.bot1Start = .zero; results.pointee.bot1End = .zero
+            results.pointee.bot2Start = .zero; results.pointee.bot2End = .zero
+            results.pointee.bot3Start = .zero; results.pointee.bot3End = .zero
+            results.pointee.bot4Start = .zero; results.pointee.bot4End = .zero
+
             onWaveUpdate?(currentWave, 0, totalBotsInWave, true, max(0, intermissionTimeRemaining))
             if intermissionTimeRemaining <= 0 {
                 isWaveIntermission = false
@@ -2673,18 +2726,24 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             default: break
             }
 
-            if npcRespawnTimers[index] > 0 {
-                npcRespawnTimers[index] = max(0, npcRespawnTimers[index] - dt)
-                npcPositions[index].y = -10
-                if npcRespawnTimers[index] == 0 {
-                    npcPositions[index] = npcSpawnPositions[index]
-                    npcHealths[index] = npcMaxHealths[index]
-                    npcMeltProgress[index] = 0
-                    botAimTargets[index] = npcSpawnPositions[index] + SIMD3<Float>(0, 1.1, 0)
-                    botLaserCooldownTimers[index] = 2.0 + Float(index) * 1.2
-                    botLaserActiveTimers[index] = 0
-                    botTeleportReactionTimers[index] = 0
+            if npcRespawnTimers[index] > 0 || npcHealths[index] <= 0 {
+                if npcRespawnTimers[index] > 0 {
+                    npcRespawnTimers[index] = max(0, npcRespawnTimers[index] - dt)
+                    npcPositions[index].y = -10
+                    if npcRespawnTimers[index] == 0 {
+                        npcPositions[index] = npcSpawnPositions[index]
+                        npcHealths[index] = npcMaxHealths[index]
+                        npcMeltProgress[index] = 0
+                        botAimTargets[index] = npcSpawnPositions[index] + SIMD3<Float>(0, 1.1, 0)
+                        botLaserCooldownTimers[index] = 2.0 + Float(index) * 1.2
+                        botLaserActiveTimers[index] = 0
+                        botTeleportReactionTimers[index] = 0
+                    }
                 }
+                currentBotLaserStarts[index] = .zero
+                currentBotLaserEnds[index] = .zero
+                botLaserActiveTimers[index] = 0
+                botLaserPropagationDistances[index] = 0
                 continue
             }
 
@@ -2696,6 +2755,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             if playerHiddenInEasterEgg {
                 // NPCs cannot see player hidden in underwater realm!
                 npcYaws[index] += sin(dt * Float(index + 1)) * 0.8 * dt
+                currentBotLaserStarts[index] = .zero
+                currentBotLaserEnds[index] = .zero
+                botLaserActiveTimers[index] = 0
                 continue
             }
 
@@ -3096,10 +3158,26 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     botLaserPropagationDistances[index] = 0
                     currentBotLaserStarts[index] = .zero
                     currentBotLaserEnds[index] = .zero
+                    switch index {
+                    case 0: results.pointee.bot0Start = .zero; results.pointee.bot0End = .zero
+                    case 1: results.pointee.bot1Start = .zero; results.pointee.bot1End = .zero
+                    case 2: results.pointee.bot2Start = .zero; results.pointee.bot2End = .zero
+                    case 3: results.pointee.bot3Start = .zero; results.pointee.bot3End = .zero
+                    case 4: results.pointee.bot4Start = .zero; results.pointee.bot4End = .zero
+                    default: break
+                    }
                 }
             } else {
                 currentBotLaserStarts[index] = .zero
                 currentBotLaserEnds[index] = .zero
+                switch index {
+                case 0: results.pointee.bot0Start = .zero; results.pointee.bot0End = .zero
+                case 1: results.pointee.bot1Start = .zero; results.pointee.bot1End = .zero
+                case 2: results.pointee.bot2Start = .zero; results.pointee.bot2End = .zero
+                case 3: results.pointee.bot3Start = .zero; results.pointee.bot3End = .zero
+                case 4: results.pointee.bot4Start = .zero; results.pointee.bot4End = .zero
+                default: break
+                }
             }
         }
     }
