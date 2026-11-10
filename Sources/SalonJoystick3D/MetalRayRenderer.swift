@@ -1080,6 +1080,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private let floatMesh: RTMeshResources
     private let mirrorShieldMesh: RTMeshResources
     private let rainbowGateMesh: RTMeshResources
+    private let airPumpMesh: RTMeshResources
     private let instanceBuffer: MTLBuffer
     private var instanceDescriptor: MTLInstanceAccelerationStructureDescriptor?
     private var instanceAccelerationStructure: MTLAccelerationStructure?
@@ -1270,6 +1271,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let floatBuilder = Self.makeFloatMesh()
         let mirrorShieldBuilder = Self.makeMirrorShieldMesh()
         let rainbowGateBuilder = Self.makeRainbowGateMesh()
+        let airPumpBuilder = Self.makeAirPumpMesh()
         self.staticMesh = try Self.makeMesh(builder: staticBuilder, device: device, queue: commandQueue)
         self.playerMesh = try Self.makeMesh(builder: playerBuilder, device: device, queue: commandQueue)
         self.playerWalkMesh = try Self.makeMesh(builder: playerWalkBuilder, device: device, queue: commandQueue)
@@ -1288,6 +1290,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         self.floatMesh = try Self.makeMesh(builder: floatBuilder, device: device, queue: commandQueue)
         self.mirrorShieldMesh = try Self.makeMesh(builder: mirrorShieldBuilder, device: device, queue: commandQueue)
         self.rainbowGateMesh = try Self.makeMesh(builder: rainbowGateBuilder, device: device, queue: commandQueue)
+        self.airPumpMesh = try Self.makeMesh(builder: airPumpBuilder, device: device, queue: commandQueue)
 
         let instanceLength = MemoryLayout<MTLAccelerationStructureInstanceDescriptor>.stride * 26
         guard let instanceBuffer = device.makeBuffer(length: instanceLength, options: .storageModeShared) else {
@@ -1308,7 +1311,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
            let npcAS = npcMesh.accelerationStructure,
            let fotofagoAS = fotofagoMesh.accelerationStructure,
            let shieldAS = mirrorShieldMesh.accelerationStructure,
-           let rainbowGateAS = rainbowGateMesh.accelerationStructure {
+           let rainbowGateAS = rainbowGateMesh.accelerationStructure,
+           let airPumpAS = airPumpMesh.accelerationStructure {
             let descriptor = MTLInstanceAccelerationStructureDescriptor()
             descriptor.instancedAccelerationStructures = [
                 staticAS,        // 0
@@ -1323,9 +1327,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 playerWalkAS,    // 9 (walk articulado)
                 playerClimbAS,   // 10 (climb escalera)
                 fotofagoAS,      // 11 (El Fotófago - Golem Devorador de Luz)
-                rainbowGateAS    // 12 (Puerta Holográfica Arcoíris 3,000 Pts)
+                rainbowGateAS,   // 12 (Puerta Holográfica Arcoíris 3,000 Pts)
+                airPumpAS        // 13 (Bomba de Aire Neumática de Inflado Slime)
             ]
-            descriptor.instanceCount = 25
+            descriptor.instanceCount = 26
             descriptor.instanceDescriptorBuffer = instanceBuffer
             self.instanceDescriptor = descriptor
 
@@ -1635,6 +1640,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 if let npcAS = npcMesh.accelerationStructure { encoder.useResource(npcAS, usage: .read) }
                 if let fotofagoAS = fotofagoMesh.accelerationStructure { encoder.useResource(fotofagoAS, usage: .read) }
                 if let shieldAS = mirrorShieldMesh.accelerationStructure { encoder.useResource(shieldAS, usage: .read) }
+                if let rainbowGateAS = rainbowGateMesh.accelerationStructure { encoder.useResource(rainbowGateAS, usage: .read) }
+                if let airPumpAS = airPumpMesh.accelerationStructure { encoder.useResource(airPumpAS, usage: .read) }
                 encoder.dispatchThreads(
                     MTLSize(width: drawable.texture.width, height: drawable.texture.height, depth: 1),
                     threadsPerThreadgroup: MTLSize(width: 8, height: 8, depth: 1)
@@ -3961,7 +3968,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let cameraForward: SIMD3<Float>
         let fieldOfView: Float
 
-        if cameraMode == .firstPerson {
+        let isDeflatedOrDead = isPlayerDead || isRecoveringInChamber
+        let effectiveCameraMode: GameCameraMode = isDeflatedOrDead ? .thirdPerson : cameraMode
+
+        if effectiveCameraMode == .firstPerson {
             let pitchCosine = cos(firstPersonPitch)
             cameraForward = simd_normalize(SIMD3<Float>(
                 viewForward.x * pitchCosine,
@@ -3976,9 +3986,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             fieldOfView = 72
         } else {
             // ☁️ 🐢 Super Mario 64 Lakitu Camera + SpringArm Anti-Clipping
-            let distance: Float = isUnderwaterCamera ? 3.4 : 4.0
-            let shoulderOffset: Float = isUnderwaterCamera ? 0.28 : 0.36
-            let pitchClamped = max(-0.25, min(0.68, orbitPitch))
+            let distance: Float = isDeflatedOrDead ? 2.6 : (isUnderwaterCamera ? 3.4 : 4.0)
+            let shoulderOffset: Float = isDeflatedOrDead ? 0.0 : (isUnderwaterCamera ? 0.28 : 0.36)
+            let pitchClamped = isDeflatedOrDead ? 0.42 : max(-0.25, min(0.68, orbitPitch))
             let cosP = cos(pitchClamped)
             let sinP = sin(pitchClamped)
 
@@ -4190,6 +4200,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     }
 
     private func writeInstanceDescriptors() {
+        let isDeflatedOrDead = isPlayerDead || isRecoveringInChamber
+        let effectiveCameraMode: GameCameraMode = isDeflatedOrDead ? .thirdPerson : cameraMode
         let currentlyInPool = isInsidePoolXZ(playerPosition) && playerPosition.y <= 0.35
         let isSubterraneanTarget = playerPosition.y <= -4.75
         let isGroundedInPool = currentlyInPool && playerPosition.y >= -0.25
@@ -4245,7 +4257,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let effYaw = playerYaw + shieldYawOffset
         let baseMirrorPitch: Float = (cameraMode == .firstPerson) ? firstPersonPitch : -(orbitPitch - 0.22) * 1.15
         let effPitch = max(-0.95, min(0.95, baseMirrorPitch + shieldPitchOffset))
-        let isFirstPerson = (cameraMode == .firstPerson)
+        let isFirstPerson = (effectiveCameraMode == .firstPerson)
         let shieldPos: SIMD3<Float>
         let shieldMask: UInt32
         if isMirrorActive {
@@ -4259,9 +4271,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         // 🎯 🦾 Oclusión del Jugador y Near Clipping con Espejos Realistas:
         let headPos = playerPosition + SIMD3<Float>(0, 1.15, 0)
         let distToCamera = simd_distance(lakituPosition, headPos)
-        let shouldHideInThirdPerson = (!isFirstPerson && (distToCamera < 1.25 || (isClimbingLadder && distToCamera < 1.50)))
+        let shouldHideInThirdPerson = !isDeflatedOrDead && (!isFirstPerson && (distToCamera < 1.25 || (isClimbingLadder && distToCamera < 1.50)))
         let playerRenderPos = shouldHideInThirdPerson ? SIMD3<Float>(0, -500, 0) : pPos
-        let playerInstanceMask: UInt32 = shouldHideInThirdPerson ? 0x00 : 0x02
+        let playerInstanceMask: UInt32 = isDeflatedOrDead ? 0x01 : (isFirstPerson ? 0x02 : (shouldHideInThirdPerson ? 0x00 : 0x01))
 
         let playerASIndex: UInt32
         if isPlayerDead {
@@ -4357,6 +4369,29 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
         // El cuadro/espejo se mantiene SIEMPRE visible en Z = 17.8; al desbloquearlo el jugador lo atraviesa como en Mario 64
         descriptors.append(Self.makeInstanceDescriptor(translation: SIMD3<Float>(0, 0, 17.8), yaw: 0, pitch: 0, mask: 0x01, accelerationStructureIndex: 12))
+
+        // 💨 Bomba de Aire Neumática 3D (AS Index 13)
+        let pumpPos: SIMD3<Float>
+        let pumpMask: UInt32
+        let pumpAnim = Float(abs(sin(Double(elapsedTime) * 14.0)))
+        let pumpScale = SIMD3<Float>(1.0, 0.88 + pumpAnim * 0.24, 1.0)
+        let pumpYaw: Float
+
+        if isRecoveringInChamber {
+            // Colocada justo al lado del charco de slime en el suelo
+            pumpPos = playerPosition + SIMD3<Float>(cos(playerYaw + 1.2) * 0.68, -0.02, sin(playerYaw + 1.2) * 0.68)
+            pumpYaw = playerYaw + 1.57
+            pumpMask = 0x01
+        } else if isRemotePlayerConnected && remotePlayerIsRecovering && simd_distance(playerPosition, smoothedRemotePos) < 2.5 {
+            pumpPos = smoothedRemotePos + SIMD3<Float>(0.65, -0.02, 0.0)
+            pumpYaw = 0.0
+            pumpMask = 0x01
+        } else {
+            pumpPos = SIMD3<Float>(0, -500, 0)
+            pumpYaw = 0.0
+            pumpMask = 0x00
+        }
+        descriptors.append(Self.makeInstanceDescriptor(translation: pumpPos, yaw: pumpYaw, pitch: 0, scale: pumpScale, mask: pumpMask, accelerationStructureIndex: 13))
 
         descriptors.withUnsafeBytes { bytes in
             guard let baseAddress = bytes.baseAddress else { return }
@@ -4635,6 +4670,36 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         builder.addBox(center: SIMD3<Float>(0, 0, 0.018), size: SIMD3<Float>(0.46, 0.56, 0.010), material: mirrorGlassFront)
         // Inward (-Z facing player in 1st person): One-way see-through cyan glass visor
         builder.addBox(center: SIMD3<Float>(0, 0, -0.012), size: SIMD3<Float>(0.46, 0.56, 0.010), material: oneWayVisorBack)
+        return builder
+    }
+
+    private static func makeAirPumpMesh() -> RTMeshBuilder {
+        var builder = RTMeshBuilder()
+        let pumpRed = RTMaterial(color: SIMD3<Float>(0.92, 0.18, 0.14), roughness: 0.28, reflectivity: 0.25)
+        let pumpChrome = RTMaterial(color: SIMD3<Float>(0.90, 0.92, 0.95), roughness: 0.08, reflectivity: 0.85)
+        let pumpRubber = RTMaterial(color: SIMD3<Float>(0.10, 0.11, 0.12), roughness: 0.85, reflectivity: 0.05)
+        let pumpGaugeYellow = RTMaterial(color: SIMD3<Float>(1.0, 0.85, 0.20), roughness: 0.20, emission: SIMD3<Float>(0.4, 0.3, 0.05), reflectivity: 0.30, kind: 5.0)
+
+        // 1. Base del inflador (pedal de pie en el suelo)
+        builder.addBox(center: SIMD3<Float>(0, 0.03, 0), size: SIMD3<Float>(0.36, 0.06, 0.18), material: pumpRubber)
+
+        // 2. Cilindro principal de aire (cuerpo rojo brillante)
+        builder.addBox(center: SIMD3<Float>(0, 0.40, 0), size: SIMD3<Float>(0.14, 0.70, 0.14), material: pumpRed)
+
+        // 3. Manómetro de presión analógico en la base
+        builder.addBox(center: SIMD3<Float>(0.09, 0.25, 0), size: SIMD3<Float>(0.08, 0.08, 0.08), material: pumpGaugeYellow)
+
+        // 4. Vástago / pistón cromado
+        builder.addBox(center: SIMD3<Float>(0, 0.82, 0), size: SIMD3<Float>(0.05, 0.22, 0.05), material: pumpChrome)
+
+        // 5. Mango / empuñadura T de bombeo
+        builder.addBox(center: SIMD3<Float>(0, 0.94, 0), size: SIMD3<Float>(0.38, 0.06, 0.08), material: pumpRubber)
+
+        // 6. Manguera negra que va hacia el slime
+        builder.addBox(center: SIMD3<Float>(-0.25, 0.06, 0), size: SIMD3<Float>(0.42, 0.04, 0.04), material: pumpRubber)
+        // Boquilla dorada de inflado
+        builder.addBox(center: SIMD3<Float>(-0.48, 0.06, 0), size: SIMD3<Float>(0.08, 0.05, 0.05), material: pumpChrome)
+
         return builder
     }
 

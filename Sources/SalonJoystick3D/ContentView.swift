@@ -63,17 +63,17 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "100"
-    static let commitHash = "b100pump"
+    static let build = "101"
+    static let commitHash = "b101dark"
     static let formatted = "v\(version) • Build \(build)"
 }
 
 struct GameLightStates: Codable, Equatable {
-    var post = true
-    var piscinaNeon = true
-    var sheeritNeon = true
-    var poolStrips = true
-    var postIntensity: Float = 1
+    var post = false
+    var piscinaNeon = false
+    var sheeritNeon = false
+    var poolStrips = false
+    var postIntensity: Float = 0
     var piscinaNeonIntensity: Float = 1
     var sheeritNeonIntensity: Float = 1
     var poolStripsIntensity: Float = 1
@@ -976,19 +976,6 @@ struct ContentView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("Menú Radial de Teletransporte")
 
-                    Button {
-                        model.showsSettingsSheet = true
-                    } label: {
-                        Image(systemName: "gearshape.fill")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 34, height: 34)
-                            .background(Color.black.opacity(0.65), in: Circle())
-                            .overlay(Circle().stroke(Color.white.opacity(0.35), lineWidth: 1.2))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Ajustes y Opciones")
-
                     if model.isGameControllerConnected && !model.isMinimalHUDEnabled {
                         HStack(spacing: 5) {
                             Image(systemName: "gamecontroller.fill")
@@ -1247,6 +1234,14 @@ struct ContentView: View {
                             Button("Desconectar", role: .destructive) {
                                 model.multiplayer.stop()
                             }
+                        }
+                    }
+
+                    Section("Ajustes Avanzados") {
+                        Button {
+                            model.showsSettingsSheet = true
+                        } label: {
+                            Label("Abrir Opciones Completas", systemImage: "slider.horizontal.3")
                         }
                     }
                 } label: {

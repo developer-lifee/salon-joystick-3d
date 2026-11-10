@@ -1254,15 +1254,16 @@ kernel void raytracePatio(
         if (kind > 3.5f && kind < 4.5f) {
             emitterIntensity = uniforms.lightStates.x;
         } else if (kind > 4.5f && kind < 5.5f) {
-            // Si está en la piscina (-6 < x < 3, -5 < z < 2), responde al interruptor de borde de piscina
+            // Si está en la piscina (-6 < x < 3, -5 < z < 2), responde al interruptor de borde de piscina; de lo contrario al neón sheerit
             bool isPoolStrip = (position.x > -6.0f && position.x < 3.0f && position.z > -5.0f && position.z < 2.0f && position.y > -0.2f && position.y < 0.4f);
-            emitterIntensity = isPoolStrip ? uniforms.lightStates.w : 1.0f;
+            emitterIntensity = isPoolStrip ? uniforms.lightStates.w : uniforms.lightStates.z;
         } else if (kind > 5.5f && kind < 6.5f) {
             emitterIntensity = uniforms.lightStates.y;
         } else if (kind > 6.5f && kind < 7.5f) {
             emitterIntensity = uniforms.lightStates.z;
         } else {
-            emitterIntensity = 1.0f;
+            // Si todas las luces están apagadas (totalLights == 0), nada emite luz artificial; oscuridad total
+            emitterIntensity = lightScale;
         }
         emission *= emitterIntensity;
 
@@ -1279,8 +1280,8 @@ kernel void raytracePatio(
             }
         }
 
-        // Iluminación ambiental nocturna de contraste garantizado para visibilidad total de noche o sin luces
-        float ambientBase = (0.042f + 0.048f * lightScale) * fotofagoDrain;
+        // Iluminación ambiental: oscuridad absoluta (0.0f) cuando las luces están apagadas para forzar el uso de la linterna
+        float ambientBase = (0.085f * lightScale) * fotofagoDrain;
         float skyAmbient = ambientBase + ambientBase * saturate(normal.y);
         float3 direct = albedo * skyAmbient;
 
