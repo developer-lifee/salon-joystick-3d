@@ -930,6 +930,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private let playerSitMesh: RTMeshResources
     private let playerClimbMesh: RTMeshResources
     private let npcMesh: RTMeshResources
+    private let fotofagoMesh: RTMeshResources
     private let waterMesh: RTMeshResources
     private let floatMesh: RTMeshResources
     private let mirrorShieldMesh: RTMeshResources
@@ -973,6 +974,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private var npcRespawnTimers = [Float](repeating: 0, count: 5)
     private let npcMaxHealths: [Float] = [80.0, 120.0, 180.0, 250.0, 350.0]
     private var npcHealths: [Float] = [80.0, 120.0, 180.0, 250.0, 350.0]
+    private let npcBaseScales: [Float] = [0.90, 1.05, 1.18, 1.38, 1.65]
+    private var npcMeltProgress = [Float](repeating: 0, count: 5)
+    private var npcDeathPositions = [SIMD3<Float>](repeating: .zero, count: 5)
     var onNPCHealthsUpdate: (([Float]) -> Void)?
     private var botLaserActiveTimers = [Float](repeating: 0, count: 5)
     private var botLaserCooldownTimers = [Float](repeating: 5.0, count: 5)
@@ -1115,6 +1119,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let playerSitBuilder = Self.makePlayerMesh(pose: .sit)
         let playerClimbBuilder = Self.makePlayerMesh(pose: .climb)
         let npcBuilder = Self.makeNPCMesh()
+        let fotofagoBuilder = Self.makeFotofagoMesh()
         let waterBuilder = Self.makeWaterMesh()
         let floatBuilder = Self.makeFloatMesh()
         let mirrorShieldBuilder = Self.makeMirrorShieldMesh()
@@ -1126,6 +1131,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         self.playerSitMesh = try Self.makeMesh(builder: playerSitBuilder, device: device, queue: commandQueue)
         self.playerClimbMesh = try Self.makeMesh(builder: playerClimbBuilder, device: device, queue: commandQueue)
         self.npcMesh = try Self.makeMesh(builder: npcBuilder, device: device, queue: commandQueue)
+        self.fotofagoMesh = try Self.makeMesh(builder: fotofagoBuilder, device: device, queue: commandQueue)
         self.waterMesh = try Self.makeMesh(
             builder: waterBuilder,
             device: device,
@@ -1152,6 +1158,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
            let waterAS = waterMesh.accelerationStructure,
            let floatAS = floatMesh.accelerationStructure,
            let npcAS = npcMesh.accelerationStructure,
+           let fotofagoAS = fotofagoMesh.accelerationStructure,
            let shieldAS = mirrorShieldMesh.accelerationStructure {
             let descriptor = MTLInstanceAccelerationStructureDescriptor()
             descriptor.instancedAccelerationStructures = [
@@ -1159,13 +1166,14 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 playerAS,        // 1 (stand)
                 waterAS,         // 2
                 floatAS,         // 3
-                npcAS,           // 4
+                npcAS,           // 4 (Scout / Soldado Plasma)
                 shieldAS,        // 5
                 playerCoverAS,   // 6 (cover GTA)
                 playerSwimAS,    // 7 (swim Mario)
                 playerSitAS,     // 8 (sit tobogán)
                 playerWalkAS,    // 9 (walk articulado)
-                playerClimbAS    // 10 (climb escalera)
+                playerClimbAS,   // 10 (climb escalera)
+                fotofagoAS       // 11 (El Fotófago - Golem Devorador de Luz)
             ]
             descriptor.instanceCount = 12
             descriptor.instanceDescriptorBuffer = instanceBuffer
@@ -1237,6 +1245,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             npcYaws[i] = Float.pi * (0.25 + Float(i) * 0.5)
             npcRespawnTimers[i] = 0
             npcHealths[i] = npcMaxHealths[i]
+            npcMeltProgress[i] = 0
             botLaserActiveTimers[i] = 0
             botLaserCooldownTimers[i] = 5.0
             botTeleportReactionTimers[i] = 0
@@ -1421,6 +1430,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 if let waterAS = waterMesh.accelerationStructure { laserEncoder.useResource(waterAS, usage: .read) }
                 if let floatAS = floatMesh.accelerationStructure { laserEncoder.useResource(floatAS, usage: .read) }
                 if let npcAS = npcMesh.accelerationStructure { laserEncoder.useResource(npcAS, usage: .read) }
+                if let fotofagoAS = fotofagoMesh.accelerationStructure { laserEncoder.useResource(fotofagoAS, usage: .read) }
                 if let shieldAS = mirrorShieldMesh.accelerationStructure { laserEncoder.useResource(shieldAS, usage: .read) }
                 laserEncoder.dispatchThreads(
                     MTLSize(width: 1, height: 1, depth: 1),
@@ -1449,6 +1459,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 if let waterAS = waterMesh.accelerationStructure { encoder.useResource(waterAS, usage: .read) }
                 if let floatAS = floatMesh.accelerationStructure { encoder.useResource(floatAS, usage: .read) }
                 if let npcAS = npcMesh.accelerationStructure { encoder.useResource(npcAS, usage: .read) }
+                if let fotofagoAS = fotofagoMesh.accelerationStructure { encoder.useResource(fotofagoAS, usage: .read) }
                 if let shieldAS = mirrorShieldMesh.accelerationStructure { encoder.useResource(shieldAS, usage: .read) }
                 encoder.dispatchThreads(
                     MTLSize(width: drawable.texture.width, height: drawable.texture.height, depth: 1),
@@ -2155,13 +2166,17 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
     private func handleNPCElimination(index: Int) {
         guard index >= 0 && index < npcPositions.count else { return }
+        // Guardar posición de muerte en el piso e iniciar animación de derretimiento líquido (Melt)
+        npcDeathPositions[index] = SIMD3<Float>(npcPositions[index].x, max(0.0, npcPositions[index].y), npcPositions[index].z)
+        npcMeltProgress[index] = 0.01
+
         // Ensure dead NPC health is zeroed and notified to HUD
         npcHealths[index] = 0
         onNPCHealthsUpdate?(npcHealths)
 
         if botsSpawnedInCurrentWave < totalBotsInWave {
             botsSpawnedInCurrentWave += 1
-            npcRespawnTimers[index] = 4.0
+            npcRespawnTimers[index] = 4.2
         } else {
             npcRespawnTimers[index] = 9999.0
         }
@@ -2194,13 +2209,16 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             let prevHealth = npcHealths[i]
             npcHealths[i] = healths[i]
             if healths[i] <= 0 {
-                npcRespawnTimers[i] = 9999.0
-                npcPositions[i].y = -10
                 if prevHealth > 0 {
+                    npcDeathPositions[i] = SIMD3<Float>(npcPositions[i].x, max(0.0, npcPositions[i].y), npcPositions[i].z)
+                    npcMeltProgress[i] = 0.01
                     audio.playLightsaberDefeatSound()
                 }
+                npcRespawnTimers[i] = 9999.0
+                npcPositions[i].y = -10
             } else {
                 npcRespawnTimers[i] = 0
+                npcMeltProgress[i] = 0
             }
         }
         self.currentWave = wave
@@ -2338,6 +2356,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         let results = laserResultBuffer.contents().assumingMemoryBound(to: RTLaserResult.self)
 
+        // Avanzar animación de disolución / derretimiento líquido (Melt) de bots eliminados
+        for idx in npcMeltProgress.indices {
+            if npcMeltProgress[idx] > 0 && npcMeltProgress[idx] < 1.0 {
+                npcMeltProgress[idx] = min(1.0, npcMeltProgress[idx] + rawDt * 0.62)
+            }
+        }
+
         // Sincronización periódica de red (Host -> Cliente) a ~12 Hz
         if isAuthorityForNPCs {
             npcNetworkSyncCountdown -= dt
@@ -2405,6 +2430,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 for i in npcPositions.indices {
                     npcPositions[i] = npcSpawnPositions[i % npcSpawnPositions.count]
                     npcHealths[i] = npcMaxHealths[i]
+                    npcMeltProgress[i] = 0
                     npcRespawnTimers[i] = 0.5 + Float(i) * 0.4
                     botLaserActiveTimers[i] = 0
                     botTeleportReactionTimers[i] = 0
@@ -2451,6 +2477,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 if npcRespawnTimers[index] == 0 {
                     npcPositions[index] = npcSpawnPositions[index]
                     npcHealths[index] = npcMaxHealths[index]
+                    npcMeltProgress[index] = 0
                     botAimTargets[index] = npcSpawnPositions[index] + SIMD3<Float>(0, 1.1, 0)
                     botLaserCooldownTimers[index] = 2.0 + Float(index) * 1.2
                     botLaserActiveTimers[index] = 0
@@ -2704,15 +2731,17 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     if !isTargetingRemote {
                         let reflectedDir = shieldNormal
                         for targetIdx in npcPositions.indices where npcRespawnTimers[targetIdx] <= 0 && npcHealths[targetIdx] > 0 {
-                            let botCenter = npcPositions[targetIdx] + SIMD3<Float>(0, 0.90, 0)
+                            let scale = npcBaseScales[targetIdx]
+                            let botCenter = npcPositions[targetIdx] + SIMD3<Float>(0, 0.90 * scale, 0)
                             let toBot = botCenter - shieldCenter
                             let alongR = simd_dot(toBot, reflectedDir)
                             if alongR > 0.2 && alongR < 30.0 {
                                 let closestPoint = shieldCenter + reflectedDir * alongR
-                                if simd_distance(botCenter, closestPoint) < 0.92 {
+                                if simd_distance(botCenter, closestPoint) < (0.95 * scale) {
                                     if mirrorReflectHitCooldowns[targetIdx] <= 0 {
                                         mirrorReflectHitCooldowns[targetIdx] = 0.18
-                                        let damage: Float = 50.0
+                                        // Sobrecarga del núcleo de singularidad del Fotófago al reflejar su propio láser con el espejo
+                                        let damage: Float = (targetIdx >= 2) ? 85.0 : 55.0
                                         npcHealths[targetIdx] = max(0, npcHealths[targetIdx] - damage)
                                         audio.playLaserReflectionSound()
                                         onNPCHealthsUpdate?(npcHealths)
@@ -2802,18 +2831,20 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         var closestDistance: Float = 35
 
         for index in npcPositions.indices where npcRespawnTimers[index] <= 0 && npcHealths[index] > 0 {
-            let center = npcPositions[index] + SIMD3<Float>(0, 0.85, 0)
+            let scale = npcBaseScales[index]
+            let center = npcPositions[index] + SIMD3<Float>(0, 0.88 * scale, 0)
             let alongRay = simd_dot(center - origin, direction)
             guard alongRay > 0, alongRay < closestDistance else { continue }
             let closestPoint = origin + direction * alongRay
-            guard simd_distance(center, closestPoint) < 1.45 else { continue }
+            guard simd_distance(center, closestPoint) < (1.42 * scale) else { continue }
             closestIndex = index
             closestDistance = alongRay
         }
 
         if let closestIndex, playerLaserHitCooldowns[closestIndex] <= 0 {
             playerLaserHitCooldowns[closestIndex] = 0.20
-            let damage: Float = 35.0
+            // El Fotófago absorbe parte de los fotones directos (armadura Vantablack), requiriendo más impactos o usar el espejo
+            let damage: Float = (closestIndex >= 3) ? 26.0 : 35.0
             if isAuthorityForNPCs {
                 npcHealths[closestIndex] = max(0, npcHealths[closestIndex] - damage)
                 onNPCHealthsUpdate?(npcHealths)
@@ -3740,41 +3771,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             Self.makeInstanceDescriptor(translation: playerRenderPos, yaw: playerYaw, pitch: pPitch, scale: pScale, mask: playerInstanceMask, accelerationStructureIndex: playerASIndex),
             Self.makeInstanceDescriptor(translation: .zero, yaw: 0, pitch: 0, mask: 0x04, accelerationStructureIndex: 2),
             Self.makeInstanceDescriptor(translation: floatPosition, yaw: floatYaw, pitch: 0, mask: 0x01, accelerationStructureIndex: 3),
-            Self.makeInstanceDescriptor(
-                translation: (npcHealths[0] > 0 && npcRespawnTimers[0] <= 0 && !isWaveIntermission) ? npcPositions[0] : SIMD3<Float>(0, -500, 0),
-                yaw: npcYaws[0],
-                pitch: 0,
-                mask: (npcHealths[0] > 0 && npcRespawnTimers[0] <= 0 && !isWaveIntermission) ? 0x01 : 0x00,
-                accelerationStructureIndex: 4
-            ),
-            Self.makeInstanceDescriptor(
-                translation: (npcHealths[1] > 0 && npcRespawnTimers[1] <= 0 && !isWaveIntermission) ? npcPositions[1] : SIMD3<Float>(0, -500, 0),
-                yaw: npcYaws[1],
-                pitch: 0,
-                mask: (npcHealths[1] > 0 && npcRespawnTimers[1] <= 0 && !isWaveIntermission) ? 0x01 : 0x00,
-                accelerationStructureIndex: 4
-            ),
-            Self.makeInstanceDescriptor(
-                translation: (npcHealths[2] > 0 && npcRespawnTimers[2] <= 0 && !isWaveIntermission) ? npcPositions[2] : SIMD3<Float>(0, -500, 0),
-                yaw: npcYaws[2],
-                pitch: 0,
-                mask: (npcHealths[2] > 0 && npcRespawnTimers[2] <= 0 && !isWaveIntermission) ? 0x01 : 0x00,
-                accelerationStructureIndex: 4
-            ),
-            Self.makeInstanceDescriptor(
-                translation: (npcHealths[3] > 0 && npcRespawnTimers[3] <= 0 && !isWaveIntermission) ? npcPositions[3] : SIMD3<Float>(0, -500, 0),
-                yaw: npcYaws[3],
-                pitch: 0,
-                mask: (npcHealths[3] > 0 && npcRespawnTimers[3] <= 0 && !isWaveIntermission) ? 0x01 : 0x00,
-                accelerationStructureIndex: 4
-            ),
-            Self.makeInstanceDescriptor(
-                translation: (npcHealths[4] > 0 && npcRespawnTimers[4] <= 0 && !isWaveIntermission) ? npcPositions[4] : SIMD3<Float>(0, -500, 0),
-                yaw: npcYaws[4],
-                pitch: 0,
-                mask: (npcHealths[4] > 0 && npcRespawnTimers[4] <= 0 && !isWaveIntermission) ? 0x01 : 0x00,
-                accelerationStructureIndex: 4
-            ),
+            makeNPCInstanceDescriptor(index: 0),
+            makeNPCInstanceDescriptor(index: 1),
+            makeNPCInstanceDescriptor(index: 2),
+            makeNPCInstanceDescriptor(index: 3),
+            makeNPCInstanceDescriptor(index: 4),
             Self.makeInstanceDescriptor(translation: shieldPos, yaw: effYaw, pitch: effPitch, mask: shieldMask, accelerationStructureIndex: 5),
             Self.makeInstanceDescriptor(
                 translation: isRemotePlayerConnected ? (remotePlayerIsRecovering ? SIMD3<Float>(isHost ? 0.95 : -0.95, 0.45, 6.2) : smoothedRemotePos) : SIMD3<Float>(0, -500, 0),
@@ -3797,6 +3798,57 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         descriptors.withUnsafeBytes { bytes in
             guard let baseAddress = bytes.baseAddress else { return }
             instanceBuffer.contents().copyMemory(from: baseAddress, byteCount: bytes.count)
+        }
+    }
+
+    private func makeNPCInstanceDescriptor(index: Int) -> MTLAccelerationStructureInstanceDescriptor {
+        let baseScale = npcBaseScales[index]
+        let isFotofago = index >= 2
+        let asIndex: UInt32 = isFotofago ? 11 : 4
+        let isAlive = npcHealths[index] > 0 && npcRespawnTimers[index] <= 0 && !isWaveIntermission
+        let melt = npcMeltProgress[index]
+        let isMelting = !isAlive && melt > 0.005 && melt < 1.0 && !isWaveIntermission && !isVersusMode
+
+        if isAlive {
+            // Animación pesada de respiración, gravitación de cristales y zancada del Fotófago
+            let bobFreq: Float = isFotofago ? 3.4 : 5.8
+            let bobAmp: Float = isFotofago ? 0.048 : 0.024
+            let strideBob = abs(sin(elapsedTime * bobFreq + Float(index) * 1.4)) * bobAmp
+            let breathe = 1.0 + sin(elapsedTime * 2.6 + Float(index)) * 0.028
+            let swayPitch = sin(elapsedTime * (bobFreq * 0.5) + Float(index)) * (isFotofago ? 0.042 : 0.020)
+            let pos = npcPositions[index] + SIMD3<Float>(0, strideBob, 0)
+            let scale = SIMD3<Float>(baseScale * breathe, baseScale, baseScale * breathe)
+            return Self.makeInstanceDescriptor(
+                translation: pos,
+                yaw: npcYaws[index],
+                pitch: swayPitch,
+                scale: scale,
+                mask: 0x01,
+                accelerationStructureIndex: asIndex
+            )
+        } else if isMelting {
+            // 🧪 Animación de Disolución / Derretimiento Líquido Cromático en el suelo
+            let wobble = sin(elapsedTime * 12.0 + Float(index) * 1.7) * 0.06 * melt
+            let scaleY = baseScale * max(0.035, (1.0 - melt * 0.965) + wobble * 0.25)
+            let scaleXZ = baseScale * (1.0 + melt * 1.75 + wobble)
+            let scale = SIMD3<Float>(scaleXZ, scaleY, scaleXZ)
+            return Self.makeInstanceDescriptor(
+                translation: npcDeathPositions[index],
+                yaw: npcYaws[index] + melt * 0.35,
+                pitch: 0,
+                scale: scale,
+                mask: 0x01,
+                accelerationStructureIndex: asIndex
+            )
+        } else {
+            return Self.makeInstanceDescriptor(
+                translation: SIMD3<Float>(0, -500, 0),
+                yaw: npcYaws[index],
+                pitch: 0,
+                scale: SIMD3<Float>(repeating: baseScale),
+                mask: 0x00,
+                accelerationStructureIndex: asIndex
+            )
         }
     }
 
@@ -3940,6 +3992,118 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private static func makeNPCMesh() -> RTMeshBuilder {
         var builder = RTMeshBuilder()
         builder.addCharacter(origin: .zero, color: SIMD3<Float>(0.92, 0.18, 0.34), holdsTool: true)
+        // Cristales de obsidiana flotantes y hombreras oscuras para los Scouts de Plasma
+        let obsidian = RTMaterial(color: SIMD3<Float>(0.018, 0.014, 0.028), roughness: 0.05, emission: SIMD3<Float>(0.04, 0.01, 0.08), reflectivity: 0.80, kind: 10.0)
+        let shardGlow = RTMaterial(color: SIMD3<Float>(0.85, 0.12, 0.55), roughness: 0.04, emission: SIMD3<Float>(3.8, 0.25, 2.2), reflectivity: 0.85, kind: 5.0)
+        builder.addBox(center: SIMD3<Float>(-0.34, 1.02, 0.0), size: SIMD3<Float>(0.18, 0.14, 0.22), material: obsidian)
+        builder.addBox(center: SIMD3<Float>( 0.34, 1.02, 0.0), size: SIMD3<Float>(0.18, 0.14, 0.22), material: obsidian)
+        builder.addBox(center: SIMD3<Float>(-0.38, 1.24, -0.08), size: SIMD3<Float>(0.07, 0.22, 0.07), material: shardGlow)
+        builder.addBox(center: SIMD3<Float>( 0.38, 1.24, -0.08), size: SIMD3<Float>(0.07, 0.22, 0.07), material: shardGlow)
+        return builder
+    }
+
+    private static func makeFotofagoMesh() -> RTMeshBuilder {
+        var builder = RTMeshBuilder()
+        // 🌑 EL FOTÓFAGO COLOSAL: Golem de Obsidiana Vantablack y Singularidad Devoradora de Luz
+        let obsidian = RTMaterial(
+            color: SIMD3<Float>(0.012, 0.010, 0.020),
+            roughness: 0.04,
+            emission: SIMD3<Float>(0.02, 0.004, 0.05),
+            reflectivity: 0.84,
+            kind: 10.0
+        )
+        let vantablack = RTMaterial(
+            color: SIMD3<Float>(0.006, 0.005, 0.010),
+            roughness: 0.10,
+            emission: SIMD3<Float>(0.01, 0.0, 0.02),
+            reflectivity: 0.52,
+            kind: 10.0
+        )
+        let singularityCore = RTMaterial(
+            color: SIMD3<Float>(0.01, 0.0, 0.02),
+            roughness: 0.01,
+            emission: SIMD3<Float>(1.4, 0.08, 3.2),
+            reflectivity: 0.96,
+            kind: 1.0
+        )
+        let accretionMagenta = RTMaterial(
+            color: SIMD3<Float>(1.0, 0.12, 0.45),
+            roughness: 0.04,
+            emission: SIMD3<Float>(7.8, 0.45, 3.6),
+            reflectivity: 0.85,
+            kind: 5.0
+        )
+        let ultravioletShard = RTMaterial(
+            color: SIMD3<Float>(0.48, 0.10, 1.0),
+            roughness: 0.04,
+            emission: SIMD3<Float>(3.6, 0.40, 7.8),
+            reflectivity: 0.88,
+            kind: 5.0
+        )
+        let cyanHorizon = RTMaterial(
+            color: SIMD3<Float>(0.05, 0.95, 1.0),
+            roughness: 0.04,
+            emission: SIMD3<Float>(0.5, 5.8, 7.5),
+            reflectivity: 0.88,
+            kind: 5.0
+        )
+
+        // 1. 🦿 Piernas Acorazadas de Obsidiana y Grebas Pesadas
+        builder.addBox(center: SIMD3<Float>(-0.22, 0.09, 0.04), size: SIMD3<Float>(0.24, 0.18, 0.34), material: obsidian)
+        builder.addBox(center: SIMD3<Float>( 0.22, 0.09, 0.04), size: SIMD3<Float>(0.24, 0.18, 0.34), material: obsidian)
+        builder.addBox(center: SIMD3<Float>(-0.22, 0.30, 0.00), size: SIMD3<Float>(0.22, 0.32, 0.24), material: vantablack)
+        builder.addBox(center: SIMD3<Float>( 0.22, 0.30, 0.00), size: SIMD3<Float>(0.22, 0.32, 0.24), material: vantablack)
+        // Rodilleras de cristal facetado con fisuras ultravioleta
+        builder.addBox(center: SIMD3<Float>(-0.22, 0.46, 0.12), size: SIMD3<Float>(0.18, 0.16, 0.10), material: obsidian)
+        builder.addBox(center: SIMD3<Float>( 0.22, 0.46, 0.12), size: SIMD3<Float>(0.18, 0.16, 0.10), material: obsidian)
+        builder.addBox(center: SIMD3<Float>(-0.22, 0.46, 0.17), size: SIMD3<Float>(0.08, 0.10, 0.03), material: ultravioletShard)
+        builder.addBox(center: SIMD3<Float>( 0.22, 0.46, 0.17), size: SIMD3<Float>(0.08, 0.10, 0.03), material: ultravioletShard)
+        // Muslos colosales y cintura gravitacional
+        builder.addBox(center: SIMD3<Float>(-0.22, 0.62, 0.00), size: SIMD3<Float>(0.25, 0.28, 0.26), material: obsidian)
+        builder.addBox(center: SIMD3<Float>( 0.22, 0.62, 0.00), size: SIMD3<Float>(0.25, 0.28, 0.26), material: obsidian)
+        builder.addBox(center: SIMD3<Float>( 0.00, 0.76, 0.00), size: SIMD3<Float>(0.54, 0.16, 0.32), material: vantablack)
+
+        // 2. 🌌 Torso Colosal en V con Vórtice de Singularidad (Agujero Negro Fotónico)
+        builder.addBox(center: SIMD3<Float>( 0.00, 1.06, -0.02), size: SIMD3<Float>(0.68, 0.52, 0.36), material: vantablack)
+        // Placas pectorales angulares que enmarcan el horizonte de sucesos
+        builder.addBox(center: SIMD3<Float>(-0.24, 1.10, 0.14), size: SIMD3<Float>(0.22, 0.42, 0.12), material: obsidian)
+        builder.addBox(center: SIMD3<Float>( 0.24, 1.10, 0.14), size: SIMD3<Float>(0.22, 0.42, 0.12), material: obsidian)
+        builder.addBox(center: SIMD3<Float>( 0.00, 1.30, 0.12), size: SIMD3<Float>(0.56, 0.12, 0.14), material: obsidian)
+        // Núcleo de Singularidad Esférico + Anillos de Acreción
+        builder.addSphere(center: SIMD3<Float>(0.00, 1.06, 0.14), radii: SIMD3<Float>(repeating: 0.13), material: singularityCore, segments: 12, rings: 8)
+        builder.addTorus(center: SIMD3<Float>(0.00, 1.06, 0.16), majorRadius: 0.17, minorRadius: 0.026, material: accretionMagenta, majorSegments: 16, minorSegments: 8)
+        builder.addTorus(center: SIMD3<Float>(0.00, 1.06, 0.19), majorRadius: 0.10, minorRadius: 0.018, material: cyanHorizon, majorSegments: 14, minorSegments: 6)
+
+        // 3. 💎 Hombreras Colosales (Pauldrons) y Corona de Cristales de Obsidiana Flotantes
+        builder.addBox(center: SIMD3<Float>(-0.46, 1.24, 0.00), size: SIMD3<Float>(0.28, 0.24, 0.36), material: obsidian)
+        builder.addBox(center: SIMD3<Float>( 0.46, 1.24, 0.00), size: SIMD3<Float>(0.28, 0.24, 0.36), material: obsidian)
+        builder.addBox(center: SIMD3<Float>(-0.52, 1.38, -0.02), size: SIMD3<Float>(0.14, 0.22, 0.18), material: obsidian)
+        builder.addBox(center: SIMD3<Float>( 0.52, 1.38, -0.02), size: SIMD3<Float>(0.14, 0.22, 0.18), material: obsidian)
+
+        // Corona de 7 fragmentos de cristal flotantes (Floating Shards alrededor de espalda y hombros)
+        builder.addBox(center: SIMD3<Float>(-0.60, 1.54, -0.10), size: SIMD3<Float>(0.09, 0.30, 0.09), material: ultravioletShard)
+        builder.addBox(center: SIMD3<Float>( 0.60, 1.54, -0.10), size: SIMD3<Float>(0.09, 0.30, 0.09), material: ultravioletShard)
+        builder.addBox(center: SIMD3<Float>(-0.38, 1.70, -0.14), size: SIMD3<Float>(0.10, 0.34, 0.10), material: obsidian)
+        builder.addBox(center: SIMD3<Float>( 0.38, 1.70, -0.14), size: SIMD3<Float>(0.10, 0.34, 0.10), material: obsidian)
+        builder.addBox(center: SIMD3<Float>(-0.38, 1.72, -0.10), size: SIMD3<Float>(0.05, 0.26, 0.05), material: accretionMagenta)
+        builder.addBox(center: SIMD3<Float>( 0.38, 1.72, -0.10), size: SIMD3<Float>(0.05, 0.26, 0.05), material: accretionMagenta)
+        builder.addBox(center: SIMD3<Float>( 0.00, 1.80, -0.16), size: SIMD3<Float>(0.11, 0.36, 0.11), material: ultravioletShard)
+
+        // 4. 👹 Cabeza Monolítica con Cuernos de Obsidiana y Visor Óptico Carmesí
+        builder.addBox(center: SIMD3<Float>( 0.00, 1.48, 0.04), size: SIMD3<Float>(0.34, 0.28, 0.30), material: obsidian)
+        builder.addBox(center: SIMD3<Float>(-0.18, 1.64, 0.02), size: SIMD3<Float>(0.07, 0.24, 0.09), material: obsidian)
+        builder.addBox(center: SIMD3<Float>( 0.18, 1.64, 0.02), size: SIMD3<Float>(0.07, 0.24, 0.09), material: obsidian)
+        builder.addBox(center: SIMD3<Float>( 0.00, 1.49, 0.18), size: SIMD3<Float>(0.28, 0.06, 0.06), material: accretionMagenta)
+
+        // 5. 🦾 Brazos Pesados y Cañón Fotónico Devorador de Luz
+        builder.addBox(center: SIMD3<Float>(-0.46, 0.96, 0.04), size: SIMD3<Float>(0.20, 0.34, 0.22), material: vantablack)
+        builder.addBox(center: SIMD3<Float>( 0.46, 0.96, 0.04), size: SIMD3<Float>(0.20, 0.34, 0.22), material: vantablack)
+        builder.addBox(center: SIMD3<Float>(-0.46, 0.76, 0.16), size: SIMD3<Float>(0.22, 0.22, 0.28), material: obsidian)
+        builder.addBox(center: SIMD3<Float>( 0.46, 0.84, 0.24), size: SIMD3<Float>(0.24, 0.22, 0.42), material: obsidian)
+        // Rieles emisores del cañón derecho
+        builder.addBox(center: SIMD3<Float>( 0.46, 0.86, 0.48), size: SIMD3<Float>(0.14, 0.14, 0.22), material: ultravioletShard)
+        builder.addSphere(center: SIMD3<Float>(0.46, 0.86, 0.60), radii: SIMD3<Float>(repeating: 0.07), material: cyanHorizon, segments: 8, rings: 6)
+
         return builder
     }
 
@@ -3988,9 +4152,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private static func makeWaterMesh() -> RTMeshBuilder {
         var builder = RTMeshBuilder()
         let water = RTMaterial(
-            color: SIMD3<Float>(0.008, 0.025, 0.030),
-            roughness: 0.028,
-            reflectivity: 0.055,
+            color: SIMD3<Float>(0.008, 0.025, 0.035),
+            roughness: 0.012,
+            reflectivity: 0.54,
             kind: 2
         )
         let columns = 32
@@ -4018,15 +4182,16 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
     private static func makeStaticScene() -> RTMeshBuilder {
         var builder = RTMeshBuilder()
-        let deck = RTMaterial(color: SIMD3<Float>(0.13, 0.16, 0.17), roughness: 0.76, reflectivity: 0.04)
+        // Piso de pizarra oscura húmeda con reflejos especulares Ray-Traced
+        let deck = RTMaterial(color: SIMD3<Float>(0.042, 0.052, 0.072), roughness: 0.08, reflectivity: 0.36, kind: 3)
         let wall = RTMaterial(color: SIMD3<Float>(0.035, 0.045, 0.065), roughness: 0.9)
         let poolTile = RTMaterial(color: SIMD3<Float>(0.14, 0.24, 0.26), roughness: 0.36, reflectivity: 0.08)
-        let coping = RTMaterial(color: SIMD3<Float>(0.28, 0.30, 0.30), roughness: 0.16, reflectivity: 0.42, kind: 3)
+        let coping = RTMaterial(color: SIMD3<Float>(0.28, 0.30, 0.30), roughness: 0.12, reflectivity: 0.52, kind: 3)
         let mirror = RTMaterial(color: SIMD3<Float>(0.92, 0.95, 0.98), roughness: 0.01, reflectivity: 0.97, kind: 1)
         let shallowWater = RTMaterial(
-            color: SIMD3<Float>(0.012, 0.034, 0.040),
-            roughness: 0.018,
-            reflectivity: 0.045,
+            color: SIMD3<Float>(0.010, 0.028, 0.038),
+            roughness: 0.008,
+            reflectivity: 0.74,
             kind: 8
         )
         let metal = RTMaterial(color: SIMD3<Float>(0.42, 0.45, 0.48), roughness: 0.12, reflectivity: 0.58)
@@ -4222,9 +4387,12 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         builder.addBox(center: lampPosition + SIMD3<Float>(0, 2.45, 0), size: SIMD3<Float>(0.46, 0.08, 0.46), material: metal)
         builder.addBox(center: lampPosition + SIMD3<Float>(0, 0.08, 0), size: SIMD3<Float>(0.62, 0.16, 0.62), material: metal)
 
-        builder.addPuddle(center: SIMD2<Float>(4.2, -1.1), scale: SIMD2<Float>(0.9, 0.52), rotation: 0.35, material: shallowWater)
-        builder.addPuddle(center: SIMD2<Float>(5.8, 2.2), scale: SIMD2<Float>(1.25, 0.62), rotation: -0.5, material: shallowWater)
-        builder.addPuddle(center: SIMD2<Float>(-7.0, 4.6), scale: SIMD2<Float>(1.1, 0.7), rotation: 0.8, material: shallowWater)
+        builder.addPuddle(center: SIMD2<Float>(4.2, -1.1), scale: SIMD2<Float>(1.5, 0.95), rotation: 0.35, material: shallowWater)
+        builder.addPuddle(center: SIMD2<Float>(5.8, 2.2), scale: SIMD2<Float>(2.1, 1.35), rotation: -0.5, material: shallowWater)
+        builder.addPuddle(center: SIMD2<Float>(-7.0, 4.6), scale: SIMD2<Float>(2.2, 1.45), rotation: 0.8, material: shallowWater)
+        builder.addPuddle(center: SIMD2<Float>(0.0, 5.2), scale: SIMD2<Float>(2.8, 1.85), rotation: 0.15, material: shallowWater)
+        builder.addPuddle(center: SIMD2<Float>(-3.6, 3.8), scale: SIMD2<Float>(1.9, 1.25), rotation: -0.35, material: shallowWater)
+        builder.addPuddle(center: SIMD2<Float>(0.2, -7.2), scale: SIMD2<Float>(2.5, 1.60), rotation: 0.42, material: shallowWater)
 
         for (index, rock) in rtRiverRocks.enumerated() {
             let stone = RTMaterial(color: rock.color, roughness: 0.32, reflectivity: 0.18, kind: 3)

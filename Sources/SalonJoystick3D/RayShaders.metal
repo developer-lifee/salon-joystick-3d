@@ -897,8 +897,19 @@ kernel void raytracePatio(
 
     float3 accumulated = 0.0f;
     float3 throughput = 1.0f;
+    float3 bounce1Origin = 0.0f;
+    float3 bounce1Direction = 0.0f;
+    float bounce1Distance = 80.0f;
+    float3 bounce1Throughput = 0.0f;
+    bool hasBounce1 = false;
 
     for (uint bounce = 0; bounce < 3; ++bounce) {
+        if (bounce == 1) {
+            hasBounce1 = true;
+            bounce1Origin = currentRay.origin;
+            bounce1Direction = currentRay.direction;
+            bounce1Throughput = throughput;
+        }
         tracer.accept_any_intersection(false);
         uint rayMask = (bounce == 0 && isMirrorViewport) ? 0x01 : (bounce == 0 && firstPerson ? 0x05 : 0x07);
         auto hit = tracer.intersect(currentRay, accelerationStructure, rayMask);
@@ -944,6 +955,8 @@ kernel void raytracePatio(
             if (hit.type != intersection_type::none) {
                 if (bounce == 0) {
                     firstSurfaceDistance = hit.distance;
+                } else if (bounce == 1) {
+                    bounce1Distance = hit.distance;
                 }
                 RTTriangleData material = *(const device RTTriangleData *)hit.primitive_data;
                 position = currentRay.origin + currentRay.direction * hit.distance;
@@ -1048,7 +1061,23 @@ kernel void raytracePatio(
         bool poolWaterSurface = kind > 1.5f && kind < 2.5f;
         bool puddleSurface = kind > 7.5f && kind < 8.5f;
         bool jellySurface = kind > 8.5f && kind < 9.5f;
+        bool obsidianSurface = kind > 9.5f && kind < 10.5f;
         bool waterSurface = poolWaterSurface || puddleSurface;
+
+        float botMelt = 0.0f;
+        if (!hitFP && hit.type != intersection_type::none && hit.instance_id >= 4 && hit.instance_id <= 8) {
+            float3 col0 = float3(instances[hit.instance_id].transformationMatrix[0][0],
+                                 instances[hit.instance_id].transformationMatrix[0][1],
+                                 instances[hit.instance_id].transformationMatrix[0][2]);
+            float3 col1 = float3(instances[hit.instance_id].transformationMatrix[1][0],
+                                 instances[hit.instance_id].transformationMatrix[1][1],
+                                 instances[hit.instance_id].transformationMatrix[1][2]);
+            float scaleXZ = length(col0);
+            float scaleY = length(col1);
+            float ratio = scaleY / max(scaleXZ, 0.001f);
+            botMelt = saturate((0.88f - ratio) / 0.80f);
+        }
+
         if (poolWaterSurface) {
             normal = simulatedWaterNormal(position, waterState);
         } else if (puddleSurface) {
@@ -1056,8 +1085,29 @@ kernel void raytracePatio(
         } else if (kind > 2.5f && kind < 3.5f) {
             float2 grid = fract(position.xz * 2.2f);
             float grout = step(0.04f, grid.x) * step(0.04f, grid.y);
-            float3 groutBump = float3((1.0f - grout) * 0.12f, 0.0f, (1.0f - grout) * 0.12f);
-            normal = normalize(normal + groutBump);
+            float3 groutBump = float3((1.0f - grout) * 0.09f, 0.0f, (1.0f - grout) * 0.09f);
+            float3 wetRipple = shallowPuddleNormal(position * 0.7f, uniforms.waterSimulation.y * 0.6f) * 0.16f;
+            normal = normalize(normal + groutBump + float3(wetRipple.x, 0.0f, wetRipple.z));
+        } else if (obsidianSurface) {
+            // 🌑 Armadura de Obsidiana Vantablack del Fotófago: facetas cristalinas + fisuras bioluminiscentes ultravioletas
+            float time = uniforms.waterSimulation.y;
+            float3 pCrystal = position * 14.0f;
+            float3 facetBump = float3(
+                cos(pCrystal.x * 1.3f) * sin(pCrystal.y),
+                sin(pCrystal.y * 1.3f) * cos(pCrystal.z),
+                cos(pCrystal.z * 1.3f) * sin(pCrystal.x)
+            ) * 0.085f;
+            normal = normalize(normal + facetBump);
+
+            float veinWave = abs(sin(position.x * 17.0f + position.y * 11.0f - time * 3.6f) * cos(position.z * 17.0f - position.y * 9.0f));
+            float veinMask = smoothstep(0.065f, 0.008f, veinWave);
+            float viewCos = saturate(dot(-currentRay.direction, normal));
+            float edgeFresnel = pow(1.0f - viewCos, 2.5f);
+            float3 uvGlow = mix(float3(0.52f, 0.08f, 1.0f), float3(1.0f, 0.12f, 0.48f), 0.5f + 0.5f * sin(position.y * 6.0f + time * 2.5f));
+            albedo = float3(0.006f, 0.005f, 0.012f);
+            emission += uvGlow * (veinMask * 3.8f + edgeFresnel * 0.90f);
+            baseReflectivity = mix(0.28f, 0.90f, edgeFresnel);
+            roughness = 0.04f;
         } else if (jellySurface) {
             // 🧪 Diablillo de Gelatina: Textura orgánica húmeda con micro-relieve, SSS Fresnel y motas luminosas internas
             float3 pCell = position * 28.0f;
@@ -1083,11 +1133,30 @@ kernel void raytracePatio(
             roughness = 0.12f;
         }
 
+        // 🫠 Disolución / Derretimiento Líquido Cromático al eliminar a un enemigo
+        if (botMelt > 0.02f) {
+            float time = uniforms.waterSimulation.y;
+            float2 rippleUV = position.xz * 12.0f;
+            float ripple = sin(rippleUV.x + time * 8.5f) * cos(rippleUV.y - time * 7.5f);
+            normal = normalize(mix(normal, float3(ripple * 0.14f, 1.0f, -ripple * 0.14f), botMelt));
+            float swirl = 0.5f + 0.5f * sin(length(position.xz) * 15.0f - time * 9.0f + ripple * 2.2f);
+            float3 neonCyan = float3(0.0f, 0.95f, 1.0f);
+            float3 neonMagenta = float3(1.0f, 0.10f, 0.56f);
+            float3 neonAmber = float3(1.0f, 0.58f, 0.08f);
+            float3 meltColor = mix(neonMagenta, neonCyan, swirl);
+            float ember = smoothstep(0.76f, 0.95f, fract(sin(dot(floor(position * 26.0f), float3(12.9898f, 78.233f, 37.719f))) * 43758.5453f));
+            albedo = mix(albedo, meltColor * 0.32f, botMelt);
+            emission = mix(emission, meltColor * 4.8f + neonAmber * (ember * 6.8f), botMelt);
+            baseReflectivity = mix(baseReflectivity, 0.86f, botMelt);
+            roughness = mix(roughness, 0.02f, botMelt);
+        }
+
         if ((kind > 1.5f && kind < 3.5f) || puddleSurface) {
             float viewCosine = saturate(dot(-currentRay.direction, normal));
-            float fresnel = pow(1.0f - viewCosine, 5.0f);
-            float maximumReflectivity = waterSurface ? 0.92f : 0.96f;
-            baseReflectivity = mix(baseReflectivity, maximumReflectivity, fresnel);
+            float fresnel = pow(1.0f - viewCosine, 2.2f);
+            float minRefl = puddleSurface ? 0.68f : (poolWaterSurface ? 0.52f : baseReflectivity);
+            float maximumReflectivity = waterSurface ? 0.95f : 0.96f;
+            baseReflectivity = mix(minRefl, maximumReflectivity, fresnel);
         }
         float reflectivity = rayBouncesEnabled ? baseReflectivity : 0.0f;
         float totalLights = uniforms.lightStates.x + uniforms.lightStates.y + uniforms.lightStates.z + uniforms.lightStates.w;
@@ -1109,7 +1178,27 @@ kernel void raytracePatio(
         }
         emission *= emitterIntensity;
 
-        float ambientBase = 0.032f * lightScale;
+        // 🕳️ Aura de Singularidad del Fotófago: "Se Come la Luz" en su radio y proyecta anillos gravitacionales en el piso
+        float fotofagoDrain = 1.0f;
+        float3 fotofagoFloorRing = 0.0f;
+        for (uint fIdx = 6; fIdx <= 8; ++fIdx) {
+            float3 fPos = float3(instances[fIdx].transformationMatrix[3][0],
+                                 instances[fIdx].transformationMatrix[3][1],
+                                 instances[fIdx].transformationMatrix[3][2]);
+            if (fPos.y > -5.0f) {
+                float dFotofago = distance(position.xz, fPos.xz);
+                float drain = smoothstep(0.7f, 4.8f, dFotofago);
+                fotofagoDrain = min(fotofagoDrain, mix(0.30f, 1.0f, drain));
+                if (abs(position.y - fPos.y) < 0.25f && dFotofago < 2.3f) {
+                    float ringPulse = fract(dFotofago * 1.4f + uniforms.waterSimulation.y * 1.3f);
+                    float ringLine = smoothstep(0.12f, 0.02f, abs(ringPulse - 0.5f)) * (1.0f - dFotofago / 2.3f);
+                    fotofagoFloorRing += float3(0.65f, 0.08f, 1.0f) * ringLine * 2.2f;
+                }
+            }
+        }
+        emission += fotofagoFloorRing;
+
+        float ambientBase = 0.032f * lightScale * fotofagoDrain;
         float skyAmbient = ambientBase + ambientBase * saturate(normal.y);
         float3 direct = albedo * skyAmbient;
 
@@ -1373,19 +1462,19 @@ kernel void raytracePatio(
                         : float3(0.008f, 0.055f, 0.065f);
                     float3 transmissionColor = bottomColor * absorption +
                         waterTint * (1.0f - absorption);
-                    direct = mix(direct, transmissionColor, puddleSurface ? 0.82f : 0.95f);
+                    direct = mix(direct, transmissionColor, puddleSurface ? 0.42f : 0.62f);
                 }
             }
         }
 
         accumulated += throughput * (emission + direct * (1.0f - reflectivity));
 
-        if (!rayBouncesEnabled || reflectivity < 0.18f || bounce >= 1) {
+        if (!rayBouncesEnabled || reflectivity < 0.10f || bounce >= 1) {
             break; // 🚀 Locked 60/120 FPS on iPhone 15 Pro Max!
         }
 
         if (waterSurface) {
-            throughput *= float3(0.96f) * reflectivity;
+            throughput *= float3(0.98f) * reflectivity;
         } else {
             throughput *= mix(albedo, float3(0.96f), reflectivity) * reflectivity;
         }
@@ -1412,6 +1501,9 @@ kernel void raytracePatio(
                 pStart,
                 pEndActual
             );
+            if (hasBounce1) {
+                primaryBeam += laserBeamIntensity(bounce1Origin, bounce1Direction, bounce1Distance, pStart, pEndActual) * bounce1Throughput.x * 1.15f;
+            }
 
             float reflectedBeam = 0.0f;
             float3 photonFrontPos = pEndActual;
@@ -1434,6 +1526,9 @@ kernel void raytracePatio(
                         rStart,
                         rEndActual
                     );
+                    if (hasBounce1) {
+                        reflectedBeam += laserBeamIntensity(bounce1Origin, bounce1Direction, bounce1Distance, rStart, rEndActual) * bounce1Throughput.x * 1.15f;
+                    }
                     photonFrontPos = rEndActual;
                 }
             }
@@ -1459,6 +1554,9 @@ kernel void raytracePatio(
             mStart,
             mEnd
         );
+        if (hasBounce1) {
+            mirrorBeam += laserBeamIntensity(bounce1Origin, bounce1Direction, bounce1Distance, mStart, mEnd) * bounce1Throughput.x * 1.15f;
+        }
         float3 hitPoint = primaryOrigin + primaryDirection * firstSurfaceDistance;
         float distToTarget = distance(hitPoint, mEnd);
         float impactSpot = 1.0f - smoothstep(0.03f, 0.28f, distToTarget);
@@ -1478,6 +1576,9 @@ kernel void raytracePatio(
             laserResult.bot0Start.xyz,
             laserResult.bot0End.xyz
         );
+        if (hasBounce1) {
+            botBeam += laserBeamIntensity(bounce1Origin, bounce1Direction, bounce1Distance, laserResult.bot0Start.xyz, laserResult.bot0End.xyz) * bounce1Throughput.x * 1.15f;
+        }
         accumulated += float3(9.5f, 0.08f, 0.02f) * (botBeam * 0.95f);
     }
 
@@ -1489,6 +1590,9 @@ kernel void raytracePatio(
             laserResult.bot1Start.xyz,
             laserResult.bot1End.xyz
         );
+        if (hasBounce1) {
+            botBeam += laserBeamIntensity(bounce1Origin, bounce1Direction, bounce1Distance, laserResult.bot1Start.xyz, laserResult.bot1End.xyz) * bounce1Throughput.x * 1.15f;
+        }
         accumulated += float3(9.5f, 0.08f, 0.02f) * (botBeam * 0.95f);
     }
 
@@ -1500,7 +1604,10 @@ kernel void raytracePatio(
             laserResult.bot2Start.xyz,
             laserResult.bot2End.xyz
         );
-        accumulated += float3(9.5f, 0.08f, 0.02f) * (botBeam * 0.95f);
+        if (hasBounce1) {
+            botBeam += laserBeamIntensity(bounce1Origin, bounce1Direction, bounce1Distance, laserResult.bot2Start.xyz, laserResult.bot2End.xyz) * bounce1Throughput.x * 1.15f;
+        }
+        accumulated += float3(9.2f, 0.14f, 4.5f) * (botBeam * 0.95f);
     }
 
     if (laserResult.bot3End.w > 0.5f) {
@@ -1511,7 +1618,10 @@ kernel void raytracePatio(
             laserResult.bot3Start.xyz,
             laserResult.bot3End.xyz
         );
-        accumulated += float3(9.5f, 0.08f, 0.02f) * (botBeam * 0.95f);
+        if (hasBounce1) {
+            botBeam += laserBeamIntensity(bounce1Origin, bounce1Direction, bounce1Distance, laserResult.bot3Start.xyz, laserResult.bot3End.xyz) * bounce1Throughput.x * 1.15f;
+        }
+        accumulated += float3(8.5f, 0.12f, 6.2f) * (botBeam * 0.95f);
     }
 
     if (laserResult.bot4End.w > 0.5f) {
@@ -1522,7 +1632,10 @@ kernel void raytracePatio(
             laserResult.bot4Start.xyz,
             laserResult.bot4End.xyz
         );
-        accumulated += float3(9.5f, 0.08f, 0.02f) * (botBeam * 0.95f);
+        if (hasBounce1) {
+            botBeam += laserBeamIntensity(bounce1Origin, bounce1Direction, bounce1Distance, laserResult.bot4Start.xyz, laserResult.bot4End.xyz) * bounce1Throughput.x * 1.15f;
+        }
+        accumulated += float3(7.5f, 0.10f, 8.8f) * (botBeam * 1.05f);
     }
 
     if (isMirrorViewport) {
