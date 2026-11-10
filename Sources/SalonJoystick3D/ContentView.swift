@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "94"
-    static let commitHash = "b94geo"
+    static let build = "95"
+    static let commitHash = "b95fx"
     static let formatted = "v\(version) • Build \(build)"
 }
 
@@ -1808,9 +1808,9 @@ final class GameModel: ObservableObject {
 
     func warpToLightFixture(_ fixture: GameLightFixture) {
         let pos: SIMD3<Float> = switch fixture {
-        case .post: SIMD3<Float>(-7.55, 0.2, 6.65)
-        case .piscinaNeon: SIMD3<Float>(-5.25, 0.2, -9.15)
-        case .sheeritNeon: SIMD3<Float>(5.45, 0.2, 9.15)
+        case .post: SIMD3<Float>(-7.55, 0.2, 11.2)
+        case .piscinaNeon: SIMD3<Float>(-7.70, 0.2, -15.8)
+        case .sheeritNeon: SIMD3<Float>(6.20, 0.2, 15.8)
         case .poolStrips: SIMD3<Float>(-1.5, 0.2, -1.5)
         }
         warpRequestID += 1

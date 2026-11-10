@@ -3441,17 +3441,17 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let point = SIMD2<Float>(playerPosition.x, playerPosition.z)
         var candidates: [(GameLightFixture, Float)] = []
 
-        // Detección cercana y confiable (~3.4m) para interactuar con luminarias
-        let postDistance = simd_distance(point, SIMD2<Float>(-7.55, 6.65))
-        if postDistance < 3.4 {
+        // Detección cercana y confiable (~4.2m) para interactuar con luminarias
+        let postDistance = simd_distance(point, SIMD2<Float>(-7.55, 12.65))
+        if postDistance < 4.2 {
             candidates.append((.post, postDistance))
         }
-        let piscinaDistance = simd_distance(point, SIMD2<Float>(-5.25, -9.15))
-        if piscinaDistance < 3.4 {
+        let piscinaDistance = simd_distance(point, SIMD2<Float>(-7.70, -16.80))
+        if piscinaDistance < 4.2 {
             candidates.append((.piscinaNeon, piscinaDistance))
         }
-        let sheeritDistance = simd_distance(point, SIMD2<Float>(5.45, 9.15))
-        if sheeritDistance < 3.4 {
+        let sheeritDistance = simd_distance(point, SIMD2<Float>(6.20, 16.80))
+        if sheeritDistance < 4.2 {
             candidates.append((.sheeritNeon, sheeritDistance))
         }
 
@@ -3770,10 +3770,21 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             (SIMD3<Float>(-17.2, -0.30, -17.2), SIMD3<Float>(17.2, 0.05, -4.08)),
             (SIMD3<Float>(-17.2, -0.30, 1.08), SIMD3<Float>(17.2, 0.05, 17.2)),
             (SIMD3<Float>(-17.2, -0.30, -4.08), SIMD3<Float>(-5.28, 0.05, 1.08)),
-            (SIMD3<Float>(2.28, -0.30, -4.08), SIMD3<Float>(17.2, 0.05, 1.08))
+            (SIMD3<Float>(2.28, -0.30, -4.08), SIMD3<Float>(17.2, 0.05, 1.08)),
+            // 🌈 Muros Perimetrales del Gran Salón Arcoíris (Z: 17.8..72.0, X: -27.0..27.0, Y: 0..9.0)
+            (SIMD3<Float>(-27.2, 0.0, 17.8), SIMD3<Float>(-26.8, 9.0, 72.2)), // Muro Oeste
+            (SIMD3<Float>( 26.8, 0.0, 17.8), SIMD3<Float>( 27.2, 9.0, 72.2)), // Muro Este
+            (SIMD3<Float>(-27.2, 0.0, 71.8), SIMD3<Float>( 27.2, 9.0, 72.2))  // Muro Sur Final
         ]
 
-        for (boxMin, boxMax) in staticAABBs {
+        var allAABBs = staticAABBs
+        // 🌈 Bloques de Parkour de Cuerpo Completo y Cabañas Arcoíris (evita que la cámara 3ra persona atraviese los bloques)
+        for box in rtRainbowParkourBoxes {
+            let half = box.size * 0.5
+            allAABBs.append((box.center - half, box.center + half))
+        }
+
+        for (boxMin, boxMax) in allAABBs {
             let expMin = boxMin - SIMD3<Float>(repeating: cameraBumper)
             let expMax = boxMax + SIMD3<Float>(repeating: cameraBumper)
 
@@ -3998,7 +4009,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let isBlackout = lightStates.areAllLightsOff
         let isSubterraneanIlluminated = !isBlackout && (cameraPosition.y <= -4.75 || playerPosition.y <= -4.75)
         let isPoolSubmerged = !isBlackout && (currentlyInPool && cameraPosition.y < 0.20)
-        let activeLightPos = isSubterraneanIlluminated ? SIMD4<Float>(0.0, -5.2, 0.0, 1) : (isPoolSubmerged ? SIMD4<Float>(-1.5, -3.5, -1.5, 1) : SIMD4<Float>(-7.55, 2.72, 6.65, 1))
+        let activeLightPos = isSubterraneanIlluminated ? SIMD4<Float>(0.0, -5.2, 0.0, 1) : (isPoolSubmerged ? SIMD4<Float>(-1.5, -3.5, -1.5, 1) : SIMD4<Float>(-7.55, 2.72, 12.65, 1))
         let activeLightColor: SIMD4<Float>
         if isBlackout {
             activeLightColor = SIMD4<Float>(0, 0, 0, 0)
@@ -4959,12 +4970,20 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
 
         // 7. Bloques de Parkour de Cuerpo Completo, Pasarelas Elevadas y Las 4 Cabañas Arcoíris
+        // 100% Sólidos, Opacos y Mate Arquitectónico (cero transparencia, sin reflejos tipo espejo, cero emisión en el cuerpo)
         for (idx, box) in rtRainbowParkourBoxes.enumerated() {
+            let baseColor: SIMD3<Float>
+            if simd_length_squared(box.color) > 0.005 {
+                baseColor = simd_clamp(box.color * 2.4, SIMD3<Float>(repeating: 0.0), SIMD3<Float>(repeating: 0.96))
+            } else {
+                baseColor = rainbowColors[idx % rainbowColors.count].0 * 0.85
+            }
+
             let mat = RTMaterial(
-                color: box.color,
-                roughness: 0.55,
-                emission: box.emission * 0.40,
-                reflectivity: 0.05,
+                color: baseColor,
+                roughness: 0.78,
+                emission: .zero,
+                reflectivity: 0.02,
                 kind: 0
             )
             builder.addBox(center: box.center, size: box.size, material: mat)
