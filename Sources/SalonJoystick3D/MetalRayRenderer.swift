@@ -2605,6 +2605,16 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         isMirrorReflectingLaser = false
 
+        // 🎖️ Coordinación Dinámica de Escuadra: Ordenar bots vivos por cercanía al objetivo
+        let aliveBotIndices = npcPositions.indices.filter {
+            npcHealths[$0] > 0 && npcRespawnTimers[$0] <= 0
+        }
+        let squadTargetRef = (isRemotePlayerConnected && !isVersusMode && isRecoveringInChamber && !remotePlayerIsRecovering) ? smoothedRemotePos : playerPosition
+        let sortedAliveByDistance = aliveBotIndices.sorted { a, b in
+            simd_distance_squared(npcPositions[a], squadTargetRef) < simd_distance_squared(npcPositions[b], squadTargetRef)
+        }
+        let totalAliveBots = aliveBotIndices.count
+
         for index in npcPositions.indices {
             switch index {
             case 0: results.pointee.bot0Start = .zero; results.pointee.bot0End = .zero
@@ -2679,15 +2689,20 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             let botCooldown: Float = max(1.8, 4.8 - Float(currentWave) * 0.35)
             let aimSpeedScale: Float = min(11.0, 5.2 + Float(currentWave) * 0.65)
 
-            // 👻 IA Táctica estilo Fantasmas de Pac-Man + Distancia de Puntería Técnica (NUNCA se pegan al jugador)
-            // En Oleada 3+, el Bot 4 es el Gólem Colosal y mantiene aún mayor distancia (14.5m) para verse imponente de lejos
+            // 🎖️ Rol Táctico Dinámico de Escuadra: Determinado por cercanía relativa entre los bots vivos
+            let dynamicRoleIndex = sortedAliveByDistance.firstIndex(of: index) ?? 0
             let isColossalGolem = (index == 4 && currentWave >= 3)
-            let idealStandoffDist: [Float] = [7.6, 9.4, 12.8, 10.4, isColossalGolem ? 14.5 : 11.8]
-            let idealDist = idealStandoffDist[index % idealStandoffDist.count]
-            let minSafeDist = idealDist - 1.2
-            let maxComfortDist = idealDist + 2.2
 
-            let orbitSign: Float = (index % 2 == 0) ? 1.0 : -1.0
+            // Distancias óptimas según rol táctico dinámico:
+            // Rol 0 (Asaltante de Punta): Presión directa a 6.2m
+            // Rol 1 (Atajador / Interceptor): Flanqueo de intercepción a 8.5m
+            // Rol 2 (Hostigador de Apoyo): Cobertura media a 11.0m
+            // Rol 3+ / Gólem: Cerco perimetral envolvente (13.5m)
+            let idealDist: Float = isColossalGolem ? 13.5 : (dynamicRoleIndex == 0 ? 6.2 : (dynamicRoleIndex == 1 ? 8.5 : (dynamicRoleIndex == 2 ? 11.0 : 13.0)))
+            let minSafeDist: Float = max(3.2, idealDist - 1.5)
+            let maxComfortDist: Float = idealDist + 2.0
+
+            let orbitSign: Float = (dynamicRoleIndex % 2 == 0) ? 1.0 : -1.0
             let lateralTangent = SIMD2<Float>(-rawDirection.y * orbitSign, rawDirection.x * orbitSign)
             var tacticalDesiredDir: SIMD2<Float>
 
@@ -2700,43 +2715,39 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 let pLen = simd_length(toPortal)
                 tacticalDesiredDir = pLen > 0.01 ? (toPortal / pLen) : rawDirection
             } else if distance < minSafeDist {
-                // 🛡️ Si el jugador se acerca demasiado, el bot retrocede en diagonal buscando línea de tiro lejana
-                tacticalDesiredDir = simd_normalize(-rawDirection * 0.78 + lateralTangent * 0.62)
+                // 🛡️ Si el jugador se acerca demasiado, retrocede en diagonal buscando línea de tiro
+                tacticalDesiredDir = simd_normalize(-rawDirection * 0.75 + lateralTangent * 0.65)
             } else {
-                switch index {
+                switch dynamicRoleIndex {
                 case 0:
-                    // 🔴 Bot 0 (Blinky - Rastreador de Media Distancia): Flanquea en arco manteniendo ~7.6m
+                    // 🔴 ROL 0: ASALTANTE DE PUNTA (Point Attacker) - Presión frontal directa y ataque constante
                     tacticalDesiredDir = distance > maxComfortDist
-                        ? simd_normalize(rawDirection * 0.80 + lateralTangent * 0.60)
-                        : lateralTangent
+                        ? simd_normalize(rawDirection * 0.85 + lateralTangent * 0.40)
+                        : simd_normalize(rawDirection * 0.35 + lateralTangent * 0.90)
                 case 1:
-                    // 🩷 Bot 1 (Pinky - Emboscador Predictivo): Apunta 4.5m por delante de hacia dónde se mueve el jugador
-                    let predTarget = SIMD2<Float>(targetPos.x, targetPos.z) + horizontalVelocity * 2.8
-                    let toPred = predTarget - SIMD2<Float>(npcPositions[index].x, npcPositions[index].z)
-                    let predLen = simd_length(toPred)
-                    let predDir = predLen > 0.01 ? toPred / predLen : rawDirection
+                    // 🩷 ROL 1: EL ATAJADOR (Interceptor / Flanker) - ¡Ataja! Corta el paso hacia donde huye o se mueve el jugador
+                    let leadTime: Float = min(3.5, max(1.2, distance / max(1.0, speed)))
+                    let interceptTarget = SIMD2<Float>(targetPos.x, targetPos.z) + horizontalVelocity * leadTime
+                    let toIntercept = interceptTarget - SIMD2<Float>(npcPositions[index].x, npcPositions[index].z)
+                    let intLen = simd_length(toIntercept)
+                    let intDir = intLen > 0.01 ? (toIntercept / intLen) : rawDirection
+                    // Corre hacia el punto de corte en semicírculo para emboscarlo
                     tacticalDesiredDir = distance > maxComfortDist
-                        ? predDir
-                        : simd_normalize(predDir * 0.45 + lateralTangent * 0.89)
+                        ? intDir
+                        : simd_normalize(intDir * 0.50 + lateralTangent * 0.85)
                 case 2:
-                    // 🩵 Bot 2 (Inky - Francotirador de Espejos): Se posiciona en el sector norte / espejo o bordes largos (12.8m)
-                    let sniperSpot = SIMD2<Float>(targetPos.x > 0 ? -9.5 : 9.5, -11.5)
-                    let toSniper = sniperSpot - SIMD2<Float>(npcPositions[index].x, npcPositions[index].z)
-                    let sniperLen = simd_length(toSniper)
-                    tacticalDesiredDir = sniperLen > 2.2 ? (toSniper / sniperLen) : lateralTangent
-                case 3:
-                    // 🧡 Bot 3 (Clyde - Acechador de Cobertura): Patrulla entre las rocas y cambia de flanco si lo miras de frente
+                    // 🩵 ROL 2: HOSTIGADOR DE COBERTURA (Support / Suppression) - Mantiene línea de tiro lateral
                     let playerLook2D = SIMD2<Float>(sin(playerYaw), cos(playerYaw))
-                    let playerLookingAtBot = simd_dot(playerLook2D, -rawDirection) > 0.72
+                    let playerLookingAtBot = simd_dot(playerLook2D, -rawDirection) > 0.70
                     if playerLookingAtBot {
-                        tacticalDesiredDir = simd_normalize(lateralTangent * 0.88 - rawDirection * 0.48)
+                        tacticalDesiredDir = simd_normalize(lateralTangent * 0.85 - rawDirection * 0.45)
                     } else {
-                        tacticalDesiredDir = distance > maxComfortDist ? rawDirection : lateralTangent * 0.75
+                        tacticalDesiredDir = distance > maxComfortDist ? rawDirection : lateralTangent * 0.80
                     }
                 default:
-                    // 🌑 Bot 4 (El Fotófago - Guardián del Perímetro): Camina imponente por el borde exterior absorbiendo la luz
+                    // 🌑 ROL 3+: CERCO PERIMETRAL ENVOLVENTE
                     tacticalDesiredDir = distance > maxComfortDist
-                        ? simd_normalize(rawDirection * 0.65 + lateralTangent * 0.76)
+                        ? simd_normalize(rawDirection * 0.70 + lateralTangent * 0.70)
                         : lateralTangent
                 }
             }
@@ -2859,26 +2870,35 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
             let targetIsUsingMirror = isTargetingRemote ? (remotePlayerHeldTool == .mirror) : (heldTool == .mirror && mirrorActiveRemaining > 0)
 
-            // 🎯 Director de Ataque por Turnos (Attack Token): evita que los 5 bots disparen al mismo tiempo
+            // 🎯 Director Dinámico de Fuego de Escuadra:
+            // Asegura que SIEMPRE haya al menos un bot atacando activamente mientras haya bots vivos
             let activeShootersCount = npcPositions.indices.filter {
                 $0 != index && npcHealths[$0] > 0 && npcRespawnTimers[$0] <= 0 && botLaserActiveTimers[$0] > 0
             }.count
-            let maxConcurrentShooters = currentWave >= 4 ? 2 : 1
+            let maxConcurrentShooters = (currentWave >= 4 || totalAliveBots >= 4) ? 2 : 1
+
+            // 🔥 ALTERNANCIA DINÁMICA: Si ningún bot está disparando actualmente en la sala,
+            // el asaltante de punta (Rol 0) o el atajador (Rol 1 si son 2) toma el token de ataque de inmediato
+            if activeShootersCount == 0 && (dynamicRoleIndex == 0 || (dynamicRoleIndex == 1 && totalAliveBots <= 2)) {
+                if botLaserCooldownTimers[index] > 0.35 && distance < 36.0 && botTeleportReactionTimers[index] <= 0 {
+                    botLaserCooldownTimers[index] = 0.20 // Asume el ataque de inmediato
+                }
+            }
 
             // Bot Laser Combat AI with symmetric active/cooldown windows & 3D visual beams
             if botLaserCooldownTimers[index] > 0 {
                 let cooldownRate: Float = (targetIsUsingMirror && distance < 22.0) ? 3.2 : 1.0
                 botLaserCooldownTimers[index] = max(0, botLaserCooldownTimers[index] - dt * cooldownRate)
-                let maxEngageDist: Float = 24.0
-                if botLaserCooldownTimers[index] == 0 && distance < maxEngageDist && distance >= 4.2 && botTeleportReactionTimers[index] <= 0 {
+                let maxEngageDist: Float = (botInRainbow || playerInRainbow) ? 38.0 : 28.0
+                if botLaserCooldownTimers[index] == 0 && distance < maxEngageDist && distance >= 1.2 && botTeleportReactionTimers[index] <= 0 {
                     if activeShootersCount < maxConcurrentShooters {
                         botLaserActiveTimers[index] = targetIsUsingMirror ? 2.6 : 1.9
                         botLaserPropagationDistances[index] = 0
                         botLaserOrigins[index] = npcPositions[index] + SIMD3<Float>(0.42, 0.88, 0.20)
                         botLaserDistancesToPlayer[index] = simd_distance(botLaserOrigins[index], currentAimTarget)
                     } else {
-                        // Espera su turno de disparo mientras flanquea tácticamente
-                        botLaserCooldownTimers[index] = 0.75 + Float(index) * 0.25
+                        // Espera su turno de disparo mientras ataja / flanquea tácticamente
+                        botLaserCooldownTimers[index] = 0.45 + Float(dynamicRoleIndex) * 0.20
                     }
                 }
             } else if botLaserActiveTimers[index] > 0 && botTeleportReactionTimers[index] <= 0 {
