@@ -68,6 +68,12 @@ struct LocalMatchPacket: Codable {
     var versusRound: Int?
     var versusLocalWins: Int?
     var versusRemoteWins: Int?
+
+    // Capa de Escudo / Poción estilo Fortnite / Hongos Free Fire
+    var shield: Float?
+
+    // Contador de bajas / muertes en cooperativo
+    var coopDeaths: Int?
 }
 
 enum LocalDeviceRole: String, Codable, CaseIterable, Identifiable {

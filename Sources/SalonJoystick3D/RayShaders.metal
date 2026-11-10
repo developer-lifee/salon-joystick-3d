@@ -1090,14 +1090,25 @@ kernel void raytracePatio(
             baseReflectivity = mix(baseReflectivity, maximumReflectivity, fresnel);
         }
         float reflectivity = rayBouncesEnabled ? baseReflectivity : 0.0f;
-        float emitterIntensity = 1.0f;
-        if (kind > 3.5f && kind < 4.5f) emitterIntensity = uniforms.lightStates.x;
-        if (kind > 4.5f && kind < 5.5f) emitterIntensity = uniforms.lightStates.w;
-        if (kind > 5.5f && kind < 6.5f) emitterIntensity = uniforms.lightStates.y;
-        if (kind > 6.5f && kind < 7.5f) emitterIntensity = uniforms.lightStates.z;
-        emission *= emitterIntensity;
         float totalLights = uniforms.lightStates.x + uniforms.lightStates.y + uniforms.lightStates.z + uniforms.lightStates.w;
         float lightScale = clamp(totalLights / 0.8f, 0.0f, 1.0f);
+
+        float emitterIntensity = 1.0f;
+        if (kind > 3.5f && kind < 4.5f) {
+            emitterIntensity = uniforms.lightStates.x;
+        } else if (kind > 4.5f && kind < 5.5f) {
+            emitterIntensity = uniforms.lightStates.w;
+        } else if (kind > 5.5f && kind < 6.5f) {
+            emitterIntensity = uniforms.lightStates.y;
+        } else if (kind > 6.5f && kind < 7.5f) {
+            emitterIntensity = uniforms.lightStates.z;
+        } else if (totalLights <= 0.001f) {
+            emitterIntensity = 0.0f;
+        } else {
+            emitterIntensity = lightScale;
+        }
+        emission *= emitterIntensity;
+
         float ambientBase = 0.032f * lightScale;
         float skyAmbient = ambientBase + ambientBase * saturate(normal.y);
         float3 direct = albedo * skyAmbient;
@@ -1106,19 +1117,23 @@ kernel void raytracePatio(
             float3 fromTool = position - uniforms.toolOrigin.xyz;
             float toolDistance = length(fromTool);
             float3 toolToSurface = fromTool / max(toolDistance, 1e-4f);
-            float cone = smoothstep(
-                0.90f,
-                0.975f,
-                dot(toolToSurface, normalize(uniforms.toolDirection.xyz))
-            );
-            float incidence = saturate(dot(normal, -toolToSurface));
-            float flashlightPower = 19.0f / (1.0f + toolDistance * toolDistance * 0.075f);
-            float3 flashlightColor = float3(1.0f, 0.88f, 0.68f);
-            direct += albedo * flashlightColor * flashlightPower * cone *
-                      (0.16f + incidence * 0.84f);
-            float3 flashlightHalf = normalize(-toolToSurface - currentRay.direction);
-            float flashlightGloss = pow(saturate(dot(normal, flashlightHalf)), 180.0f);
-            direct += flashlightColor * flashlightPower * cone * flashlightGloss * 0.32f;
+            float dotDir = dot(toolToSurface, normalize(uniforms.toolDirection.xyz));
+            
+            // Tactical dual-cone: haz central concentrado de alta intensidad + halo perimetral suave
+            float centerBeam = smoothstep(0.85f, 0.985f, dotDir);
+            float wideSpill = smoothstep(0.62f, 0.85f, dotDir) * 0.35f;
+            float cone = centerBeam + wideSpill;
+            
+            if (cone > 0.001f && toolDistance < 38.0f) {
+                float incidence = saturate(dot(normal, -toolToSurface));
+                float flashlightPower = 52.0f / (1.0f + toolDistance * toolDistance * 0.032f);
+                float3 flashlightColor = float3(1.0f, 0.94f, 0.82f);
+                direct += albedo * flashlightColor * flashlightPower * cone * (0.22f + incidence * 0.78f);
+                
+                float3 flashlightHalf = normalize(-toolToSurface - currentRay.direction);
+                float flashlightGloss = pow(saturate(dot(normal, flashlightHalf)), 140.0f);
+                direct += flashlightColor * flashlightPower * cone * flashlightGloss * 0.40f;
+            }
         } else if (uniforms.toolParameters.x > 1.5f && uniforms.toolParameters.x < 2.5f) {
             float primarySpot = laserResult.primaryEnd.w > 0.5f
                 ? 1.0f - smoothstep(0.025f, 0.14f, distance(position, laserResult.primaryEnd.xyz))

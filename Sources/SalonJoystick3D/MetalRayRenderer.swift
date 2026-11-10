@@ -1128,7 +1128,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         self.floatMesh = try Self.makeMesh(builder: floatBuilder, device: device, queue: commandQueue)
         self.mirrorShieldMesh = try Self.makeMesh(builder: mirrorShieldBuilder, device: device, queue: commandQueue)
 
-        let instanceLength = MemoryLayout<MTLAccelerationStructureInstanceDescriptor>.stride * 11
+        let instanceLength = MemoryLayout<MTLAccelerationStructureInstanceDescriptor>.stride * 12
         guard let instanceBuffer = device.makeBuffer(length: instanceLength, options: .storageModeShared) else {
             throw MetalRayRendererError.resourceCreationFailed
         }
@@ -1160,7 +1160,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 playerWalkAS,    // 9 (walk articulado)
                 playerClimbAS    // 10 (climb escalera)
             ]
-            descriptor.instanceCount = 11
+            descriptor.instanceCount = 12
             descriptor.instanceDescriptorBuffer = instanceBuffer
             self.instanceDescriptor = descriptor
 
@@ -3699,6 +3699,15 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 scale: rScale,
                 mask: isRemotePlayerConnected ? 0x01 : 0x00,
                 accelerationStructureIndex: (simd_distance_squared(smoothedRemotePos, remotePlayerPosition) > 0.002 && !remotePlayerIsRecovering) ? 9 : 1
+            ),
+            Self.makeInstanceDescriptor(
+                translation: (isRemotePlayerConnected && remotePlayerHeldTool == .mirror && !remotePlayerIsRecovering)
+                    ? (smoothedRemotePos + SIMD3<Float>(0, 1.08, 0) + SIMD3<Float>(sin(remotePlayerYaw), 0, cos(remotePlayerYaw)) * 0.52)
+                    : SIMD3<Float>(0, -500, 0),
+                yaw: remotePlayerYaw,
+                pitch: 0,
+                mask: (isRemotePlayerConnected && remotePlayerHeldTool == .mirror && !remotePlayerIsRecovering) ? 0x01 : 0x00,
+                accelerationStructureIndex: 5
             )
         ]
         descriptors.withUnsafeBytes { bytes in

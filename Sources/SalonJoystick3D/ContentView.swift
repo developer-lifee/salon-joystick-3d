@@ -62,8 +62,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "1.0.0"
-    static let build = "80"
-    static let commitHash = "9b90dc0"
+    static let build = "81"
+    static let commitHash = "713c540"
     static let formatted = "v\(version) • Build \(build) (\(commitHash))"
 }
 
@@ -198,6 +198,7 @@ struct ContentView: View {
                                 localWins: model.versusLocalWins,
                                 remoteWins: model.versusRemoteWins,
                                 remotePlayerName: model.remotePlayerName,
+                                coopDeaths: model.coopDeaths,
                                 onRespawn: {
                                     if model.isAnyMultiplayerConnected && model.multiplayer.mode == .versus {
                                         model.startNextVersusRound(fromNetwork: false)
@@ -337,13 +338,27 @@ struct ContentView: View {
                 .allowsHitTesting(false)
             }
 
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 5) {
+                // 🍄 Capa de Escudo / Poción estilo Fortnite / Hongos Free Fire
+                HStack(spacing: 7) {
+                    Image(systemName: "shield.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color.cyan)
+                    ProgressView(value: Double(model.playerShield), total: 100.0)
+                        .tint(.cyan)
+                        .frame(width: 95)
+                    Text("\(Int(model.playerShield)) ESC")
+                        .font(.caption.monospacedDigit().bold())
+                        .foregroundStyle(.cyan)
+                }
+
+                HStack(spacing: 7) {
                     Image(systemName: "heart.fill")
+                        .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(.red)
                     ProgressView(value: Double(model.playerHealth), total: 100.0)
                         .tint(model.playerHealth > 30 ? .green : .red)
-                        .frame(width: 100)
+                        .frame(width: 95)
                     Text("\(Int(model.playerHealth)) HP")
                         .font(.caption.monospacedDigit().bold())
                         .foregroundStyle(.white)
@@ -407,8 +422,8 @@ struct ContentView: View {
                             .background(Color.white.opacity(0.4))
 
                         HStack(spacing: 6) {
-                            Text("HP: \(Int(max(0, model.remotePlayerHealth)))%")
-                                .font(.system(size: 12, weight: .black, design: .monospaced))
+                            Text("HP: \(Int(max(0, model.remotePlayerHealth)))% • ESC: \(Int(max(0, model.remotePlayerShield)))%")
+                                .font(.system(size: 11, weight: .black, design: .monospaced))
                                 .foregroundStyle(model.remotePlayerHealth > 30 ? Color.green : Color.red)
                         }
                     }
@@ -497,6 +512,22 @@ struct ContentView: View {
                             Text("RESTANTES: \(model.botsRemainingInWave) / \(model.totalBotsInWave)")
                                 .font(.system(size: 12, weight: .bold, design: .monospaced))
                                 .foregroundStyle(.white)
+                        }
+
+                        if model.isAnyMultiplayerConnected && model.multiplayer.mode == .cooperative {
+                            Divider()
+                                .frame(height: 20)
+                                .background(Color.white.opacity(0.4))
+
+                            HStack(spacing: 4) {
+                                Image(systemName: "skull.fill")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.purple)
+
+                                Text("BAJAS: \(model.coopDeaths)")
+                                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(.purple)
+                            }
                         }
                     }
                     .padding(.horizontal, 16)
@@ -719,29 +750,6 @@ struct ContentView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Menú Radial de Teletransporte")
-
-                    Button {
-                        model.toggleAllLights()
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: model.lightStates.areAllLightsOff ? "lightbulb.slash.fill" : "lightbulb.fill")
-                                .font(.system(size: 13, weight: .bold))
-                            Text(model.lightStates.areAllLightsOff ? "Apagón" : "Luces")
-                                .font(.system(size: 11, weight: .bold))
-                        }
-                        .foregroundStyle(model.lightStates.areAllLightsOff ? .yellow : .white.opacity(0.85))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(
-                            model.lightStates.areAllLightsOff
-                                ? AnyShapeStyle(Color.red.opacity(0.80))
-                                : AnyShapeStyle(Color.black.opacity(0.65)),
-                            in: Capsule()
-                        )
-                        .overlay(Capsule().stroke(model.lightStates.areAllLightsOff ? Color.red : Color.yellow.opacity(0.70), lineWidth: 1.5))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(model.lightStates.areAllLightsOff ? "Encender luces" : "Apagar todas las luces (Modo Apagón Total)")
 
                     if model.isNearRecoveryConsole && model.remotePlayerIsRecovering {
                         Button {
@@ -1043,25 +1051,18 @@ struct ContentView: View {
                                 .stroke(Color.yellow.opacity(0.4), lineWidth: 2)
                                 .frame(width: 230, height: 230)
 
-                            // 🌑 Botón Central: Apagar Todas las Luces / Apagón Total
-                            Button {
-                                model.toggleAllLights()
-                            } label: {
-                                VStack(spacing: 3) {
-                                    Image(systemName: model.lightStates.areAllLightsOff ? "lightbulb.fill" : "lightbulb.slash.fill")
-                                        .font(.system(size: 20, weight: .bold))
-                                    Text(model.lightStates.areAllLightsOff ? "ENCENDER" : "APAGÓN")
-                                        .font(.system(size: 8, weight: .black))
-                                }
-                                .foregroundStyle(model.lightStates.areAllLightsOff ? .black : .white)
-                                .frame(width: 68, height: 68)
-                                .background(
-                                    model.lightStates.areAllLightsOff ? AnyShapeStyle(Color.yellow) : AnyShapeStyle(Color.red.opacity(0.85)),
-                                    in: Circle()
-                                )
-                                .overlay(Circle().stroke(Color.white.opacity(0.85), lineWidth: 1.5))
-                                .shadow(color: (model.lightStates.areAllLightsOff ? Color.yellow : Color.red).opacity(0.85), radius: 10)
+                            // ⚡ Centro: Indicador de Beacons
+                            VStack(spacing: 2) {
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 22, weight: .bold))
+                                    .foregroundStyle(.yellow)
+                                Text("BEACONS")
+                                    .font(.system(size: 8, weight: .black))
+                                    .foregroundStyle(.white.opacity(0.8))
                             }
+                            .frame(width: 60, height: 60)
+                            .background(Color.black.opacity(0.55), in: Circle())
+                            .overlay(Circle().stroke(Color.yellow.opacity(0.5), lineWidth: 1))
 
                             ForEach(Array(GameLightFixture.allCases.enumerated()), id: \.element) { index, fixture in
                                 let angle: Double = Double(index) * (.pi / 2.0) - (.pi / 2.0)
@@ -1163,6 +1164,8 @@ final class GameModel: ObservableObject {
     @Published private(set) var toolStatus = GameToolStatus()
     @Published var playerScore = 0
     @Published var playerHealth: Float = 100.0
+    @Published var playerShield: Float = 100.0
+    private var lastDamageTime: TimeInterval = 0
     @Published var currentWave = 1
     @Published var botsRemainingInWave = 5
     @Published var totalBotsInWave = 5
@@ -1189,6 +1192,7 @@ final class GameModel: ObservableObject {
     @Published var versusRemoteWins: Int = 0
     @Published var versusRound: Int = 1
     @Published var hasRecordedVersusRoundResult: Bool = false
+    @Published var coopDeaths: Int = 0
 
     func updateNPCHealths(_ healths: [Float]) {
         self.npcHealths = healths
@@ -1265,6 +1269,7 @@ final class GameModel: ObservableObject {
     @Published private(set) var resetRequestID = 0
     @Published var remotePlayerName: String = ""
     @Published var remotePlayerHealth: Float = 100.0
+    @Published var remotePlayerShield: Float = 100.0
     @Published var remotePlayerScore: Int = 0
     @Published var remotePlayerPosition = SIMD3<Float>(-3.8, 0, 3.8)
     @Published var remotePlayerYaw: Float = .pi
@@ -1420,13 +1425,21 @@ final class GameModel: ObservableObject {
     func updateLocalTransform(position: SIMD3<Float>, yaw: Float) {
         self.localPlayerPosition = position
         self.localPlayerYaw = yaw
+
+        // 🍄 Capa de Escudo / Regeneración gradual (estilo Hongos Free Fire / Poción Fortnite)
+        let now = Date().timeIntervalSince1970
+        if now - lastDamageTime > 4.5 && playerShield < 100.0 && playerHealth > 0 && !isDefeated && !isRecoveringInChamber {
+            playerShield = min(100.0, playerShield + 0.15)
+        }
         broadcastLocalState()
     }
 
     func startGame(fromNetwork: Bool = false) {
         playerHealth = 100.0
+        playerShield = 100.0
         playerScore = 0
         remotePlayerHealth = 100.0
+        remotePlayerShield = 100.0
         remotePlayerScore = 0
         currentWave = 1
         botsRemainingInWave = 5
@@ -1448,6 +1461,7 @@ final class GameModel: ObservableObject {
             versusLocalWins = 0
             versusRemoteWins = 0
             versusRound = 1
+            coopDeaths = 0
         }
         hasRecordedVersusRoundResult = false
 
@@ -1474,7 +1488,9 @@ final class GameModel: ObservableObject {
                 score: playerScore,
                 versusRound: versusRound,
                 versusLocalWins: versusLocalWins,
-                versusRemoteWins: versusRemoteWins
+                versusRemoteWins: versusRemoteWins,
+                shield: playerShield,
+                coopDeaths: coopDeaths
             )
             if multiplayer.isConnected {
                 remotePlayerName = multiplayer.peers.first?.displayName ?? "Jugador 2"
@@ -1493,7 +1509,9 @@ final class GameModel: ObservableObject {
         }
         hasRecordedVersusRoundResult = false
         playerHealth = 100.0
+        playerShield = 100.0
         remotePlayerHealth = 100.0
+        remotePlayerShield = 100.0
         isDefeated = false
         isTeamDefeated = false
         heldTool = .none
@@ -1522,7 +1540,9 @@ final class GameModel: ObservableObject {
                 score: playerScore,
                 versusRound: versusRound,
                 versusLocalWins: versusLocalWins,
-                versusRemoteWins: versusRemoteWins
+                versusRemoteWins: versusRemoteWins,
+                shield: playerShield,
+                coopDeaths: coopDeaths
             )
             if multiplayer.isConnected {
                 remotePlayerName = multiplayer.peers.first?.displayName ?? "Jugador 2"
@@ -1546,7 +1566,9 @@ final class GameModel: ObservableObject {
             score: playerScore,
             versusRound: versusRound,
             versusLocalWins: versusLocalWins,
-            versusRemoteWins: versusRemoteWins
+            versusRemoteWins: versusRemoteWins,
+            shield: playerShield,
+            coopDeaths: coopDeaths
         )
         if multiplayer.isConnected { multiplayer.send(packet) }
         if gameCenter.isInMatch { gameCenter.sendPacket(packet) }
@@ -1574,6 +1596,12 @@ final class GameModel: ObservableObject {
                 self.versusRemoteWins = vlw
                 self.versusLocalWins = vrw
             }
+            if let s = packet.shield {
+                self.remotePlayerShield = s
+            }
+            if let cd = packet.coopDeaths {
+                self.coopDeaths = max(self.coopDeaths, cd)
+            }
             if multiplayer.mode == .versus {
                 startNextVersusRound(fromNetwork: true)
             } else {
@@ -1599,6 +1627,12 @@ final class GameModel: ObservableObject {
             if let vlw = packet.versusLocalWins, let vrw = packet.versusRemoteWins {
                 self.versusRemoteWins = vlw
                 self.versusLocalWins = vrw
+            }
+            if let s = packet.shield {
+                self.remotePlayerShield = s
+            }
+            if let cd = packet.coopDeaths {
+                self.coopDeaths = max(self.coopDeaths, cd)
             }
             if let h = packet.health {
                 self.remotePlayerHealth = h
@@ -1717,7 +1751,9 @@ final class GameModel: ObservableObject {
             recoveryProgress: isRecoveringInChamber ? max(0, min(1.0, 1.0 - recoveryTimeRemaining / 12.0)) : 1.0,
             versusRound: versusRound,
             versusLocalWins: versusLocalWins,
-            versusRemoteWins: versusRemoteWins
+            versusRemoteWins: versusRemoteWins,
+            shield: playerShield,
+            coopDeaths: coopDeaths
         )
         if multiplayer.isConnected {
             multiplayer.send(pkt)
@@ -1753,16 +1789,38 @@ final class GameModel: ObservableObject {
     }
 
     func takeDamage(_ damage: Float, broadcast: Bool = true) {
+        lastDamageTime = Date().timeIntervalSince1970
         if damage < 0 {
-            playerHealth = min(100.0, playerHealth - damage)
+            // Curación: primero vida hasta 100, luego recarga el escudo
+            let healAmount = -damage
+            let missingHealth = 100.0 - playerHealth
+            if healAmount <= missingHealth {
+                playerHealth += healAmount
+            } else {
+                playerHealth = 100.0
+                playerShield = min(100.0, playerShield + (healAmount - missingHealth))
+            }
         } else {
-            playerHealth = max(0, playerHealth - damage)
+            // Daño: absorbe primero el escudo azul (estilo Free Fire / Fortnite)
+            if playerShield > 0 {
+                if playerShield >= damage {
+                    playerShield -= damage
+                } else {
+                    let remainder = damage - playerShield
+                    playerShield = 0
+                    playerHealth = max(0, playerHealth - remainder)
+                }
+            } else {
+                playerHealth = max(0, playerHealth - damage)
+            }
         }
         if broadcast {
             broadcastLocalState()
         }
         if playerHealth <= 0 && !isDefeated && !isRecoveringInChamber {
             if isAnyMultiplayerConnected && multiplayer.mode == .cooperative {
+                coopDeaths += 1
+                broadcastLocalState()
                 if remotePlayerIsRecovering {
                     triggerTeamDefeat(fromNetwork: false)
                 } else {
@@ -1793,6 +1851,7 @@ final class GameModel: ObservableObject {
         isRecoveringInChamber = true
         recoveryTimeRemaining = 12.0
         playerHealth = 0
+        playerShield = 0
         heldTool = .none
         audio.playRecoveryChamberEnterSound()
         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
@@ -1812,6 +1871,7 @@ final class GameModel: ObservableObject {
         guard isRecoveringInChamber else { return }
         isRecoveringInChamber = false
         playerHealth = 100.0
+        playerShield = 100.0
         recoveryTimeRemaining = 0
         isTeammateBoostingRecovery = false
         audio.playRecoveryCompleteSound()
@@ -1845,6 +1905,7 @@ final class GameModel: ObservableObject {
         }
         remotePlayerIsRecovering = false
         remotePlayerHealth = 100.0
+        remotePlayerShield = 100.0
     }
 
     func triggerTeamDefeat(fromNetwork: Bool = false) {
@@ -1870,8 +1931,10 @@ final class GameModel: ObservableObject {
 
     func restartCooperativeMatch(fromNetwork: Bool = false) {
         playerHealth = 100.0
+        playerShield = 100.0
         playerScore = 0
         remotePlayerHealth = 100.0
+        remotePlayerShield = 100.0
         remotePlayerScore = 0
         isDefeated = false
         isTeamDefeated = false
@@ -1902,6 +1965,7 @@ final class GameModel: ObservableObject {
 
     func respawnPlayer() {
         playerHealth = 100.0
+        playerShield = 100.0
         playerScore = 0
         isDefeated = false
         isTeamDefeated = false
@@ -5265,11 +5329,11 @@ struct GameOptionsSheet: View {
                     Toggle("Mostrar contador de FPS", isOn: $model.showsFPS)
                 }
 
-                Section("Iluminación Táctica") {
-                    Toggle("Modo Apagón Total (Oscuridad Absoluta)", isOn: Binding(
-                        get: { model.lightStates.areAllLightsOff },
-                        set: { _ in model.toggleAllLights() }
-                    ))
+                Section("Interruptores de Luces Individuales") {
+                    Toggle("Farol del Patio (Poste)", isOn: $model.lightStates.post)
+                    Toggle("Neón Piscina (Rojo/Cian)", isOn: $model.lightStates.piscinaNeon)
+                    Toggle("Letrero Neón SHEERIT", isOn: $model.lightStates.sheeritNeon)
+                    Toggle("Tiras LED de la Piscina", isOn: $model.lightStates.poolStrips)
                 }
 
                 Section("Personalización Visual de la Interfaz") {
@@ -5550,6 +5614,7 @@ struct DefeatOverlayView: View {
     var localWins: Int = 0
     var remoteWins: Int = 0
     var remotePlayerName: String = "Rival"
+    var coopDeaths: Int = 0
     var onRespawn: () -> Void
 
     @State private var animateIn = false
@@ -5600,8 +5665,14 @@ struct DefeatOverlayView: View {
                                 .foregroundStyle(.red)
                         }
                         .padding(.top, 2)
+                    } else if isTeamDefeat {
+                        Text("AMBOS AGENTES HAN CAÍDO • BAJAS TOTALES: \(coopDeaths)")
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .tracking(1.5)
+                            .foregroundStyle(.white.opacity(0.92))
+                            .shadow(color: .black.opacity(0.7), radius: 3)
                     } else {
-                        Text(isTeamDefeat ? "AMBOS AGENTES HAN CAÍDO EN COMBATE" : "OLEADA RESTABLECIDA A OLEADA 1")
+                        Text("OLEADA RESTABLECIDA A OLEADA 1")
                             .font(.system(size: 11, weight: .bold, design: .monospaced))
                             .tracking(2.0)
                             .foregroundStyle(.white.opacity(0.92))
