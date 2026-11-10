@@ -21,6 +21,19 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.target.set(0, 0.45, 0.35);
 
+// 1.1 TransformControls 3D (Gizmo de manipulación directa estilo Roblox / Fortnite Creative)
+const transformControl = new THREE.TransformControls(camera, renderer.domElement);
+transformControl.size = 0.85;
+transformControl.addEventListener('change', () => {
+  if (selectedMapProp) {
+    updateSelectedPropInfo();
+  }
+});
+transformControl.addEventListener('dragging-changed', (event) => {
+  controls.enabled = !event.value;
+});
+scene.add(transformControl);
+
 // 2. Luces
 const ambientLight = new THREE.AmbientLight(0x334455, 1.6);
 scene.add(ambientLight);
@@ -956,21 +969,51 @@ function applyWaterPreset(preset) {
   updateWater();
 }
 
+let currentActiveTab = 'tab-cover';
+
 function switchTab(tabId) {
   const btnCover = document.getElementById('btn-tab-cover');
+  const btnMap = document.getElementById('btn-tab-map');
   const btnWater = document.getElementById('btn-tab-water');
   const btnChar = document.getElementById('btn-tab-character');
   const panelCover = document.getElementById('tab-cover');
+  const panelMap = document.getElementById('tab-map');
   const panelWater = document.getElementById('tab-water');
   const panelChar = document.getElementById('tab-character');
 
-  if (tabId === 'tab-water') {
-    btnCover.classList.remove('active');
-    btnWater.classList.add('active');
-    if (btnChar) btnChar.classList.remove('active');
-    panelCover.classList.remove('active');
-    panelWater.classList.add('active');
-    if (panelChar) panelChar.classList.remove('active');
+  [btnCover, btnMap, btnWater, btnChar].forEach(b => b && b.classList.remove('active'));
+  [panelCover, panelMap, panelWater, panelChar].forEach(p => p && p.classList.remove('active'));
+
+  currentActiveTab = tabId;
+
+  if (tabId === 'tab-map') {
+    if (btnMap) btnMap.classList.add('active');
+    if (panelMap) panelMap.classList.add('active');
+
+    // Atmósfera de Cyberpunk / Gran Salón Arcoíris (54m x 54m)
+    scene.background = new THREE.Color(0x060913);
+    sunLight.intensity = 1.6;
+    sunLight.color.setHex(0xe0f2fe);
+    sunLight.position.set(10, 18, 12);
+    ambientLight.color.setHex(0x1e293b);
+    ambientLight.intensity = 1.4;
+
+    coverGroup.visible = false;
+    slimeImpGroup.visible = false;
+    poolGroup.visible = false;
+    patioFloor.visible = true;
+    gridHelper.visible = true;
+    mapGroup.visible = true;
+
+    gridHelper.scale.set(3, 1, 3);
+    patioFloor.scale.set(3, 1, 3);
+
+    transformControl.enabled = true;
+    camera.position.set(-8, 9, 14);
+    controls.target.set(0, 1.5, 0);
+  } else if (tabId === 'tab-water') {
+    if (btnWater) btnWater.classList.add('active');
+    if (panelWater) panelWater.classList.add('active');
 
     // Cambiar a iluminación y atmósfera equilibrada de resort soleado
     scene.background = new THREE.Color(0x38bdf8); // Cielo azul caribeño
@@ -980,25 +1023,21 @@ function switchTab(tabId) {
     ambientLight.color.setHex(0x7dd3fc);
     ambientLight.intensity = 0.7;
 
-    // Ocultar personaje y cobertura, mostrar piscina 3D viva
     coverGroup.visible = false;
     slimeImpGroup.visible = false;
     patioFloor.visible = false;
     gridHelper.visible = false;
+    mapGroup.visible = false;
     poolGroup.visible = true;
+    transformControl.detach();
+    transformControl.enabled = false;
 
-    // Actualizar botones de cámara para piscina
     updateCameraButtons('tab-water');
     setCameraView('pool-resort');
   } else if (tabId === 'tab-character') {
-    btnCover.classList.remove('active');
-    btnWater.classList.remove('active');
     if (btnChar) btnChar.classList.add('active');
-    panelCover.classList.remove('active');
-    panelWater.classList.remove('active');
     if (panelChar) panelChar.classList.add('active');
 
-    // Atmósfera de estudio de personajes 3D estilo Pixar / Nintendo
     scene.background = new THREE.Color(0x0b1329);
     sunLight.intensity = 1.4;
     sunLight.color.setHex(0xffffff);
@@ -1006,24 +1045,23 @@ function switchTab(tabId) {
     ambientLight.color.setHex(0x94a3b8);
     ambientLight.intensity = 0.9;
 
-    // Ocultar piscina y cobertura, mostrar Slime Imp 3D
     coverGroup.visible = false;
     poolGroup.visible = false;
+    mapGroup.visible = false;
     patioFloor.visible = true;
     gridHelper.visible = true;
+    gridHelper.scale.set(1, 1, 1);
+    patioFloor.scale.set(1, 1, 1);
     slimeImpGroup.visible = true;
+    transformControl.detach();
+    transformControl.enabled = false;
 
     updateCameraButtons('tab-character');
     setCameraView('slime-front');
   } else {
-    btnWater.classList.remove('active');
-    btnCover.classList.add('active');
-    if (btnChar) btnChar.classList.remove('active');
-    panelWater.classList.remove('active');
-    panelCover.classList.add('active');
-    if (panelChar) panelChar.classList.remove('active');
+    if (btnCover) btnCover.classList.add('active');
+    if (panelCover) panelCover.classList.add('active');
 
-    // Restaurar atmósfera nocturna del taller de cinemática
     scene.background = new THREE.Color(0x070a0f);
     sunLight.intensity = 2.2;
     sunLight.color.setHex(0xfff7e6);
@@ -1031,14 +1069,17 @@ function switchTab(tabId) {
     ambientLight.color.setHex(0x334455);
     ambientLight.intensity = 1.6;
 
-    // Mostrar personaje y cobertura
     coverGroup.visible = true;
     slimeImpGroup.visible = false;
     patioFloor.visible = true;
     gridHelper.visible = true;
+    gridHelper.scale.set(1, 1, 1);
+    patioFloor.scale.set(1, 1, 1);
     poolGroup.visible = false;
+    mapGroup.visible = false;
+    transformControl.detach();
+    transformControl.enabled = false;
 
-    // Actualizar botones de cámara para cobertura
     updateCameraButtons('tab-cover');
     setCameraView('side');
   }
@@ -1279,6 +1320,392 @@ window.addEventListener('resize', () => {
   camera.aspect = container.clientWidth / container.clientHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(container.clientWidth, container.clientHeight);
+});
+
+// ====================================================
+// 🗺️ MOTOR UGC: EDITOR DE MAPAS & ESCENARIOS (ROBLOX / FORTNITE CREATIVE)
+// ====================================================
+const mapGroup = new THREE.Group();
+mapGroup.visible = false;
+scene.add(mapGroup);
+
+let mapPropsList = [];
+let selectedMapProp = null;
+let currentSnapValue = 0.5; // 0.5m por defecto
+
+// Raycaster para selección táctil o con mouse
+const mapRaycaster = new THREE.Raycaster();
+const mapMouse = new THREE.Vector2();
+
+function setGizmoMode(mode) {
+  transformControl.setMode(mode);
+  ['gizmo-translate', 'gizmo-rotate', 'gizmo-scale'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (btn) btn.style.borderColor = 'rgba(255,255,255,0.1)';
+  });
+  const activeBtn = document.getElementById(`gizmo-${mode}`);
+  if (activeBtn) activeBtn.style.borderColor = 'var(--accent-cyan)';
+}
+
+function toggleGridSnap() {
+  const btn = document.getElementById('snap-toggle');
+  if (currentSnapValue === 0.5) {
+    currentSnapValue = 1.0;
+    transformControl.setTranslationSnap(1.0);
+    transformControl.setRotationSnap(THREE.MathUtils.degToRad(15));
+    if (btn) btn.innerText = '🧲 Snap: 1.0m';
+  } else if (currentSnapValue === 1.0) {
+    currentSnapValue = 0.0;
+    transformControl.setTranslationSnap(null);
+    transformControl.setRotationSnap(null);
+    if (btn) btn.innerText = '🧲 Snap: Libre';
+  } else {
+    currentSnapValue = 0.5;
+    transformControl.setTranslationSnap(0.5);
+    transformControl.setRotationSnap(THREE.MathUtils.degToRad(45));
+    if (btn) btn.innerText = '🧲 Snap: 0.5m';
+  }
+}
+toggleGridSnap(); // Iniciar configurando 0.5m
+
+function createPropMesh(type, colorHex) {
+  const group = new THREE.Group();
+  group.userData.propType = type;
+  group.userData.colorHex = colorHex || 0x00e5ff;
+
+  const matNeon = new THREE.MeshStandardMaterial({
+    color: group.userData.colorHex,
+    emissive: group.userData.colorHex,
+    emissiveIntensity: 0.95,
+    roughness: 0.1,
+    metalness: 0.2
+  });
+  const matMetal = new THREE.MeshStandardMaterial({
+    color: 0x1f2937,
+    roughness: 0.35,
+    metalness: 0.8
+  });
+
+  if (type === 'neon_post') {
+    // Poste de Neón táctico de 3.8m
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 0.2, 16), matMetal);
+    base.position.y = 0.1;
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 3.4, 16), matMetal);
+    pole.position.y = 1.8;
+    const lantern = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.65, 0.48), matNeon);
+    lantern.position.y = 3.6;
+    lantern.name = 'neonPart';
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.45, 0.25, 4), matMetal);
+    cap.position.y = 4.05;
+    cap.rotation.y = Math.PI / 4;
+    group.add(base, pole, lantern, cap);
+  } else if (type === 'rainbow_cabin') {
+    // Cabaña de Cobertura Táctica (3.6m x 3.6m x 3.2m)
+    for (let x of [-1.6, 1.6]) {
+      for (let z of [-1.6, 1.6]) {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 3.0, 12), matMetal);
+        post.position.set(x, 1.5, z);
+        group.add(post);
+      }
+    }
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.18, 3.6), matMetal);
+    roof.position.y = 3.05;
+    const roofTrim = new THREE.Mesh(new THREE.BoxGeometry(3.66, 0.08, 3.66), matNeon);
+    roofTrim.position.y = 3.16;
+    roofTrim.name = 'neonPart';
+    const halfWall = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.15, 0.15), matMetal);
+    halfWall.position.set(0, 0.58, -1.6);
+    group.add(roof, roofTrim, halfWall);
+  } else if (type === 'mirror_panel') {
+    // Escudo/Panel de Espejo Reflectante
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(1.8, 2.4, 0.12), matMetal);
+    frame.position.y = 1.2;
+    const glass = new THREE.Mesh(
+      new THREE.BoxGeometry(1.6, 2.2, 0.04),
+      new THREE.MeshStandardMaterial({ color: 0xe0f2fe, roughness: 0.02, metalness: 0.98 })
+    );
+    glass.position.set(0, 1.2, 0.05);
+    const border = new THREE.Mesh(new THREE.BoxGeometry(1.84, 0.06, 0.14), matNeon);
+    border.position.y = 2.42;
+    border.name = 'neonPart';
+    group.add(frame, glass, border);
+  } else if (type === 'block_low') {
+    const box = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.70, 2.4), matMetal);
+    box.position.y = 0.35;
+    const trim = new THREE.Mesh(new THREE.BoxGeometry(2.46, 0.06, 2.46), matNeon);
+    trim.position.y = 0.71;
+    trim.name = 'neonPart';
+    group.add(box, trim);
+  } else if (type === 'block_mid') {
+    const box = new THREE.Mesh(new THREE.BoxGeometry(2.8, 1.40, 2.8), matMetal);
+    box.position.y = 0.70;
+    const trim = new THREE.Mesh(new THREE.BoxGeometry(2.86, 0.06, 2.86), matNeon);
+    trim.position.y = 1.41;
+    trim.name = 'neonPart';
+    group.add(box, trim);
+  } else if (type === 'block_high') {
+    const box = new THREE.Mesh(new THREE.BoxGeometry(4.2, 2.80, 4.2), matMetal);
+    box.position.y = 1.40;
+    const trim = new THREE.Mesh(new THREE.BoxGeometry(4.28, 0.08, 4.28), matNeon);
+    trim.position.y = 2.82;
+    trim.name = 'neonPart';
+    group.add(box, trim);
+  } else if (type === 'water_patch') {
+    const puddle = new THREE.Mesh(
+      new THREE.CylinderGeometry(2.2, 2.2, 0.04, 32),
+      new THREE.MeshStandardMaterial({ color: 0x0ea5e9, roughness: 0.02, metalness: 0.85, transparent: true, opacity: 0.82 })
+    );
+    puddle.position.y = 0.02;
+    group.add(puddle);
+  } else if (type === 'bot_spawner') {
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(1.1, 0.08, 8, 32),
+      new THREE.MeshStandardMaterial({ color: 0xff0055, emissive: 0xff0055, emissiveIntensity: 1.0 })
+    );
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 0.04;
+    const core = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.35),
+      new THREE.MeshStandardMaterial({ color: 0xff0055, emissive: 0xff0055, emissiveIntensity: 1.2 })
+    );
+    core.position.y = 0.65;
+    group.add(ring, core);
+  } else if (type === 'base_alpha') {
+    const pad = new THREE.Mesh(
+      new THREE.CylinderGeometry(2.0, 2.2, 0.15, 32),
+      new THREE.MeshStandardMaterial({ color: 0xfef08a, emissive: 0xffd600, emissiveIntensity: 0.85 })
+    );
+    pad.position.y = 0.08;
+    group.add(pad);
+  } else if (type === 'base_omega') {
+    const pad = new THREE.Mesh(
+      new THREE.CylinderGeometry(2.0, 2.2, 0.15, 32),
+      new THREE.MeshStandardMaterial({ color: 0xa855f7, emissive: 0x9333ea, emissiveIntensity: 0.85 })
+    );
+    pad.position.y = 0.08;
+    group.add(pad);
+  }
+
+  // Activar sombras en todos los hijos
+  group.traverse(child => {
+    if (child.isMesh) {
+      child.castShadow = true;
+      child.receiveShadow = true;
+      child.userData.parentPropGroup = group;
+    }
+  });
+
+  return group;
+}
+
+function spawnMapProp(type, x = 0, z = 0, colorHex = 0x00e5ff) {
+  const prop = createPropMesh(type, colorHex);
+  prop.position.set(x, 0, z);
+  mapGroup.add(prop);
+  mapPropsList.push(prop);
+  selectProp(prop);
+  updateMapStats();
+}
+
+function selectProp(propGroup) {
+  selectedMapProp = propGroup;
+  if (propGroup) {
+    transformControl.attach(propGroup);
+    document.getElementById('prop-color-row').style.display = 'flex';
+  } else {
+    transformControl.detach();
+    document.getElementById('prop-color-row').style.display = 'none';
+  }
+  updateSelectedPropInfo();
+}
+
+function updateSelectedPropInfo() {
+  const info = document.getElementById('selected-prop-info');
+  if (!selectedMapProp) {
+    info.innerHTML = 'Ningún objeto seleccionado. Haz clic en un prop en el visor 3D.';
+    return;
+  }
+  const pos = selectedMapProp.position;
+  const rot = selectedMapProp.rotation;
+  const type = selectedMapProp.userData.propType;
+  info.innerHTML = `
+    <div style="color: var(--accent-cyan); font-weight: 600;">Prop: ${type}</div>
+    <div>Pos: X=${pos.x.toFixed(2)}m, Y=${pos.y.toFixed(2)}m, Z=${pos.z.toFixed(2)}m</div>
+    <div>Rot: Y=${(THREE.MathUtils.radToDeg(rot.y)).toFixed(0)}°</div>
+  `;
+}
+
+function setPropColor(colorHex) {
+  if (!selectedMapProp) return;
+  selectedMapProp.userData.colorHex = colorHex;
+  selectedMapProp.traverse(child => {
+    if (child.name === 'neonPart' && child.material) {
+      child.material.color.setHex(colorHex);
+      child.material.emissive.setHex(colorHex);
+    }
+  });
+}
+
+function duplicateSelectedProp() {
+  if (!selectedMapProp) return;
+  const type = selectedMapProp.userData.propType;
+  const col = selectedMapProp.userData.colorHex;
+  const newProp = createPropMesh(type, col);
+  newProp.position.copy(selectedMapProp.position).add(new THREE.Vector3(1.0, 0, 1.0));
+  newProp.rotation.copy(selectedMapProp.rotation);
+  newProp.scale.copy(selectedMapProp.scale);
+  mapGroup.add(newProp);
+  mapPropsList.push(newProp);
+  selectProp(newProp);
+  updateMapStats();
+}
+
+function deleteSelectedProp() {
+  if (!selectedMapProp) return;
+  transformControl.detach();
+  mapGroup.remove(selectedMapProp);
+  mapPropsList = mapPropsList.filter(p => p !== selectedMapProp);
+  selectedMapProp = null;
+  updateSelectedPropInfo();
+  updateMapStats();
+}
+
+function clearCustomMap() {
+  transformControl.detach();
+  selectedMapProp = null;
+  mapPropsList.forEach(p => mapGroup.remove(p));
+  mapPropsList = [];
+  updateSelectedPropInfo();
+  updateMapStats();
+}
+
+function updateMapStats() {
+  const count = mapPropsList.length;
+  const header = document.querySelector('#tab-map h3');
+  if (header) {
+    header.innerHTML = `🎯 Herramientas de Gizmo 3D <span style="font-size:11px; color:var(--text-muted); float:right;">Props: ${count}</span>`;
+  }
+}
+
+function loadOfficialRainbowMap() {
+  clearCustomMap();
+  // 4 Cabañas en las esquinas
+  spawnMapProp('rainbow_cabin', -12.5, 32.0, 0xff007f);
+  spawnMapProp('rainbow_cabin',  12.5, 32.0, 0x00e676);
+  spawnMapProp('rainbow_cabin', -12.5, 56.0, 0x00e5ff);
+  spawnMapProp('rainbow_cabin',  12.5, 56.0, 0xa855f7);
+
+  // 4 Postes Neón cerca a cabañas
+  spawnMapProp('neon_post', -14.5, 29.0, 0xff007f);
+  spawnMapProp('neon_post',  14.5, 29.0, 0x00e676);
+  spawnMapProp('neon_post', -14.5, 58.0, 0x00e5ff);
+  spawnMapProp('neon_post',  14.5, 58.0, 0xa855f7);
+
+  // Pasarelas y bloques de parkour centrales
+  spawnMapProp('block_low', 0, 24, 0xff5252);
+  spawnMapProp('block_mid', -3.6, 28, 0xff7b00);
+  spawnMapProp('block_mid',  3.6, 28, 0xffd600);
+  spawnMapProp('block_high', 0, 45, 0x9333ea);
+  spawnMapProp('block_mid',  0, 62, 0xff007f);
+
+  // Espejos tácticos
+  spawnMapProp('mirror_panel', -5.0, 36, 0x00e5ff);
+  spawnMapProp('mirror_panel',  5.0, 36, 0x00e5ff);
+
+  // Bases Alpha y Omega
+  spawnMapProp('base_alpha', 0, 19, 0xffd600);
+  spawnMapProp('base_omega', 0, 68, 0xa855f7);
+
+  // Charcos reflectantes
+  spawnMapProp('water_patch', -7.0, 42, 0x00e5ff);
+  spawnMapProp('water_patch',  7.0, 42, 0x00e5ff);
+
+  selectProp(null);
+}
+
+function saveCustomMap() {
+  const mapData = {
+    version: '2.1',
+    name: 'SalonRainbow_Custom',
+    propsCount: mapPropsList.length,
+    props: mapPropsList.map(p => ({
+      type: p.userData.propType,
+      position: [p.position.x, p.position.y, p.position.z],
+      rotation: [p.rotation.x, p.rotation.y, p.rotation.z],
+      scale: [p.scale.x, p.scale.y, p.scale.z],
+      colorHex: p.userData.colorHex
+    }))
+  };
+
+  fetch('/api/save-map', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(mapData)
+  })
+  .then(res => res.json())
+  .then(data => {
+    const badge = document.getElementById('status-map');
+    badge.innerText = data.message || '✅ ¡Mapa guardado en el servidor!';
+    badge.style.display = 'block';
+    setTimeout(() => { badge.style.display = 'none'; }, 3500);
+  })
+  .catch(err => {
+    // Si corre offline sin server.py, descargar como archivo JSON
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(mapData, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", "custom_map.json");
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  });
+}
+
+// Clic para seleccionar prop en la escena
+container.addEventListener('pointerdown', (event) => {
+  if (currentActiveTab !== 'tab-map') return;
+  // Si estamos haciendo clic sobre el gizmo de transformación, ignorar
+  if (transformControl.dragging) return;
+
+  const rect = renderer.domElement.getBoundingClientRect();
+  mapMouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  mapMouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+  mapRaycaster.setFromCamera(mapMouse, camera);
+  const intersects = mapRaycaster.intersectObjects(mapGroup.children, true);
+
+  if (intersects.length > 0) {
+    let topPropGroup = intersects[0].object;
+    while (topPropGroup.parent && topPropGroup.parent !== mapGroup) {
+      topPropGroup = topPropGroup.parent;
+    }
+    selectProp(topPropGroup);
+  } else if (!event.target.closest('#sidebar')) {
+    // Clic en suelo vacío deselecciona
+    selectProp(null);
+  }
+});
+
+// Atajos de teclado en el editor
+window.addEventListener('keydown', (e) => {
+  if (currentActiveTab !== 'tab-map') return;
+  if (e.target.tagName === 'INPUT') return;
+
+  switch (e.key.toLowerCase()) {
+    case 'w': setGizmoMode('translate'); break;
+    case 'e': setGizmoMode('rotate'); break;
+    case 'r': setGizmoMode('scale'); break;
+    case 'd':
+      if (selectedMapProp) duplicateSelectedProp();
+      break;
+    case 'delete':
+    case 'backspace':
+      if (selectedMapProp) deleteSelectedProp();
+      break;
+    case 'escape':
+      selectProp(null);
+      break;
+  }
 });
 
 // Inicializar estado inicial

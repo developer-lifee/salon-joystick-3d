@@ -29,6 +29,13 @@ class StudioHandler(http.server.SimpleHTTPRequestHandler):
                     self._send_json(json.load(f))
             else:
                 self._send_json({"error": "No cover poses found"})
+        elif self.path == "/api/load-map":
+            map_file = os.path.join(BASE_DIR, "presets", "custom_map.json")
+            if os.path.exists(map_file):
+                with open(map_file, "r", encoding="utf-8") as f:
+                    self._send_json(json.load(f))
+            else:
+                self._send_json({"props": [], "name": "Vacio"})
         elif self.path == "/api/export-all":
             water_p = os.path.join(BASE_DIR, "presets", "water_shaders.json")
             cover_p = os.path.join(BASE_DIR, "presets", "cover_poses.json")
@@ -61,6 +68,14 @@ class StudioHandler(http.server.SimpleHTTPRequestHandler):
             with open(char_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
             self._send_json({"success": True, "message": "¡Configuración de Slime Imp guardada en presets/!"})
+        elif self.path == "/api/save-map":
+            length = int(self.headers.get('content-length', 0))
+            data = json.loads(self.rfile.read(length).decode('utf-8'))
+            map_file = os.path.join(BASE_DIR, "presets", "custom_map.json")
+            os.makedirs(os.path.join(BASE_DIR, "presets"), exist_ok=True)
+            with open(map_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            self._send_json({"success": True, "message": "¡Mapa de escenario guardado exitosamente en presets/custom_map.json!"})
         else:
             self.send_error(404, "Not Found")
 

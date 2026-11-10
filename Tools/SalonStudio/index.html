@@ -313,6 +313,7 @@
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
 </head>
 <body>
   <div id="viewport-container">
@@ -344,8 +345,9 @@
 
     <div class="tabs">
       <button id="btn-tab-cover" class="tab-btn active" onclick="switchTab('tab-cover')">🪨 Rigging</button>
+      <button id="btn-tab-map" class="tab-btn" onclick="switchTab('tab-map')">🗺️ Mapas (UGC)</button>
       <button id="btn-tab-water" class="tab-btn" onclick="switchTab('tab-water')">💧 Piscina</button>
-      <button id="btn-tab-character" class="tab-btn" onclick="switchTab('tab-character')">👾 Slime Imp</button>
+      <button id="btn-tab-character" class="tab-btn" onclick="switchTab('tab-character')">👾 Slime</button>
     </div>
 
     <!-- Pestaña 1: Rigging y Cobertura GTA -->
@@ -422,6 +424,68 @@
         💾 Guardar Postura en Swift
       </button>
       <div id="status-cover" class="status-badge">✅ Pose guardada en MetalRayRenderer.swift</div>
+    </div>
+
+    <!-- Pestaña UGC: Editor de Mapas y Escenarios estilo Roblox / Fortnite Creative -->
+    <div id="tab-map" class="panel">
+      <div class="control-group">
+        <h3>🎯 Herramientas de Gizmo 3D</h3>
+        <div class="preset-grid">
+          <button id="gizmo-translate" class="preset-btn" style="border-color: var(--accent-cyan);" onclick="setGizmoMode('translate')">↔️ Mover (W)</button>
+          <button id="gizmo-rotate" class="preset-btn" onclick="setGizmoMode('rotate')">🔄 Rotar (E)</button>
+          <button id="gizmo-scale" class="preset-btn" onclick="setGizmoMode('scale')">📐 Escalar (R)</button>
+          <button class="preset-btn" style="color: #ff5252;" onclick="deleteSelectedProp()">🗑️ Borrar (Supr)</button>
+        </div>
+        <div class="preset-grid" style="margin-top: 6px;">
+          <button class="preset-btn" onclick="duplicateSelectedProp()">📑 Duplicar (D)</button>
+          <button id="snap-toggle" class="preset-btn" onclick="toggleGridSnap()">🧲 Snap: 0.5m</button>
+        </div>
+        <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+          💡 Clic en cualquier objeto del mapa para seleccionarlo y arrastrar las flechas 3D.
+        </div>
+      </div>
+
+      <div class="control-group">
+        <h3>📦 Paleta de Objetos (Click para Spawnear)</h3>
+        <div class="preset-grid">
+          <button class="preset-btn" onclick="spawnMapProp('neon_post')">🏮 Poste de Neón</button>
+          <button class="preset-btn" onclick="spawnMapProp('rainbow_cabin')">🌈 Cabaña Arcoíris</button>
+          <button class="preset-btn" onclick="spawnMapProp('mirror_panel')">🛡️ Espejo Táctico</button>
+          <button class="preset-btn" onclick="spawnMapProp('block_low')">🧱 Bloque Bajo (0.7m)</button>
+          <button class="preset-btn" onclick="spawnMapProp('block_mid')">🧱 Bloque Medio (1.4m)</button>
+          <button class="preset-btn" onclick="spawnMapProp('block_high')">🧱 Pasarela Alta (2.8m)</button>
+          <button class="preset-btn" onclick="spawnMapProp('water_patch')">💧 Charco Reflectante</button>
+          <button class="preset-btn" onclick="spawnMapProp('bot_spawner')">👾 Spawn Fotófago</button>
+          <button class="preset-btn" onclick="spawnMapProp('base_alpha')">🏁 Base Alpha (Luz)</button>
+          <button class="preset-btn" onclick="spawnMapProp('base_omega')">🏁 Base Omega (Sombra)</button>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <h3>📋 Propiedades del Objeto Seleccionado</h3>
+        <div id="selected-prop-info" style="font-size: 12px; color: var(--text-muted);">
+          Ningún objeto seleccionado. Haz clic en un prop en el visor 3D.
+        </div>
+        <div class="slider-row" id="prop-color-row" style="display: none; margin-top: 8px;">
+          <div class="slider-label"><span>Color / Neón del Objeto</span></div>
+          <div class="preset-grid">
+            <button class="preset-btn" style="background: rgba(255, 0, 127, 0.25);" onclick="setPropColor(0xff007f)">Magenta</button>
+            <button class="preset-btn" style="background: rgba(0, 229, 255, 0.25);" onclick="setPropColor(0x00e5ff)">Cian</button>
+            <button class="preset-btn" style="background: rgba(0, 230, 118, 0.25);" onclick="setPropColor(0x00e676)">Verde</button>
+            <button class="preset-btn" style="background: rgba(255, 214, 0, 0.25);" onclick="setPropColor(0xffd600)">Dorado</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="preset-grid">
+        <button class="preset-btn" onclick="loadOfficialRainbowMap()">📂 Cargar Mapa Arcoíris</button>
+        <button class="preset-btn" style="color: #ff5252;" onclick="clearCustomMap()">🗑️ Limpiar Todo</button>
+      </div>
+
+      <button class="btn-action" onclick="saveCustomMap()">
+        💾 Guardar Escenario en JSON / Servidor
+      </button>
+      <div id="status-map" class="status-badge">✅ Mapa guardado en presets/custom_map.json</div>
     </div>
 
     <!-- Pestaña 2: Piscina & Agua -->
