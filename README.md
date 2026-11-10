@@ -19,7 +19,7 @@
 > ₍⸍⸏────────────────────────────────────────────────────────────⸏⸌₎
 > **LASER TRACER 3D** es un motor de combate táctico 3D y demostración técnica avanzada desarrollado **100% en código nativo Swift y Metal Shaders (MSL)**. Diseñado desde cero para exprimir los hardware **Ray Tracing Cores** de los chips **Apple A17 Pro (iPhone 15 Pro / Max)** y **Apple Silicon M-series** a 60 FPS estables sin sobrecalentar la batería (uwu) ♡.
 > 
-> 🏷️ **Versión Actual:** `v1.0.0` • **Build:** `82` (`b82fix`)
+> 🏷️ **Versión Actual:** `v1.0.0` • **Build:** `82` (`42fbd30`)
 > └──────────────────────────────────────────────────────────────┘
 
 ---
