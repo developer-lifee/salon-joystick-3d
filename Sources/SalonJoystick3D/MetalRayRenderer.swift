@@ -1729,16 +1729,15 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             remotePlayerMeltProgress = max(0.0, remotePlayerMeltProgress - rawDt * 3.2)
         }
 
-        // 🏥 Bio-Stasis Recovery Chamber System
+        // 💨 Slime Deflation & Pneumatic Air Pump Revive System (Build 100)
         if isRecoveringInChamber {
-            let podX: Float = isHost ? -0.95 : 0.95
-            playerPosition = SIMD3<Float>(podX, 0.45, 6.2)
-            playerYaw = Float.pi
+            // Cero teletransportación: el jugador permanece exactamente donde cayó en el suelo
             horizontalVelocity = .zero
             verticalVelocity = 0
 
-            let remoteDist = simd_distance(smoothedRemotePos, SIMD3<Float>(0.0, 0.45, 5.8))
-            let teammateBoosting = isRemotePlayerConnected && !remotePlayerIsRecovering && remoteDist < 3.2
+            // Si el compañero vivo se acerca a menos de 2.5m, acelera el inflado a presión
+            let distToTeammate = simd_distance(playerPosition, smoothedRemotePos)
+            let teammateBoosting = isRemotePlayerConnected && !remotePlayerIsRecovering && distToTeammate < 2.5
             let recoveryRate: Float = teammateBoosting ? 4.0 : 0.0
             if teammateBoosting {
                 recoveryTimeRemaining = max(0, recoveryTimeRemaining - dt * recoveryRate)
@@ -1749,8 +1748,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
             return
         } else {
-            let distToConsole = simd_distance(playerPosition, SIMD3<Float>(0.0, playerPosition.y, 5.25))
-            onNearRecoveryConsoleUpdate?(distToConsole < 2.6)
+            // Proximidad a compañero caído en cualquier lugar del mapa para sacar la Bomba de Aire
+            let distToFallenTeammate = simd_distance(playerPosition, smoothedRemotePos)
+            let isNearFallen = isRemotePlayerConnected && remotePlayerIsRecovering && distToFallenTeammate < 2.5
+            onNearRecoveryConsoleUpdate?(isNearFallen)
         }
 
         let inputX = max(-1.0, min(1.0, Float(joystick.dx)))
@@ -4199,13 +4200,18 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let isMoving = hypot(joystick.dx, joystick.dy) > 0.15
 
         let melt = playerMeltProgress
-        let wobble = sin(elapsedTime * 9.0) * 0.05 * melt
+        let isRecovering = isRecoveringInChamber
+        let recoveryFrac = isRecovering ? max(0.0, min(1.0, 1.0 - recoveryTimeRemaining / 12.0)) : 0.0
+        let effectiveMelt = isRecovering ? (1.0 - recoveryFrac) * melt : melt
+        let pumpPuff = (isRecovering && recoveryFrac > 0) ? abs(sin(elapsedTime * 14.0)) * (1.0 - recoveryFrac * 0.4) * 0.20 : 0.0
+
+        let wobble = sin(elapsedTime * 9.0) * 0.05 * effectiveMelt
         let pScale: SIMD3<Float>
         let pPitch: Float
-        if melt > 0.01 {
-            // 🟢 Slime Melting Death: Se derrite orgánicamente en un charco de slime verde burbujeante en el suelo
-            let scaleY = max(0.06, (1.0 - melt * 0.94) + wobble * 0.3)
-            let scaleXZ = 1.0 + melt * 1.30 + wobble
+        if effectiveMelt > 0.01 {
+            // 🟢 Slime Deflation & Inflation Animation: aplastado en charco o inflando con rebote de bomba de aire
+            let scaleY = max(0.06, (1.0 - effectiveMelt * 0.94) + wobble * 0.3 + pumpPuff)
+            let scaleXZ = max(0.85, 1.0 + effectiveMelt * 1.30 + wobble - pumpPuff * 0.12)
             pScale = SIMD3<Float>(scaleXZ, scaleY, scaleXZ)
             pPitch = 0.0 // Slime derretido apoyado horizontalmente sobre el suelo
         } else if isPlayerDead {
@@ -4307,8 +4313,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             if slot < activeAgents.count {
                 let agent = activeAgents[slot]
                 let smoothPos = smoothedRemoteAgents[agent.peerID] ?? (slot == 0 ? smoothedRemotePos : agent.position)
-                let podPos = SIMD3<Float>(slot % 2 == 0 ? 0.95 : -0.95, 0.45, 6.2)
-                let renderPos = agent.isRecovering ? podPos : smoothPos
+                let renderPos = smoothPos
                 let isMovingAgent = simd_distance_squared(smoothPos, agent.position) > 0.002 && !agent.isRecovering
                 let agentAS: UInt32 = isMovingAgent ? 9 : 1
                 let agentScale: SIMD3<Float> = slot == 0 ? rScale : SIMD3<Float>(1, 1, 1)
@@ -4318,7 +4323,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 descriptors.append(
                     Self.makeInstanceDescriptor(
                         translation: renderPos,
-                        yaw: agent.isRecovering ? Float.pi : agent.yaw,
+                        yaw: agent.yaw,
                         pitch: 0,
                         scale: agentScale,
                         mask: 0x01,
@@ -4931,64 +4936,6 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         builder.addBox(center: SIMD3<Float>(8.5, 0.28, 4.8), size: SIMD3<Float>(0.18, 0.55, 0.58), material: wood)
         builder.addBox(center: SIMD3<Float>(6.8, 0.70, 4.8), size: SIMD3<Float>(0.72, 0.10, 0.52), material: RTMaterial(color: SIMD3<Float>(0.10, 0.64, 0.72), roughness: 0.46))
         builder.addBox(center: SIMD3<Float>(7.65, 0.70, 4.8), size: SIMD3<Float>(0.72, 0.10, 0.52), material: RTMaterial(color: SIMD3<Float>(0.90, 0.24, 0.34), roughness: 0.46))
-
-        // 🏥 ⚡ CÁMARA MÉDICA DE RECUPERACIÓN COOPERATIVA (Dual Pod Bio-Stasis Bay en X = 0, Z = 6.2)
-        let podPlatformMat = RTMaterial(color: SIMD3<Float>(0.08, 0.10, 0.13), roughness: 0.35, reflectivity: 0.30)
-        let podNeonCyan = RTMaterial(color: SIMD3<Float>(0.0, 0.95, 1.0), roughness: 0.05, emission: SIMD3<Float>(0.8, 5.5, 8.2), reflectivity: 0.85, kind: 5)
-        let podNeonEmerald = RTMaterial(color: SIMD3<Float>(0.0, 1.0, 0.55), roughness: 0.05, emission: SIMD3<Float>(0.5, 6.8, 4.2), reflectivity: 0.85, kind: 5)
-        let podGlass = RTMaterial(color: SIMD3<Float>(0.10, 0.75, 0.90), roughness: 0.02, emission: SIMD3<Float>(0.05, 0.30, 0.45), reflectivity: 0.95, kind: 1)
-        let podFrameMetal = RTMaterial(color: SIMD3<Float>(0.70, 0.74, 0.78), roughness: 0.12, reflectivity: 0.82)
-        let consoleScreenMat = RTMaterial(color: SIMD3<Float>(0.10, 0.95, 0.85), roughness: 0.08, emission: SIMD3<Float>(0.6, 5.0, 6.5), reflectivity: 0.60, kind: 5)
-
-        // 1. Plataforma Base Octogonal / Biseccionada (Ancho 3.8m, Profundo 2.5m, Alto 0.14m)
-        builder.addBox(center: SIMD3<Float>(0, 0.07, 6.2), size: SIMD3<Float>(3.8, 0.14, 2.5), material: podPlatformMat)
-        // Bordes Neón Perimetrales
-        builder.addBox(center: SIMD3<Float>(0, 0.14, 4.95), size: SIMD3<Float>(3.7, 0.04, 0.06), material: podNeonCyan)
-        builder.addBox(center: SIMD3<Float>(0, 0.14, 7.45), size: SIMD3<Float>(3.7, 0.04, 0.06), material: podNeonCyan)
-        builder.addBox(center: SIMD3<Float>(-1.88, 0.14, 6.2), size: SIMD3<Float>(0.06, 0.04, 2.4), material: podNeonCyan)
-        builder.addBox(center: SIMD3<Float>(1.88, 0.14, 6.2), size: SIMD3<Float>(0.06, 0.04, 2.4), material: podNeonCyan)
-
-        // 2. Pod Alpha (Izquierdo: X = -0.95, Z = 6.2) y Pod Beta (Derecho: X = 0.95, Z = 6.2)
-        let podPositions: [SIMD3<Float>] = [
-            SIMD3<Float>(-0.95, 0, 6.2),
-            SIMD3<Float>(0.95, 0, 6.2)
-        ]
-
-        for pPos in podPositions {
-            // Disco Emisor Bio-Stasis en el piso del Pod
-            builder.addBox(center: pPos + SIMD3<Float>(0, 0.15, 0), size: SIMD3<Float>(1.20, 0.02, 1.20), material: podNeonEmerald)
-
-            // 4 Columnas / Pilares de Titanio que sostienen la cápsula
-            let strutOffsets: [(Float, Float)] = [(-0.55, -0.55), (0.55, -0.55), (-0.55, 0.55), (0.55, 0.55)]
-            for offset in strutOffsets {
-                builder.addBox(
-                    center: pPos + SIMD3<Float>(offset.0, 1.15, offset.1),
-                    size: SIMD3<Float>(0.08, 2.05, 0.08),
-                    material: podFrameMetal
-                )
-            }
-
-            // Anillo Superior de Estabilización
-            builder.addBox(center: pPos + SIMD3<Float>(0, 2.20, 0), size: SIMD3<Float>(1.25, 0.10, 1.25), material: podFrameMetal)
-            builder.addBox(center: pPos + SIMD3<Float>(0, 2.26, 0), size: SIMD3<Float>(1.15, 0.04, 1.15), material: podNeonCyan)
-
-            // Cápsula de Vidrio de Stasis (Paredes del cilindro médico)
-            builder.addBox(center: pPos + SIMD3<Float>(0, 1.15, 0.56), size: SIMD3<Float>(1.05, 1.95, 0.04), material: podGlass)
-            builder.addBox(center: pPos + SIMD3<Float>(0, 1.15, -0.56), size: SIMD3<Float>(1.05, 1.95, 0.04), material: podGlass)
-            builder.addBox(center: pPos + SIMD3<Float>(-0.56, 1.15, 0), size: SIMD3<Float>(0.04, 1.95, 1.05), material: podGlass)
-            builder.addBox(center: pPos + SIMD3<Float>(0.56, 1.15, 0), size: SIMD3<Float>(0.04, 1.95, 1.05), material: podGlass)
-        }
-
-        // 3. Consola Médica Central Interactiva de Reanimación (X = 0, Z = 5.25)
-        builder.addBox(center: SIMD3<Float>(0, 0.45, 5.25), size: SIMD3<Float>(0.55, 0.80, 0.35), material: podPlatformMat)
-        builder.addBox(center: SIMD3<Float>(0, 0.88, 5.20), size: SIMD3<Float>(0.48, 0.08, 0.28), material: podFrameMetal)
-        builder.addBox(center: SIMD3<Float>(0, 0.93, 5.20), size: SIMD3<Float>(0.42, 0.03, 0.22), material: consoleScreenMat)
-
-        // 4. Arco Médico Superior y Holograma de Cruz Médica Neón
-        builder.addBox(center: SIMD3<Float>(0, 2.45, 6.2), size: SIMD3<Float>(2.2, 0.12, 0.16), material: podFrameMetal)
-        // Cruz Holográfica Médica Neón Central:
-        builder.addBox(center: SIMD3<Float>(0, 2.80, 6.2), size: SIMD3<Float>(0.12, 0.45, 0.04), material: podNeonEmerald)
-        builder.addBox(center: SIMD3<Float>(0, 2.80, 6.2), size: SIMD3<Float>(0.45, 0.12, 0.04), material: podNeonEmerald)
 
         // =========================================================================
         // 🌈 🏎️ GRAN SALÓN ARCOÍRIS ESTILO MARIO KART (SENDA ARCOÍRIS / RAINBOW ROAD)

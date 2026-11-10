@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "99"
-    static let commitHash = "b99lzr"
+    static let build = "100"
+    static let commitHash = "b100pump"
     static let formatted = "v\(version) • Build \(build)"
 }
 
@@ -613,9 +613,9 @@ struct ContentView: View {
                                 model.reviveTeammate(fromIntermission: true)
                             } label: {
                                 HStack(spacing: 6) {
-                                    Image(systemName: "bolt.heart.fill")
+                                    Image(systemName: "wind")
                                         .font(.system(size: 14, weight: .black))
-                                    Text("REVIVIR A \(model.remotePlayerName.isEmpty ? "COMPAÑERO" : model.remotePlayerName.uppercased())")
+                                    Text("💨 INFLAR A \(model.remotePlayerName.isEmpty ? "COMPAÑERO" : model.remotePlayerName.uppercased())")
                                         .font(.system(size: 12, weight: .black, design: .rounded))
                                 }
                                 .foregroundStyle(.black)
@@ -623,9 +623,9 @@ struct ContentView: View {
                                 .padding(.vertical, 7)
                                 .background(
                                     Capsule()
-                                        .fill(LinearGradient(colors: [.cyan, .green], startPoint: .leading, endPoint: .trailing))
+                                        .fill(LinearGradient(colors: [.yellow, .green], startPoint: .leading, endPoint: .trailing))
                                 )
-                                .shadow(color: .cyan.opacity(0.8), radius: 8)
+                                .shadow(color: .green.opacity(0.8), radius: 8)
                             }
                             .buttonStyle(.plain)
                             .padding(.top, 2)
@@ -1008,24 +1008,24 @@ struct ContentView: View {
                         Button {
                             model.reviveTeammate()
                         } label: {
-                            HStack(spacing: 5) {
-                                Image(systemName: "bolt.heart.fill")
-                                    .font(.system(size: 13, weight: .black))
-                                Text("Reanimar")
-                                    .font(.system(size: 11, weight: .black))
+                            HStack(spacing: 6) {
+                                Image(systemName: "wind")
+                                    .font(.system(size: 14, weight: .black))
+                                Text("💨 INFLAR COMPAÑERO")
+                                    .font(.system(size: 12, weight: .black, design: .rounded))
                             }
                             .foregroundStyle(.black)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
                             .background(
-                                LinearGradient(colors: [.green, .cyan], startPoint: .leading, endPoint: .trailing),
+                                LinearGradient(colors: [.yellow, .green], startPoint: .leading, endPoint: .trailing),
                                 in: Capsule()
                             )
                             .overlay(Capsule().stroke(Color.white, lineWidth: 1.5))
                             .shadow(color: .green.opacity(0.8), radius: 8)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Reanimar Compañero en Cámara Médica")
+                        .accessibilityLabel("Inflar Compañero con Bomba de Aire")
                     }
 
                     if model.isNearCoverRock || model.isCoverActive {
@@ -1575,6 +1575,7 @@ final class GameModel: ObservableObject {
     @Published var showsRainbowGateNotice: Bool = false
     @Published var isDefeated = false
     @Published var isRecoveringInChamber = false
+    @Published var inflationPumpsCount: Int = 0
     @Published var recoveryTimeRemaining: Float = 0
     @Published var isTeammateBoostingRecovery = false
     @Published var remotePlayerIsRecovering = false
@@ -2699,22 +2700,19 @@ final class GameModel: ObservableObject {
                 } else {
                     enterRecoveryChamber()
                 }
-            } else {
+            } else if isAnyMultiplayerConnected && multiplayer.mode == .versus {
                 isDefeated = true
                 isTeamDefeated = false
                 heldTool = .none
-                audio.playRobloxOofDefeatSound()
-                if isAnyMultiplayerConnected && multiplayer.mode == .versus {
-                    if !hasRecordedVersusRoundResult {
-                        hasRecordedVersusRoundResult = true
-                        versusRemoteWins += 1
-                        broadcastVersusRoundUpdate()
-                    }
-                } else if !isAnyMultiplayerConnected {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
-                        self?.respawnPlayer()
-                    }
+                audio.playSlimeDeflateSound()
+                if !hasRecordedVersusRoundResult {
+                    hasRecordedVersusRoundResult = true
+                    versusRemoteWins += 1
+                    broadcastVersusRoundUpdate()
                 }
+            } else {
+                // Modo Solitario: ¡Te desinflas en el suelo y sacas la Bomba de Aire Neumática!
+                enterRecoveryChamber()
             }
         }
     }
@@ -2722,17 +2720,32 @@ final class GameModel: ObservableObject {
     func enterRecoveryChamber() {
         guard !isRecoveringInChamber else { return }
         isRecoveringInChamber = true
+        inflationPumpsCount = 0
         recoveryTimeRemaining = 12.0
         playerHealth = 0
         playerShield = 0
         heldTool = .none
-        audio.playRecoveryChamberEnterSound()
+        audio.playSlimeDeflateSound()
+        UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+
+        // 🌟 CERO TELETRANSPORTACIÓN: El jugador se queda exactamente donde cayó en el suelo
+        broadcastLocalState()
+    }
+
+    func performAirPumpStroke() {
+        guard isRecoveringInChamber else { return }
+        inflationPumpsCount += 1
+        audio.playAirPumpStrokeSound()
         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
 
-        let podX: Float = isHost ? -0.95 : 0.95
-        localPlayerPosition = SIMD3<Float>(podX, 0.45, 6.2)
-        localPlayerYaw = Float.pi
+        // Cada bombeo avanza 1/3 (33%) de la recuperación total
+        let targetRemaining = max(0.0, 12.0 * (1.0 - Float(inflationPumpsCount) / 3.0))
+        recoveryTimeRemaining = targetRemaining
         broadcastLocalState()
+
+        if inflationPumpsCount >= 3 || recoveryTimeRemaining <= 0 {
+            completeRecovery(wasRevivedByTeammate: true)
+        }
     }
 
     func updateRecoveryProgress(remaining: Float, isBoosting: Bool) {
@@ -2743,17 +2756,16 @@ final class GameModel: ObservableObject {
     func completeRecovery(wasRevivedByTeammate: Bool = false) {
         guard isRecoveringInChamber else { return }
         isRecoveringInChamber = false
+        inflationPumpsCount = 0
         playerHealth = 100.0
         playerShield = 100.0
         recoveryTimeRemaining = 0
         isTeammateBoostingRecovery = false
-        audio.playRecoveryCompleteSound()
+        audio.playBalloonBouncePopSound()
         UINotificationFeedbackGenerator().notificationOccurred(.success)
 
-        let podX: Float = isHost ? -0.95 : 0.95
-        localPlayerPosition = SIMD3<Float>(podX, 0.45, 4.8)
-        localPlayerYaw = Float.pi
-
+        // El jugador se levanta en su misma posición con salto elástico
+        localPlayerPosition.y = max(localPlayerPosition.y, 0.45)
         broadcastLocalState()
     }
 
@@ -2762,7 +2774,7 @@ final class GameModel: ObservableObject {
         if !fromIntermission {
             guard isNearRecoveryConsole else { return }
         }
-        audio.playTeammateRevivePulseSound()
+        audio.playAirPumpStrokeSound()
         playerScore += 100
         let packet = LocalMatchPacket(
             kind: .reviveTeammate,
@@ -2777,6 +2789,7 @@ final class GameModel: ObservableObject {
             gameCenter.sendPacket(packet)
         }
         remotePlayerIsRecovering = false
+        remotePlayerRecoveryTime = 0
         remotePlayerHealth = 100.0
         remotePlayerShield = 100.0
     }
@@ -4558,6 +4571,9 @@ final class ChiptuneAudioEngine {
     private var recoveryChamberEnterBuffer: AVAudioPCMBuffer?
     private var recoveryCompleteBuffer: AVAudioPCMBuffer?
     private var teammateRevivePulseBuffer: AVAudioPCMBuffer?
+    private var slimeDeflateBuffer: AVAudioPCMBuffer?
+    private var airPumpStrokeBuffer: AVAudioPCMBuffer?
+    private var balloonBouncePopBuffer: AVAudioPCMBuffer?
     private var nextSplash = 0
     private var nextLanding = 0
     private var nodesAttached = false
@@ -4642,6 +4658,9 @@ final class ChiptuneAudioEngine {
                 recoveryChamberEnterBuffer = makeRecoveryChamberEnterBuffer()
                 recoveryCompleteBuffer = makeRecoveryCompleteBuffer()
                 teammateRevivePulseBuffer = makeTeammateRevivePulseBuffer()
+                slimeDeflateBuffer = makeSlimeDeflateBuffer()
+                airPumpStrokeBuffer = makeAirPumpStrokeBuffer()
+                balloonBouncePopBuffer = makeBalloonBouncePopBuffer()
             }
 
             let session = AVAudioSession.sharedInstance()
@@ -4819,6 +4838,39 @@ final class ChiptuneAudioEngine {
     func playTeammateRevivePulseSound() {
         audioQueue.async { [weak self] in
             guard let self, self.started, self.effectsEnabled, let buffer = self.teammateRevivePulseBuffer else { return }
+            self.effectsNode.volume = 1.0
+            self.effectsNode.scheduleBuffer(buffer)
+            if !self.effectsNode.isPlaying {
+                self.effectsNode.play()
+            }
+        }
+    }
+
+    func playSlimeDeflateSound() {
+        audioQueue.async { [weak self] in
+            guard let self, self.started, self.effectsEnabled, let buffer = self.slimeDeflateBuffer else { return }
+            self.effectsNode.volume = 1.0
+            self.effectsNode.scheduleBuffer(buffer)
+            if !self.effectsNode.isPlaying {
+                self.effectsNode.play()
+            }
+        }
+    }
+
+    func playAirPumpStrokeSound() {
+        audioQueue.async { [weak self] in
+            guard let self, self.started, self.effectsEnabled, let buffer = self.airPumpStrokeBuffer else { return }
+            self.effectsNode.volume = 1.0
+            self.effectsNode.scheduleBuffer(buffer)
+            if !self.effectsNode.isPlaying {
+                self.effectsNode.play()
+            }
+        }
+    }
+
+    func playBalloonBouncePopSound() {
+        audioQueue.async { [weak self] in
+            guard let self, self.started, self.effectsEnabled, let buffer = self.balloonBouncePopBuffer else { return }
             self.effectsNode.volume = 1.0
             self.effectsNode.scheduleBuffer(buffer)
             if !self.effectsNode.isPlaying {
@@ -5381,6 +5433,102 @@ final class ChiptuneAudioEngine {
             channels[0][frame] = sample
             if format.channelCount > 1 {
                 channels[1][frame] = sample
+            }
+        }
+        return buffer
+    }
+
+    private func makeSlimeDeflateBuffer() -> AVAudioPCMBuffer? {
+        let duration = 0.75
+        let frameCount = AVAudioFrameCount(format.sampleRate * duration)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
+              let channels = buffer.floatChannelData else { return nil }
+        buffer.frameLength = frameCount
+
+        var lpNoise: Double = 0
+        for frame in 0..<Int(frameCount) {
+            let t = Double(frame) / format.sampleRate
+            let attack = min(1.0, t * 60.0)
+            let decay = exp(-t * 2.8)
+            let env = attack * decay
+
+            // Tono descendente cómico de globo pinchado perdiendo aire (520Hz bajando a 75Hz)
+            let freq = 520.0 * exp(-t * 3.4) + 75.0
+            let flutter = sin(2.0 * .pi * (42.0 - t * 28.0) * t) * 0.45
+            let tone = sin(2.0 * .pi * freq * t) * (1.0 + flutter)
+
+            let rawNoise = Double.random(in: -1.0...1.0)
+            lpNoise = lpNoise * 0.82 + rawNoise * 0.18
+            let airHiss = lpNoise * 0.42
+
+            let sample = Float(tanh((tone * 0.65 + airHiss) * env * 1.35) * 0.88)
+            channels[0][frame] = sample
+            if format.channelCount > 1 {
+                channels[1][frame] = sample * 0.95
+            }
+        }
+        return buffer
+    }
+
+    private func makeAirPumpStrokeBuffer() -> AVAudioPCMBuffer? {
+        let duration = 0.32
+        let frameCount = AVAudioFrameCount(format.sampleRate * duration)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
+              let channels = buffer.floatChannelData else { return nil }
+        buffer.frameLength = frameCount
+
+        var lpNoise: Double = 0
+        for frame in 0..<Int(frameCount) {
+            let t = Double(frame) / format.sampleRate
+            // Golpe rápido de pistón mecánico al inicio (15ms)
+            let pistonClick = sin(2.0 * .pi * 180.0 * t) * exp(-t * 85.0) * 0.55
+
+            // Ráfaga de aire comprimido saliendo por la boquilla (fshhh!)
+            let airAttack = min(1.0, t * 110.0)
+            let airDecay = exp(-t * 9.5)
+            let airEnv = airAttack * airDecay
+
+            let rawNoise = Double.random(in: -1.0...1.0)
+            lpNoise = lpNoise * 0.76 + rawNoise * 0.24
+            let airRush = lpNoise * airEnv * 0.95
+
+            let sample = Float(tanh((pistonClick + airRush) * 1.4) * 0.92)
+            channels[0][frame] = sample
+            if format.channelCount > 1 {
+                channels[1][frame] = sample * 0.94
+            }
+        }
+        return buffer
+    }
+
+    private func makeBalloonBouncePopBuffer() -> AVAudioPCMBuffer? {
+        let duration = 0.55
+        let frameCount = AVAudioFrameCount(format.sampleRate * duration)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
+              let channels = buffer.floatChannelData else { return nil }
+        buffer.frameLength = frameCount
+
+        let chimes: [Double] = [523.25, 659.25, 783.99, 1046.50] // C5, E5, G5, C6
+        for frame in 0..<Int(frameCount) {
+            let t = Double(frame) / format.sampleRate
+
+            // Boing elástico de goma ascendente (120Hz a 480Hz en 60ms)
+            let pitchSweep = min(480.0, 120.0 + t * 4500.0)
+            let boing = sin(2.0 * .pi * pitchSweep * t) * exp(-t * 8.0) * 0.70
+
+            // Pop brillante y alegre
+            var chimeSum = 0.0
+            if t > 0.04 {
+                let ct = t - 0.04
+                for freq in chimes {
+                    chimeSum += sin(2.0 * .pi * freq * ct) * exp(-ct * 7.5) * 0.25
+                }
+            }
+
+            let sample = Float(tanh((boing + chimeSum) * 1.35) * 0.90)
+            channels[0][frame] = sample
+            if format.channelCount > 1 {
+                channels[1][frame] = sample * 0.96
             }
         }
         return buffer
@@ -7166,19 +7314,43 @@ struct RecoveryChamberOverlayView: View {
         VStack {
             Spacer()
 
-            VStack(spacing: 10) {
+            VStack(spacing: 12) {
                 HStack(spacing: 8) {
-                    Image(systemName: "cross.case.fill")
-                        .font(.system(size: 20, weight: .black))
-                        .foregroundStyle(Color.cyan)
+                    Image(systemName: "wind")
+                        .font(.system(size: 22, weight: .black))
+                        .foregroundStyle(Color.yellow)
 
-                    Text("CÁMARA DE RECUPERACIÓN")
-                        .font(.system(size: 20, weight: .black, design: .rounded))
-                        .tracking(2.0)
+                    Text("¡DESINFLADO COMO SLIME!")
+                        .font(.system(size: 19, weight: .black, design: .rounded))
+                        .tracking(1.5)
                         .foregroundStyle(
-                            LinearGradient(colors: [.white, .cyan], startPoint: .leading, endPoint: .trailing)
+                            LinearGradient(colors: [.white, .yellow, .green], startPoint: .leading, endPoint: .trailing)
                         )
                 }
+
+                // Interactive Air Pump Action Button!
+                Button {
+                    model.performAirPumpStroke()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "gauge.with.needle.fill")
+                            .font(.system(size: 22, weight: .black))
+                        Text(model.inflationPumpsCount >= 3 ? "¡REBOTANDO DE PIE!" : "💨 ¡BOMBEAR AIRE! (\(model.inflationPumpsCount)/3)")
+                            .font(.system(size: 16, weight: .black, design: .rounded))
+                    }
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 14)
+                    .background(
+                        LinearGradient(colors: [.yellow, .orange], startPoint: .top, endPoint: .bottom),
+                        in: Capsule()
+                    )
+                    .overlay(Capsule().stroke(Color.white, lineWidth: 2))
+                    .shadow(color: .orange.opacity(0.85), radius: 10)
+                }
+                .disabled(model.inflationPumpsCount >= 3)
+                .scaleEffect(model.inflationPumpsCount >= 3 ? 0.95 : 1.0)
+                .animation(.spring(response: 0.35, dampingFraction: 0.65), value: model.inflationPumpsCount)
 
                 let progress = max(0, min(1.0, 1.0 - model.recoveryTimeRemaining / 12.0))
                 VStack(spacing: 6) {
@@ -7189,7 +7361,7 @@ struct RecoveryChamberOverlayView: View {
 
                             Capsule()
                                 .fill(
-                                    LinearGradient(colors: [.cyan, .green], startPoint: .leading, endPoint: .trailing)
+                                    LinearGradient(colors: [.yellow, .green, .cyan], startPoint: .leading, endPoint: .trailing)
                                 )
                                 .frame(width: max(6, geo.size.width * CGFloat(progress)))
                         }
@@ -7197,7 +7369,7 @@ struct RecoveryChamberOverlayView: View {
                     .frame(height: 12)
 
                     HStack {
-                        Text("REGENERANDO SISTEMAS VITALES (\(Int(progress * 100))%)")
+                        Text("PRESIÓN NEUMÁTICA: \(Int(progress * 100))%")
                             .font(.system(size: 10, weight: .bold, design: .monospaced))
                             .foregroundStyle(.white.opacity(0.92))
 
@@ -7205,26 +7377,27 @@ struct RecoveryChamberOverlayView: View {
 
                         Text("\(Int(ceil(model.recoveryTimeRemaining)))s")
                             .font(.system(size: 12, weight: .black, design: .monospaced))
-                            .foregroundStyle(.cyan)
+                            .foregroundStyle(.yellow)
                     }
                 }
                 .frame(width: 290)
 
                 if model.isTeammateBoostingRecovery {
                     HStack(spacing: 6) {
-                        Image(systemName: "bolt.fill")
+                        Image(systemName: "wind")
                             .foregroundStyle(.yellow)
-                        Text("¡COMPAÑERO EN CONSOLA! (+300% VELOCIDAD)")
+                        Text("¡COMPAÑERO INFLÁNDOTE A PRESIÓN! (+400% AIRE)")
                             .font(.system(size: 11, weight: .black, design: .rounded))
                             .foregroundStyle(.yellow)
                     }
-                } else {
-                    Text("En estasis médico • Tu compañero puede reanimarte o despejar la oleada")
-                        .font(.system(size: 11, weight: .bold))
+                } else if model.isAnyMultiplayerConnected && model.multiplayer.mode == .cooperative {
+                    Text("Toca BOMBEAR AIRE para inflarte o espera a que tu compañero bombee")
+                        .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(.cyan.opacity(0.90))
-                    Text("Soporte vital asegurado dentro de la cápsula")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.70))
+                } else {
+                    Text("¡Bombea aire 3 veces para inflar tu slime y rebotar al combate!")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.yellow.opacity(0.90))
                 }
             }
             .padding(.horizontal, 24)
@@ -7232,17 +7405,17 @@ struct RecoveryChamberOverlayView: View {
             .background(
                 ZStack {
                     Capsule()
-                        .fill(Color.black.opacity(0.55))
+                        .fill(Color.black.opacity(0.60))
                         .background(.ultraThinMaterial, in: Capsule())
 
                     Capsule()
                         .stroke(
-                            LinearGradient(colors: [.cyan.opacity(0.85), .green.opacity(0.50)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                            LinearGradient(colors: [.yellow.opacity(0.85), .green.opacity(0.60)], startPoint: .topLeading, endPoint: .bottomTrailing),
                             lineWidth: 1.5
                         )
                 }
             )
-            .shadow(color: .cyan.opacity(0.35), radius: 16, x: 0, y: 6)
+            .shadow(color: .yellow.opacity(0.35), radius: 16, x: 0, y: 6)
             .padding(.bottom, 24)
         }
     }
