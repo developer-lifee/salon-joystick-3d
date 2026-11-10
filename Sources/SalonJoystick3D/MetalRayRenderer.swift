@@ -597,19 +597,19 @@ private struct RTMeshBuilder {
     ) {
         let suit = isJellyGremlin
             ? RTMaterial(color: SIMD3<Float>(0.24, 0.84, 0.14), roughness: 0.12, reflectivity: 0.24, kind: 9.0)
-            : RTMaterial(color: color, roughness: 0.42, reflectivity: 0.18)
+            : RTMaterial(color: color, roughness: 0.68, reflectivity: 0.04)
         let armor = isJellyGremlin
             ? RTMaterial(color: SIMD3<Float>(0.18, 0.72, 0.11), roughness: 0.14, reflectivity: 0.22, kind: 9.0)
-            : RTMaterial(color: SIMD3<Float>(0.08, 0.12, 0.16), roughness: 0.18, reflectivity: 0.65)
-        let visor = RTMaterial(color: SIMD3<Float>(0.05, 0.85, 0.98), roughness: 0.02, emission: SIMD3<Float>(0.1, 0.45, 0.75), reflectivity: 0.94, kind: 1.0)
-        let coreEmissive = RTMaterial(color: SIMD3<Float>(1.0, 0.2, 0.4), roughness: 0.10, emission: SIMD3<Float>(3.5, 0.8, 1.2), reflectivity: 0.50, kind: 5.0)
+            : RTMaterial(color: SIMD3<Float>(0.08, 0.10, 0.14), roughness: 0.75, reflectivity: 0.04)
+        let visor = RTMaterial(color: SIMD3<Float>(0.05, 0.85, 0.98), roughness: 0.25, emission: SIMD3<Float>(0.2, 0.65, 0.95), reflectivity: 0.08, kind: 0.0)
+        let coreEmissive = RTMaterial(color: SIMD3<Float>(1.0, 0.2, 0.4), roughness: 0.35, emission: SIMD3<Float>(3.5, 0.8, 1.2), reflectivity: 0.04, kind: 5.0)
         let dark = RTMaterial(color: SIMD3<Float>(repeating: 0.012), roughness: 0.92)
-        let scubaTankMat = RTMaterial(color: SIMD3<Float>(0.92, 0.85, 0.12), roughness: 0.15, reflectivity: 0.75)
+        let scubaTankMat = RTMaterial(color: SIMD3<Float>(0.22, 0.24, 0.28), roughness: 0.65, reflectivity: 0.05)
         let flipperMat = isJellyGremlin
             ? RTMaterial(color: SIMD3<Float>(0.20, 0.76, 0.12), roughness: 0.14, reflectivity: 0.22, kind: 9.0)
-            : RTMaterial(color: SIMD3<Float>(0.95, 0.45, 0.05), roughness: 0.25, reflectivity: 0.40)
-        let clawMat = RTMaterial(color: SIMD3<Float>(0.92, 0.94, 0.80), roughness: 0.15, reflectivity: 0.30)
-        let toolMat = RTMaterial(color: SIMD3<Float>(0.055, 0.060, 0.065), roughness: 0.34, reflectivity: 0.10)
+            : RTMaterial(color: SIMD3<Float>(0.95, 0.45, 0.05), roughness: 0.55, reflectivity: 0.04)
+        let clawMat = RTMaterial(color: SIMD3<Float>(0.92, 0.94, 0.80), roughness: 0.45, reflectivity: 0.06)
+        let toolMat = RTMaterial(color: SIMD3<Float>(0.055, 0.060, 0.065), roughness: 0.55, reflectivity: 0.04)
 
         switch pose {
         case .cover:
@@ -4920,10 +4920,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         for (idx, box) in rtRainbowParkourBoxes.enumerated() {
             let mat = RTMaterial(
                 color: box.color,
-                roughness: 0.20,
-                emission: box.emission,
-                reflectivity: 0.42,
-                kind: 3
+                roughness: 0.55,
+                emission: box.emission * 0.40,
+                reflectivity: 0.05,
+                kind: 0
             )
             builder.addBox(center: box.center, size: box.size, material: mat)
 

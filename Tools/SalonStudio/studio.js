@@ -1708,6 +1708,124 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
+// =========================================================================
+// 👾 MATERIALES PBR & PERSONALIZACIÓN DE ENEMIGOS (METAL RAY TRACING)
+// =========================================================================
+let currentMaterialSubject = 'npc';
+const materialPresets = {
+  npc: { reflect: 0.04, roughness: 0.72, emission: 0.5, color: 0xeb2e56 },
+  fotofago: { reflect: 0.04, roughness: 0.85, emission: 0.3, color: 0x050508 },
+  player: { reflect: 0.05, roughness: 0.65, emission: 0.2, color: 0x14d1ad }
+};
+
+function selectMaterialSubject(subj) {
+  currentMaterialSubject = subj;
+  document.querySelectorAll('#tab-character .preset-btn[id^="btn-subj-"]').forEach(btn => {
+    btn.classList.toggle('active', btn.id === `btn-subj-${subj}`);
+  });
+  const data = materialPresets[subj];
+  if (data) {
+    document.getElementById('matReflect').value = data.reflect;
+    document.getElementById('val-matReflect').innerText = data.reflect.toFixed(2);
+    document.getElementById('matRoughness').value = data.roughness;
+    document.getElementById('val-matRoughness').innerText = data.roughness.toFixed(2);
+    document.getElementById('matEmission').value = data.emission;
+    document.getElementById('val-matEmission').innerText = data.emission.toFixed(1) + 'x';
+    applyMaterialToScene(data);
+  }
+}
+
+function updateEnemyMaterial() {
+  const reflect = parseFloat(document.getElementById('matReflect').value);
+  const roughness = parseFloat(document.getElementById('matRoughness').value);
+  const emission = parseFloat(document.getElementById('matEmission').value);
+
+  document.getElementById('val-matReflect').innerText = reflect.toFixed(2);
+  document.getElementById('val-matRoughness').innerText = roughness.toFixed(2);
+  document.getElementById('val-matEmission').innerText = emission.toFixed(1) + 'x';
+
+  materialPresets[currentMaterialSubject].reflect = reflect;
+  materialPresets[currentMaterialSubject].roughness = roughness;
+  materialPresets[currentMaterialSubject].emission = emission;
+
+  applyMaterialToScene({ reflect, roughness, emission });
+}
+
+function applyMaterialPreset(presetName) {
+  let reflect = 0.04;
+  let roughness = 0.75;
+  let emission = 0.4;
+
+  if (presetName === 'matte') {
+    reflect = 0.04;
+    roughness = 0.75;
+    emission = 0.3;
+  } else if (presetName === 'vantablack') {
+    reflect = 0.02;
+    roughness = 0.90;
+    emission = 0.1;
+  } else if (presetName === 'polymer') {
+    reflect = 0.08;
+    roughness = 0.60;
+    emission = 0.5;
+  } else if (presetName === 'chrome') {
+    reflect = 0.85;
+    roughness = 0.08;
+    emission = 0.8;
+  }
+
+  document.getElementById('matReflect').value = reflect;
+  document.getElementById('val-matReflect').innerText = reflect.toFixed(2);
+  document.getElementById('matRoughness').value = roughness;
+  document.getElementById('val-matRoughness').innerText = roughness.toFixed(2);
+  document.getElementById('matEmission').value = emission;
+  document.getElementById('val-matEmission').innerText = emission.toFixed(1) + 'x';
+
+  updateEnemyMaterial();
+}
+
+function applyMaterialToScene(pbr) {
+  armorMat.metalness = pbr.reflect;
+  armorMat.roughness = pbr.roughness;
+
+  suitMat.metalness = pbr.reflect * 0.8;
+  suitMat.roughness = pbr.roughness;
+
+  scubaTankMat.metalness = pbr.reflect;
+  scubaTankMat.roughness = Math.max(0.4, pbr.roughness - 0.1);
+
+  visorMat.emissiveIntensity = pbr.emission;
+
+  if (typeof slimeMat !== 'undefined') {
+    slimeMat.metalness = pbr.reflect;
+    slimeMat.roughness = pbr.roughness;
+  }
+}
+
+async function saveEnemyMaterials() {
+  const payload = {
+    presets: materialPresets,
+    activeSubject: currentMaterialSubject,
+    timestamp: Date.now()
+  };
+
+  try {
+    const res = await fetch('/api/save-materials', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const result = await res.json();
+    const badge = document.getElementById('status-materials');
+    badge.innerText = `✅ ${result.message || 'Materiales sincronizados'}`;
+    badge.style.display = 'block';
+    setTimeout(() => { badge.style.display = 'none'; }, 4000);
+  } catch (err) {
+    console.error('Error guardando materiales:', err);
+    alert('Materiales configurados localmente (inicia server.py para persistir en disco)');
+  }
+}
+
 // Inicializar estado inicial
 updatePose();
 updateRock();

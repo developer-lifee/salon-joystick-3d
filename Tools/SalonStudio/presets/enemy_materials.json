@@ -1,0 +1,24 @@
+{
+  "presets": {
+    "npc": {
+      "reflectivity": 0.04,
+      "roughness": 0.72,
+      "emission": 0.5,
+      "color": "#eb2e56"
+    },
+    "fotofago": {
+      "reflectivity": 0.04,
+      "roughness": 0.85,
+      "emission": 0.3,
+      "color": "#050508"
+    },
+    "player": {
+      "reflectivity": 0.05,
+      "roughness": 0.65,
+      "emission": 0.2,
+      "color": "#14d1ad"
+    }
+  },
+  "activeSubject": "npc",
+  "version": "1.0.0"
+}

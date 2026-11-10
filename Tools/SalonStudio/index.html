@@ -347,7 +347,7 @@
       <button id="btn-tab-cover" class="tab-btn active" onclick="switchTab('tab-cover')">🪨 Rigging</button>
       <button id="btn-tab-map" class="tab-btn" onclick="switchTab('tab-map')">🗺️ Mapas (UGC)</button>
       <button id="btn-tab-water" class="tab-btn" onclick="switchTab('tab-water')">💧 Piscina</button>
-      <button id="btn-tab-character" class="tab-btn" onclick="switchTab('tab-character')">👾 Slime</button>
+      <button id="btn-tab-character" class="tab-btn" onclick="switchTab('tab-character')">👾 Personajes & Materiales RT</button>
     </div>
 
     <!-- Pestaña 1: Rigging y Cobertura GTA -->
@@ -530,8 +530,56 @@
       <div id="status-water" class="status-badge">✅ Configuración de agua guardada</div>
     </div>
 
-    <!-- Pestaña 3: Diseñador de Slime Imp & Cosméticos Freemium -->
+    <!-- Pestaña 4: Diseñador de Personajes, Enemigos & Materiales PBR Ray Tracing -->
     <div id="tab-character" class="panel">
+      <div class="control-group">
+        <h3>🛡️ Sujeto a Configurar (Metal RT)</h3>
+        <div class="preset-grid">
+          <button class="preset-btn active" id="btn-subj-npc" onclick="selectMaterialSubject('npc')">🤖 Enemigo Estándar</button>
+          <button class="preset-btn" id="btn-subj-fotofago" onclick="selectMaterialSubject('fotofago')">🌑 El Fotófago / Gólem</button>
+          <button class="preset-btn" id="btn-subj-player" onclick="selectMaterialSubject('player')">🧑 Jugador / Slime</button>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <h3>⚡ Propiedades PBR & Ray Tracing</h3>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">
+          Evita reflectividades altas (&gt; 0.15) en enemigos para no desperdiciar rebotes de rayos secundarios en el GPU.
+        </p>
+
+        <div class="slider-row">
+          <div class="slider-label"><span>Reflectividad / Brillo Especular</span><span class="slider-val" id="val-matReflect">0.04</span></div>
+          <input type="range" id="matReflect" min="0.0" max="1.0" step="0.02" value="0.04" oninput="updateEnemyMaterial()">
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-label"><span>Rugosidad (Roughness)</span><span class="slider-val" id="val-matRoughness">0.72</span></div>
+          <input type="range" id="matRoughness" min="0.0" max="1.0" step="0.02" value="0.72" oninput="updateEnemyMaterial()">
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-label"><span>Brillo Emisivo de Núcleo / Visor</span><span class="slider-val" id="val-matEmission">0.5x</span></div>
+          <input type="range" id="matEmission" min="0.0" max="3.0" step="0.1" value="0.5" oninput="updateEnemyMaterial()">
+        </div>
+      </div>
+
+      <div class="control-group">
+        <h3>⚡ Presets Tácticos de Rendimiento</h3>
+        <div class="preset-grid">
+          <button class="preset-btn" onclick="applyMaterialPreset('matte')">🛡️ Táctico Mate 60 FPS</button>
+          <button class="preset-btn" onclick="applyMaterialPreset('vantablack')">🥷 Vantablack Sigilo</button>
+          <button class="preset-btn" onclick="applyMaterialPreset('polymer')">🪖 Polímero Militar</button>
+          <button class="preset-btn" onclick="applyMaterialPreset('chrome')">🪞 Cromo Espejo (Pesado)</button>
+        </div>
+      </div>
+
+      <button class="btn-action" onclick="saveEnemyMaterials()" style="margin-bottom: 12px;">
+        💾 Sincronizar Materiales de Enemigos
+      </button>
+      <div id="status-materials" class="status-badge">✅ Materiales guardados en presets/enemy_materials.json</div>
+
+      <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 16px 0;">
+
       <div class="control-group">
         <h3>🎨 Skin & Tono de Slime</h3>
         <div class="preset-grid">

@@ -36,6 +36,17 @@ class StudioHandler(http.server.SimpleHTTPRequestHandler):
                     self._send_json(json.load(f))
             else:
                 self._send_json({"props": [], "name": "Vacio"})
+        elif self.path == "/api/presets/materials":
+            m_file = os.path.join(BASE_DIR, "presets", "enemy_materials.json")
+            if os.path.exists(m_file):
+                with open(m_file, "r", encoding="utf-8") as f:
+                    self._send_json(json.load(f))
+            else:
+                self._send_json({
+                    "npc": {"reflectivity": 0.04, "roughness": 0.72, "emission": 0.5},
+                    "fotofago": {"reflectivity": 0.04, "roughness": 0.85, "emission": 0.3},
+                    "player": {"reflectivity": 0.05, "roughness": 0.65, "emission": 0.2}
+                })
         elif self.path == "/api/export-all":
             water_p = os.path.join(BASE_DIR, "presets", "water_shaders.json")
             cover_p = os.path.join(BASE_DIR, "presets", "cover_poses.json")
@@ -76,6 +87,14 @@ class StudioHandler(http.server.SimpleHTTPRequestHandler):
             with open(map_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
             self._send_json({"success": True, "message": "¡Mapa de escenario guardado exitosamente en presets/custom_map.json!"})
+        elif self.path == "/api/save-materials":
+            length = int(self.headers.get('content-length', 0))
+            data = json.loads(self.rfile.read(length).decode('utf-8'))
+            mat_file = os.path.join(BASE_DIR, "presets", "enemy_materials.json")
+            os.makedirs(os.path.join(BASE_DIR, "presets"), exist_ok=True)
+            with open(mat_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            self._send_json({"success": True, "message": "¡Materiales PBR guardados en presets/enemy_materials.json!"})
         else:
             self.send_error(404, "Not Found")
 
