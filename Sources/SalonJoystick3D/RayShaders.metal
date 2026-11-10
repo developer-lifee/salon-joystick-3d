@@ -552,7 +552,7 @@ kernel void traceToolLaser(
     ray laserRay;
     laserRay.origin = isMirrorTool ? (origin + direction * 0.14f) : origin;
     laserRay.direction = direction;
-    laserRay.max_distance = 30.0f;
+    laserRay.max_distance = 75.0f;
     auto hit = tracer.intersect(laserRay, accelerationStructure, isMirrorTool ? 0x01 : 0x05);
     if (hit.type == intersection_type::none) {
         AnalyticalHit analytical = analyticalPatioIntersect(laserRay);
@@ -598,7 +598,7 @@ kernel void traceToolLaser(
         ? hitPosition + normal * 0.018f
         : hitPosition - normal * 0.018f;
     secondaryRay.direction = normalize(secondaryDirection);
-    secondaryRay.max_distance = 22.0f;
+    secondaryRay.max_distance = 55.0f;
     auto secondaryHit = tracer.intersect(
         secondaryRay,
         accelerationStructure,
@@ -886,7 +886,7 @@ kernel void raytracePatio(
         }
     }
 
-    currentRay.max_distance = 80.0f;
+    currentRay.max_distance = 145.0f;
     float3 primaryOrigin = currentRay.origin;
     float3 primaryDirection = currentRay.direction;
     float firstSurfaceDistance = currentRay.max_distance;
@@ -899,7 +899,7 @@ kernel void raytracePatio(
     float3 throughput = 1.0f;
     float3 bounce1Origin = 0.0f;
     float3 bounce1Direction = 0.0f;
-    float bounce1Distance = 80.0f;
+    float bounce1Distance = 145.0f;
     float3 bounce1Throughput = 0.0f;
     bool hasBounce1 = false;
 
@@ -1366,6 +1366,60 @@ kernel void raytracePatio(
             }
         }
 
+        // 🌈 Iluminación Prismática Ray-Traced del Gran Salón Arcoíris (Z > 15.0)
+        // Empieza completamente apagado cuando las luces están en 0, y despierta con el espectro arcoíris al ir encendiendo las 4 luces
+        if (position.z > 14.5f && totalLights > 0.001f) {
+            float3 rainbowPos[4] = {
+                float3(-13.5f, 5.4f, 32.0f), // Sector 1 (Rojo-Naranja): Cabaña NW + Entrada Arcoíris
+                float3( 13.5f, 5.4f, 32.0f), // Sector 2 (Amarillo-Esmeralda): Cabaña NE + Parkour Medio
+                float3(-13.5f, 5.4f, 56.0f), // Sector 3 (Cian-Zafiro): Cabaña SW + Parkour Norte
+                float3( 13.5f, 5.4f, 56.0f)  // Sector 4 (Violeta-Magenta + Cumbre): Cabaña SE + Santuario Central
+            };
+            float rainbowPhase = position.z * 0.14f + position.x * 0.08f;
+            float3 dynamicSpectrum = 0.52f + 0.48f * cos(rainbowPhase + float3(0.0f, 2.094f, 4.188f));
+            float3 rainbowCol[4] = {
+                mix(float3(1.0f, 0.22f, 0.08f), dynamicSpectrum, 0.35f),
+                mix(float3(0.18f, 1.0f, 0.35f), dynamicSpectrum, 0.35f),
+                mix(float3(0.06f, 0.72f, 1.0f), dynamicSpectrum, 0.35f),
+                mix(float3(0.92f, 0.15f, 1.0f), dynamicSpectrum, 0.45f)
+            };
+            float rainbowState[4] = {
+                uniforms.lightStates.x,
+                uniforms.lightStates.y,
+                uniforms.lightStates.z,
+                uniforms.lightStates.w
+            };
+            for (uint rIdx = 0; rIdx < 4; ++rIdx) {
+                if (rainbowState[rIdx] > 0.001f) {
+                    float3 toR = rainbowPos[rIdx] - position;
+                    float rDistSq = length_squared(toR);
+                    float rDist = sqrt(max(rDistSq, 1e-4f));
+                    float3 rDir = toR / rDist;
+                    float rNDotL = saturate(dot(normal, rDir));
+                    if (rNDotL > 0.0f && rDist < 38.0f) {
+                        float rAtten = (68.0f * rainbowState[rIdx]) / (1.0f + rDistSq * 0.045f);
+                        direct += albedo * rainbowCol[rIdx] * rAtten * rNDotL * fotofagoDrain;
+                        float3 rHalf = normalize(rDir - currentRay.direction);
+                        float rGloss = pow(saturate(dot(normal, rHalf)), mix(24.0f, 240.0f, 1.0f - roughness));
+                        direct += rainbowCol[rIdx] * rAtten * rGloss * (0.28f * (1.0f - roughness));
+                    }
+                }
+            }
+            // Faro Corona Arcoíris en la Cumbre Central (X = 0, Y = 7.2, Z = 45.0)
+            float3 toCenterCrown = float3(0.0f, 7.2f, 45.0f) - position;
+            float cDistSq = length_squared(toCenterCrown);
+            float cDist = sqrt(max(cDistSq, 1e-4f));
+            float3 cDir = toCenterCrown / cDist;
+            float cNDotL = saturate(dot(normal, cDir));
+            if (cNDotL > 0.0f && cDist < 42.0f) {
+                float crownPower = (54.0f * lightScale) / (1.0f + cDistSq * 0.038f);
+                direct += albedo * dynamicSpectrum * crownPower * cNDotL * fotofagoDrain;
+                float3 cHalf = normalize(cDir - currentRay.direction);
+                float cGloss = pow(saturate(dot(normal, cHalf)), mix(24.0f, 240.0f, 1.0f - roughness));
+                direct += dynamicSpectrum * crownPower * cGloss * (0.32f * (1.0f - roughness));
+            }
+        }
+
         // Every active source uses the same finite planar-mirror light transport.
         if (rayBouncesEnabled && !(kind > 0.5f && kind < 1.5f)) {
             direct += mirroredLightContribution(
@@ -1482,7 +1536,7 @@ kernel void raytracePatio(
         }
         currentRay.origin = position + normal * 0.015f;
         currentRay.direction = normalize(reflect(currentRay.direction, normal));
-        currentRay.max_distance = 80.0f;
+        currentRay.max_distance = 145.0f;
     }
 
     if (uniforms.toolParameters.x > 1.5f && uniforms.toolParameters.x < 2.5f && laserResult.primaryEnd.w > 0.5f) {

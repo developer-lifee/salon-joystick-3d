@@ -63,16 +63,16 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "88"
-    static let commitHash = "19e4385"
+    static let build = "89"
+    static let commitHash = "d4b9b9d"
     static let formatted = "v\(version) • Build \(build) (\(commitHash))"
 }
 
 struct GameLightStates: Codable, Equatable {
-    var post = true
-    var piscinaNeon = true
-    var sheeritNeon = true
-    var poolStrips = true
+    var post = false
+    var piscinaNeon = false
+    var sheeritNeon = false
+    var poolStrips = false
     var postIntensity: Float = 1
     var piscinaNeonIntensity: Float = 1
     var sheeritNeonIntensity: Float = 1
@@ -458,7 +458,7 @@ struct ContentView: View {
                                 Text("🚨 ¡EL RIVAL LLEVA EL NÚCLEO! DISPÁRALE CON EL LÁSER O CAMBIA UNA LUZ")
                                     .foregroundStyle(.red)
                             } else if myLightsReady {
-                                Text("⚡ PASO 2: ¡4/4 LUCES LISTAS! RECOGE EL NÚCLEO EN EL CENTRO DE LA PISCINA (A \(distToCore)m)")
+                                Text("⚡ PASO 2: ¡4/4 LUCES LISTAS! RECOGE EL NÚCLEO EN EL GRAN SALÓN ARCOÍRIS (A \(distToCore)m)")
                                     .foregroundStyle(.cyan)
                             } else if rivalLightsReady {
                                 Text(isTeamLight
@@ -1505,12 +1505,12 @@ final class GameModel: ObservableObject {
         touchControlsOpacity = 0.85
     }
 
-    // Duelo de Luces (Luz vs Sombra / Captura del Núcleo)
+    // Duelo de Luces (Luz vs Sombra / Captura del Núcleo en el Gran Salón Arcoíris)
     @Published var lightTeamScore: Int = 0
     @Published var shadowTeamScore: Int = 0
     @Published var hasEnergyCore: Bool = false
     @Published var remoteHasEnergyCore: Bool = false
-    @Published var energyCorePosition: SIMD3<Float> = SIMD3<Float>(0, 0.45, 0)
+    @Published var energyCorePosition: SIMD3<Float> = SIMD3<Float>(0, 0.85, 32.0)
     @Published var lightBattleRound: Int = 1
     @Published var lightBattleWinner: String? = nil
 
@@ -1970,8 +1970,8 @@ final class GameModel: ObservableObject {
         botsRemainingInWave = 5
         totalBotsInWave = 5
         isWaveIntermission = false
-        heldTool = .none
-        remotePlayerHeldTool = .none
+        heldTool = .flashlight
+        remotePlayerHeldTool = .flashlight
         isSlowMotionActive = false
         showsMultiplayerSheet = false
         isRecoveringInChamber = false
@@ -1993,12 +1993,15 @@ final class GameModel: ObservableObject {
             remoteHasEnergyCore = false
             lightBattleWinner = nil
         }
-        if multiplayer.mode == .lightBattle {
+        if isAnyMultiplayerConnected && multiplayer.mode == .lightBattle {
             // Iniciar Duelo de Luces con 2 luces encendidas y 2 apagadas (50/50 justo para ambos equipos)
             lightStates.post = true
             lightStates.piscinaNeon = false
             lightStates.sheeritNeon = true
             lightStates.poolStrips = false
+        } else {
+            // Empezar con todas las luces apagadas para ir encendiendo progresivamente el Salón de la Piscina y el Mundo Arcoíris
+            lightStates.turnOffAllLights()
         }
         hasRecordedVersusRoundResult = false
 
@@ -4256,6 +4259,8 @@ final class ChiptuneAudioEngine {
     private let format = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 2)!
     private let audioQueue = DispatchQueue(label: "com.codex.salonjoystick3d.audio", qos: .userInitiated)
     private var musicBuffer: AVAudioPCMBuffer?
+    private var rainbowMusicBuffer: AVAudioPCMBuffer?
+    private var isInRainbowHallZone = false
     private var waterBuffer: AVAudioPCMBuffer?
     private var glideBuffer: AVAudioPCMBuffer?
     private var splashBuffers: [AVAudioPCMBuffer] = []
@@ -4292,7 +4297,22 @@ final class ChiptuneAudioEngine {
         audioQueue.async { [weak self] in
             guard let self else { return }
             self.musicEnabled = enabled
-            self.musicNode.volume = enabled ? 0.22 : 0
+            self.musicNode.volume = enabled ? (self.isInRainbowHallZone ? 0.28 : 0.22) : 0
+        }
+    }
+
+    func setArenaZone(isRainbowHall: Bool) {
+        audioQueue.async { [weak self] in
+            guard let self, self.isInRainbowHallZone != isRainbowHall else { return }
+            self.isInRainbowHallZone = isRainbowHall
+            guard self.started else { return }
+            self.musicNode.stop()
+            let activeBuffer = isRainbowHall ? (self.rainbowMusicBuffer ?? self.musicBuffer) : self.musicBuffer
+            if let activeBuffer {
+                self.musicNode.volume = self.musicEnabled ? (isRainbowHall ? 0.28 : 0.22) : 0
+                self.musicNode.scheduleBuffer(activeBuffer, at: nil, options: .loops)
+                self.musicNode.play()
+            }
         }
     }
 
@@ -4320,6 +4340,7 @@ final class ChiptuneAudioEngine {
         do {
             if musicBuffer == nil {
                 musicBuffer = makeMusicBuffer()
+                rainbowMusicBuffer = makeRainbowMusicBuffer()
                 waterBuffer = makeWaterBuffer()
                 glideBuffer = makeGlideBuffer()
                 splashBuffers = [
@@ -5119,6 +5140,56 @@ final class ChiptuneAudioEngine {
             channels[1][frame] = sample
         }
 
+        return buffer
+    }
+
+    // 🌈 Banda Ambiental Synthwave / Parkour Cósmico para el Gran Salón Arcoíris
+    private func makeRainbowMusicBuffer() -> AVAudioPCMBuffer? {
+        let duration = 8.0
+        let frameCount = AVAudioFrameCount(format.sampleRate * duration)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
+              let channels = buffer.floatChannelData else {
+            return nil
+        }
+        buffer.frameLength = frameCount
+
+        // Arpegio prismático rápido de 32 notas (F# menor / D mayor / A mayor / E mayor)
+        let arpNotes: [Double] = [
+            369.99, 440.00, 554.37, 739.99, 659.25, 554.37, 440.00, 554.37,
+            293.66, 369.99, 440.00, 587.33, 659.25, 587.33, 440.00, 369.99,
+            329.63, 440.00, 554.37, 659.25, 880.00, 659.25, 554.37, 440.00,
+            329.63, 392.00, 493.88, 659.25, 739.99, 659.25, 493.88, 392.00
+        ]
+        let bassRoots: [Double] = [92.50, 73.42, 110.00, 82.41]
+
+        for frame in 0..<Int(frameCount) {
+            let time = Double(frame) / format.sampleRate
+            let section = min(3, Int(time / 2.0))
+            let stepDur = 0.25
+            let noteIndex = min(arpNotes.count - 1, Int(time / stepDur))
+            let noteTime = time.truncatingRemainder(dividingBy: stepDur)
+            let attack = min(1.0, noteTime / 0.008)
+            let decay = exp(-noteTime * 6.8)
+            let env = attack * decay
+
+            let freq = arpNotes[noteIndex]
+            let leadL = (sin(2 * .pi * freq * time) + sin(2 * .pi * (freq * 2.003) * time) * 0.28) * 0.044 * env
+            let leadR = (sin(2 * .pi * (freq * 1.002) * time) + sin(2 * .pi * (freq * 1.5) * time) * 0.22) * 0.044 * env
+
+            // Bajo synth pulsante a 8vos de nota
+            let bassGate = 0.55 + 0.45 * max(0.0, sin(2 * .pi * 4.0 * time))
+            let bassFreq = bassRoots[section]
+            let subBass = (sin(2 * .pi * bassFreq * time) + tanh(sin(2 * .pi * bassFreq * 2.0 * time) * 1.6) * 0.35) * 0.024 * bassGate
+
+            // Pad aéreo brillante arcoíris con paneo estéreo lento
+            let shimmerL = sin(2 * .pi * (freq * 0.5) * time + sin(time * 1.5)) * 0.010
+            let shimmerR = cos(2 * .pi * (freq * 0.5) * time + cos(time * 1.5)) * 0.010
+
+            channels[0][frame] = Float(leadL + subBass + shimmerL)
+            if format.channelCount > 1 {
+                channels[1][frame] = Float(leadR + subBass + shimmerR)
+            }
+        }
         return buffer
     }
 

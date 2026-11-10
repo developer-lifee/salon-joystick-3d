@@ -56,6 +56,14 @@ private struct RTRiverRock {
     let color: SIMD3<Float>
 }
 
+private struct RTParkourBox {
+    let center: SIMD3<Float>
+    let size: SIMD3<Float>
+    let color: SIMD3<Float>
+    let emission: SIMD3<Float>
+    let kind: Float
+}
+
 private let rtRiverRocks: [RTRiverRock] = [
     RTRiverRock(center: SIMD3<Float>(-7.3, 0.24, -3.4), radii: SIMD3<Float>(0.72, 0.24, 0.52), color: SIMD3<Float>(0.18, 0.20, 0.20)),
     RTRiverRock(center: SIMD3<Float>(-6.45, 0.18, -4.4), radii: SIMD3<Float>(0.50, 0.18, 0.64), color: SIMD3<Float>(0.30, 0.29, 0.27)),
@@ -75,8 +83,105 @@ private let rtRiverRocks: [RTRiverRock] = [
     RTRiverRock(center: SIMD3<Float>(-13.8, 0.7, -13.5), radii: SIMD3<Float>(1.4, 0.8, 1.6), color: SIMD3<Float>(0.30, 0.27, 0.23)),
     // 💡 Zone 4: South-East Neon Pillars & Cover (SE X: 10..14, Z: 10..14)
     RTRiverRock(center: SIMD3<Float>(12.0, 1.5, 12.0), radii: SIMD3<Float>(1.4, 1.6, 1.4), color: SIMD3<Float>(0.15, 0.30, 0.38)),
-    RTRiverRock(center: SIMD3<Float>(13.8, 1.2, 13.8), radii: SIMD3<Float>(1.2, 1.3, 1.2), color: SIMD3<Float>(0.20, 0.25, 0.30))
+    RTRiverRock(center: SIMD3<Float>(13.8, 1.2, 13.8), radii: SIMD3<Float>(1.2, 1.3, 1.2), color: SIMD3<Float>(0.20, 0.25, 0.30)),
+    // 🌈 Postes y Columnas de Cobertura Cuerpo Completo en el Gran Salón Arcoíris (Z: 23..65)
+    RTRiverRock(center: SIMD3<Float>(-9.0, 1.8, 25.0), radii: SIMD3<Float>(1.05, 1.85, 1.05), color: SIMD3<Float>(0.35, 0.12, 0.14)),
+    RTRiverRock(center: SIMD3<Float>( 9.0, 1.8, 25.0), radii: SIMD3<Float>(1.05, 1.85, 1.05), color: SIMD3<Float>(0.36, 0.22, 0.10)),
+    RTRiverRock(center: SIMD3<Float>(-9.5, 1.8, 39.0), radii: SIMD3<Float>(1.05, 1.85, 1.05), color: SIMD3<Float>(0.34, 0.32, 0.10)),
+    RTRiverRock(center: SIMD3<Float>( 9.5, 1.8, 39.0), radii: SIMD3<Float>(1.05, 1.85, 1.05), color: SIMD3<Float>(0.12, 0.35, 0.18)),
+    RTRiverRock(center: SIMD3<Float>(-9.5, 1.8, 51.0), radii: SIMD3<Float>(1.05, 1.85, 1.05), color: SIMD3<Float>(0.10, 0.32, 0.36)),
+    RTRiverRock(center: SIMD3<Float>( 9.5, 1.8, 51.0), radii: SIMD3<Float>(1.05, 1.85, 1.05), color: SIMD3<Float>(0.12, 0.18, 0.38)),
+    RTRiverRock(center: SIMD3<Float>(-9.0, 1.8, 64.0), radii: SIMD3<Float>(1.05, 1.85, 1.05), color: SIMD3<Float>(0.28, 0.12, 0.38)),
+    RTRiverRock(center: SIMD3<Float>( 9.0, 1.8, 64.0), radii: SIMD3<Float>(1.05, 1.85, 1.05), color: SIMD3<Float>(0.38, 0.12, 0.30)),
+    RTRiverRock(center: SIMD3<Float>(-21.5, 1.8, 44.0), radii: SIMD3<Float>(1.15, 1.95, 1.15), color: SIMD3<Float>(0.14, 0.28, 0.34)),
+    RTRiverRock(center: SIMD3<Float>( 21.5, 1.8, 44.0), radii: SIMD3<Float>(1.15, 1.95, 1.15), color: SIMD3<Float>(0.34, 0.16, 0.28))
 ]
+
+// 🌈 Circuito de Parkour Multi-Altura + 4 Cabañas Arcoíris Transitables (Paredes Sólidas + Puerta Abierta + Escalones al Techo)
+private let rtRainbowParkourBoxes: [RTParkourBox] = {
+    var boxes: [RTParkourBox] = [
+        // 1. Ruta Central de Parkour (Salto de Plataforma en Plataforma hacia la Cumbre Arcoíris a Y = 3.50m)
+        RTParkourBox(center: SIMD3<Float>( 0.0, 0.35, 23.5), size: SIMD3<Float>(3.8, 0.70, 3.0), color: SIMD3<Float>(0.28, 0.06, 0.08), emission: SIMD3<Float>(4.2, 0.35, 0.18), kind: 4),
+        RTParkourBox(center: SIMD3<Float>(-3.6, 0.70, 27.8), size: SIMD3<Float>(3.4, 1.40, 3.2), color: SIMD3<Float>(0.32, 0.14, 0.04), emission: SIMD3<Float>(4.5, 1.60, 0.15), kind: 4),
+        RTParkourBox(center: SIMD3<Float>( 3.6, 0.70, 27.8), size: SIMD3<Float>(3.4, 1.40, 3.2), color: SIMD3<Float>(0.32, 0.28, 0.04), emission: SIMD3<Float>(4.2, 3.60, 0.20), kind: 6),
+        RTParkourBox(center: SIMD3<Float>(-5.0, 1.05, 33.6), size: SIMD3<Float>(3.4, 2.10, 3.8), color: SIMD3<Float>(0.06, 0.28, 0.10), emission: SIMD3<Float>(0.35, 4.40, 0.85), kind: 6),
+        RTParkourBox(center: SIMD3<Float>( 5.0, 1.05, 33.6), size: SIMD3<Float>(3.4, 2.10, 3.8), color: SIMD3<Float>(0.04, 0.28, 0.22), emission: SIMD3<Float>(0.20, 4.20, 2.60), kind: 6),
+        RTParkourBox(center: SIMD3<Float>( 0.0, 1.40, 38.8), size: SIMD3<Float>(4.4, 2.80, 3.6), color: SIMD3<Float>(0.04, 0.22, 0.32), emission: SIMD3<Float>(0.25, 3.60, 4.80), kind: 7),
+        // 🏆 Cumbre Central del Santuario Arcoíris (Y = 3.50m)
+        RTParkourBox(center: SIMD3<Float>( 0.0, 1.75, 45.0), size: SIMD3<Float>(6.6, 3.50, 6.6), color: SIMD3<Float>(0.18, 0.10, 0.28), emission: SIMD3<Float>(3.80, 0.85, 4.80), kind: 5),
+        RTParkourBox(center: SIMD3<Float>( 0.0, 1.40, 51.2), size: SIMD3<Float>(4.4, 2.80, 3.6), color: SIMD3<Float>(0.06, 0.12, 0.34), emission: SIMD3<Float>(0.55, 1.40, 4.80), kind: 7),
+        RTParkourBox(center: SIMD3<Float>(-5.0, 1.05, 56.4), size: SIMD3<Float>(3.4, 2.10, 3.8), color: SIMD3<Float>(0.16, 0.06, 0.32), emission: SIMD3<Float>(2.20, 0.40, 4.60), kind: 7),
+        RTParkourBox(center: SIMD3<Float>( 5.0, 1.05, 56.4), size: SIMD3<Float>(3.4, 2.10, 3.8), color: SIMD3<Float>(0.28, 0.06, 0.26), emission: SIMD3<Float>(4.40, 0.35, 3.60), kind: 5),
+        RTParkourBox(center: SIMD3<Float>( 0.0, 0.70, 62.2), size: SIMD3<Float>(5.0, 1.40, 3.6), color: SIMD3<Float>(0.30, 0.08, 0.18), emission: SIMD3<Float>(4.50, 0.60, 2.20), kind: 5)
+    ]
+
+    // 2. Las 4 Cabañas Arcoíris (Refugios de Cuerpo Completo con Puerta Abierta + Techo Transitable + Escalones de Parkour)
+    let cabinConfigs: [(SIMD3<Float>, Float, SIMD3<Float>, SIMD3<Float>, Float)] = [
+        // (CentroXZ, DoorFacingSignX, ColorBase, ColorEmision, LightKind)
+        (SIMD3<Float>(-16.5, 0, 32.0),  1.0, SIMD3<Float>(0.16, 0.05, 0.06), SIMD3<Float>(4.5, 0.8, 0.2), 4), // Cabaña Rubí-Ámbar (NW)
+        (SIMD3<Float>( 16.5, 0, 32.0), -1.0, SIMD3<Float>(0.05, 0.16, 0.08), SIMD3<Float>(0.4, 4.5, 1.2), 6), // Cabaña Esmeralda (NE)
+        (SIMD3<Float>(-16.5, 0, 56.0),  1.0, SIMD3<Float>(0.05, 0.14, 0.20), SIMD3<Float>(0.2, 3.4, 4.8), 7), // Cabaña Cian-Zafiro (SW)
+        (SIMD3<Float>( 16.5, 0, 56.0), -1.0, SIMD3<Float>(0.18, 0.05, 0.20), SIMD3<Float>(4.2, 0.4, 4.6), 5)  // Cabaña Violeta-Magenta (SE)
+    ]
+
+    for (cPos, doorSignX, baseCol, emitCol, lKind) in cabinConfigs {
+        let wallH: Float = 2.80
+        let halfW: Float = 2.80
+        let wallT: Float = 0.32
+        // Pared Trasera (opuesta a la puerta)
+        boxes.append(RTParkourBox(
+            center: cPos + SIMD3<Float>(-doorSignX * halfW, wallH * 0.5, 0),
+            size: SIMD3<Float>(wallT, wallH, halfW * 2.0),
+            color: baseCol, emission: .zero, kind: 0
+        ))
+        // Pared Norte (-Z) y Pared Sur (+Z)
+        boxes.append(RTParkourBox(
+            center: cPos + SIMD3<Float>(0, wallH * 0.5, -halfW),
+            size: SIMD3<Float>(halfW * 2.0, wallH, wallT),
+            color: baseCol, emission: .zero, kind: 0
+        ))
+        boxes.append(RTParkourBox(
+            center: cPos + SIMD3<Float>(0, wallH * 0.5,  halfW),
+            size: SIMD3<Float>(halfW * 2.0, wallH, wallT),
+            color: baseCol, emission: .zero, kind: 0
+        ))
+        // Pared Frontal con Puerta Abierta de 2.2m en el medio (2 jambas laterales de 1.7m cada una)
+        boxes.append(RTParkourBox(
+            center: cPos + SIMD3<Float>(doorSignX * halfW, wallH * 0.5, -1.95),
+            size: SIMD3<Float>(wallT, wallH, 1.70),
+            color: baseCol, emission: .zero, kind: 0
+        ))
+        boxes.append(RTParkourBox(
+            center: cPos + SIMD3<Float>(doorSignX * halfW, wallH * 0.5,  1.95),
+            size: SIMD3<Float>(wallT, wallH, 1.70),
+            color: baseCol, emission: .zero, kind: 0
+        ))
+        // Techo Sólido Arcoíris Transitable (Y = 2.80 .. 3.04m)
+        boxes.append(RTParkourBox(
+            center: cPos + SIMD3<Float>(0, 2.92, 0),
+            size: SIMD3<Float>(halfW * 2.12, 0.24, halfW * 2.12),
+            color: baseCol * 1.4, emission: emitCol, kind: lKind
+        ))
+        // 3 Escalones Exteriores de Parkour para subir saltando al Techo de la Cabaña (Y = 0.75m, 1.50m, 2.25m)
+        boxes.append(RTParkourBox(
+            center: cPos + SIMD3<Float>(-doorSignX * 1.6, 0.375, halfW + 1.15),
+            size: SIMD3<Float>(1.6, 0.75, 1.5),
+            color: baseCol * 1.2, emission: emitCol * 0.65, kind: lKind
+        ))
+        boxes.append(RTParkourBox(
+            center: cPos + SIMD3<Float>(0.0, 0.75, halfW + 1.15),
+            size: SIMD3<Float>(1.6, 1.50, 1.5),
+            color: baseCol * 1.3, emission: emitCol * 0.80, kind: lKind
+        ))
+        boxes.append(RTParkourBox(
+            center: cPos + SIMD3<Float>(doorSignX * 1.6, 1.125, halfW + 1.15),
+            size: SIMD3<Float>(1.6, 2.25, 1.5),
+            color: baseCol * 1.4, emission: emitCol * 0.95, kind: lKind
+        ))
+    }
+
+    return boxes
+}()
 
 private struct RTMeshBuilder {
     var vertices: [SIMD3<Float>] = []
@@ -1780,14 +1885,15 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         var proposed = playerPosition
         proposed.x += horizontalVelocity.x * dt
         proposed.z += horizontalVelocity.y * dt
-        proposed.x = max(-17.0, min(17.0, proposed.x))
-        proposed.z = max(-17.0, min(17.0, proposed.z))
+        clampToArenaBounds(position: &proposed, previousPosition: playerPosition)
         resolveFloatCollision(position: &proposed)
         resolveRockCollisions(position: &proposed)
+        resolveParkourAndCabinCollisions(position: &proposed)
         resolveCharacterCollisions(playerPos: &proposed, dt: dt)
         resolveRockCollisions(position: &proposed)
-        proposed.x = max(-17.0, min(17.0, proposed.x))
-        proposed.z = max(-17.0, min(17.0, proposed.z))
+        resolveParkourAndCabinCollisions(position: &proposed)
+        clampToArenaBounds(position: &proposed, previousPosition: playerPosition)
+        audio.setArenaZone(isRainbowHall: proposed.z > 18.0)
         let willBeInPool = isInsidePoolXZ(proposed) && proposed.y <= 0.35
         let isDeepInWater = playerPosition.y < -0.25
         let isInWater = (willBeInPool || currentlyInPool || isDeepInWater)
@@ -2542,8 +2648,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             let aimSpeedScale: Float = min(11.0, 5.2 + Float(currentWave) * 0.65)
 
             // 👻 IA Táctica estilo Fantasmas de Pac-Man + Distancia de Puntería Técnica (NUNCA se pegan al jugador)
-            // Cada bot mantiene su propia distancia ideal de duelo (7.5m a 13.0m) y personalidad de movimiento:
-            let idealStandoffDist: [Float] = [7.6, 9.4, 12.8, 10.4, 12.2]
+            // En Oleada 3+, el Bot 4 es el Gólem Colosal y mantiene aún mayor distancia (14.5m) para verse imponente de lejos
+            let isColossalGolem = (index == 4 && currentWave >= 3)
+            let idealStandoffDist: [Float] = [7.6, 9.4, 12.8, 10.4, isColossalGolem ? 14.5 : 11.8]
             let idealDist = idealStandoffDist[index % idealStandoffDist.count]
             let minSafeDist = idealDist - 1.2
             let maxComfortDist = idealDist + 2.2
@@ -2552,7 +2659,15 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             let lateralTangent = SIMD2<Float>(-rawDirection.y * orbitSign, rawDirection.x * orbitSign)
             var tacticalDesiredDir: SIMD2<Float>
 
-            if distance < minSafeDist {
+            let botInRainbow = npcPositions[index].z > 18.0
+            let playerInRainbow = targetPos.z > 18.0
+            if botInRainbow != playerInRainbow && abs(npcPositions[index].x) > 3.6 {
+                // 🌈 Si el jugador cruzó al otro salón (Piscina <-> Salón Arcoíris), el bot se dirige primero al Gran Pórtico (X = 0, Z = 17.8)
+                let portalTarget = SIMD2<Float>(0.0, playerInRainbow ? 20.5 : 15.0)
+                let toPortal = portalTarget - SIMD2<Float>(npcPositions[index].x, npcPositions[index].z)
+                let pLen = simd_length(toPortal)
+                tacticalDesiredDir = pLen > 0.01 ? (toPortal / pLen) : rawDirection
+            } else if distance < minSafeDist {
                 // 🛡️ Si el jugador se acerca demasiado, el bot retrocede en diagonal buscando línea de tiro lejana
                 tacticalDesiredDir = simd_normalize(-rawDirection * 0.78 + lateralTangent * 0.62)
             } else {
@@ -2647,10 +2762,6 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             var proposedZ = npcPositions[index].z + (moveDirection.y * speed * stepFactor + npcPushVelocities[index].y) * dt
             npcPushVelocities[index] *= exp(-dt * 7.5)
 
-            // Outer Patio Wall Colliders (Expanded 34m x 34m Arena)
-            proposedX = max(-16.5, min(16.5, proposedX))
-            proposedZ = max(-16.5, min(16.5, proposedZ))
-
             // Solid Pool Coping Wall Colliders for NPCs
             let isInsidePool = proposedX >= -5.60 && proposedX <= 2.60 && proposedZ >= -4.45 && proposedZ <= 1.45
             let wasInsidePool = npcPositions[index].x >= -5.60 && npcPositions[index].x <= 2.60 && npcPositions[index].z >= -4.45 && npcPositions[index].z <= 1.45
@@ -2674,7 +2785,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
 
             // 🤜🤛 Barrera de Distancia Mínima con el Jugador (nunca tapar la cámara ni acercarse cuerpo a cuerpo)
-            let minPlayerBotSeparation: Float = 4.50
+            let minPlayerBotSeparation: Float = isColossalGolem ? 6.50 : 4.50
             if abs(playerPosition.y - npcPositions[index].y) < 1.85 {
                 let toBot = SIMD2<Float>(proposedX - playerPosition.x, proposedZ - playerPosition.z)
                 let playerDist = simd_length(toBot)
@@ -2685,11 +2796,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 }
             }
 
-            // Apply Scenario Rock Collisions to NPCs (Same rules as player!)
+            // Apply Scenario Rock, Cabin & Arena Collisions to NPCs
             var npcPos = SIMD3<Float>(proposedX, npcPositions[index].y, proposedZ)
             resolveRockCollisions(position: &npcPos)
-            proposedX = max(-16.5, min(16.5, npcPos.x))
-            proposedZ = max(-16.5, min(16.5, npcPos.z))
+            resolveParkourAndCabinCollisions(position: &npcPos)
+            clampToArenaBounds(position: &npcPos, previousPosition: npcPositions[index], margin: 1.15)
+            proposedX = npcPos.x
+            proposedZ = npcPos.z
 
             npcPositions[index].x = proposedX
             npcPositions[index].z = proposedZ
@@ -2744,7 +2857,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 let bTotalDist = max(0.001, simd_distance(botHandOrigin, targetCenter))
                 let bDir = simd_normalize(targetCenter - botHandOrigin)
 
-                // 🪨 Check Rock Cover Oclusion (El láser de bot NO atraviesa las piedras)
+                // 🪨 Check Rock & Parkour/Cabin Cover Occlusion (El láser de bot NO atraviesa las piedras ni las cabañas/obstáculos arcoíris)
                 var closestHitDist: Float = bTotalDist
                 var hitRock = false
                 for rock in rtRiverRocks {
@@ -2759,6 +2872,24 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                             closestHitDist = proj - 0.2
                             hitRock = true
                         }
+                    }
+                }
+                for box in rtRainbowParkourBoxes {
+                    let half = box.size * 0.5
+                    let bMin = box.center - half
+                    let bMax = box.center + half
+                    let invDir = SIMD3<Float>(
+                        abs(bDir.x) > 0.0001 ? 1.0 / bDir.x : 1e6,
+                        abs(bDir.y) > 0.0001 ? 1.0 / bDir.y : 1e6,
+                        abs(bDir.z) > 0.0001 ? 1.0 / bDir.z : 1e6
+                    )
+                    let t1 = (bMin - botHandOrigin) * invDir
+                    let t2 = (bMax - botHandOrigin) * invDir
+                    let tMin = max(max(min(t1.x, t2.x), min(t1.y, t2.y)), min(t1.z, t2.z))
+                    let tMax = min(min(max(t1.x, t2.x), max(t1.y, t2.y)), max(t1.z, t2.z))
+                    if tMax >= max(0.15, tMin) && tMin < closestHitDist {
+                        closestHitDist = max(0.15, tMin - 0.1)
+                        hitRock = true
                     }
                 }
 
@@ -2891,10 +3022,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             direction = lastToolDirection
         }
         var closestIndex: Int?
-        var closestDistance: Float = 35
+        var closestDistance: Float = 72
 
         for index in npcPositions.indices where npcRespawnTimers[index] <= 0 && npcHealths[index] > 0 {
-            let scale = npcBaseScales[index]
+            let isColossalGolem = (index == 4 && currentWave >= 3)
+            let scale: Float = isColossalGolem ? 1.65 : npcBaseScales[index]
             let center = npcPositions[index] + SIMD3<Float>(0, 0.88 * scale, 0)
             let alongRay = simd_dot(center - origin, direction)
             guard alongRay > 0, alongRay < closestDistance else { continue }
@@ -3063,6 +3195,27 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 return 5.55
             }
         }
+        // 🌈 Plataformas de Parkour Multi-Altura y Techos de Cabañas en el Gran Salón Arcoíris (Z > 18)
+        if position.z > 18.0 {
+            var highestPlatform: Float = 0.0
+            for box in rtRainbowParkourBoxes {
+                let halfX = box.size.x * 0.5 + 0.26
+                let halfZ = box.size.z * 0.5 + 0.26
+                if abs(position.x - box.center.x) <= halfX && abs(position.z - box.center.z) <= halfZ {
+                    let topY = box.center.y + box.size.y * 0.5
+                    let bottomY = box.center.y - box.size.y * 0.5
+                    // Solo aterriza en el techo de la cabaña o plataforma si los pies están cerca o por encima del borde superior
+                    if bottomY > 1.8 {
+                        if position.y >= topY - 0.55 {
+                            highestPlatform = max(highestPlatform, topY)
+                        }
+                    } else if position.y >= topY - 0.58 {
+                        highestPlatform = max(highestPlatform, topY)
+                    }
+                }
+            }
+            return highestPlatform
+        }
         // 🌊 Si está bajo la superficie (en el pozo abisal o cámara subterránea), el suelo es el fondo abisal:
         if position.y < -0.30 {
             return -11.0
@@ -3082,6 +3235,62 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             return -11.0
         } else {
             return -0.14 // 🌊 Posito de 14 cm: pies en -0.14m sin hundirse
+        }
+    }
+
+    private func clampToArenaBounds(position: inout SIMD3<Float>, previousPosition: SIMD3<Float>, margin: Float = 0.80) {
+        if position.y < -4.0 {
+            position.x = max(-17.0, min(17.0, position.x))
+            position.z = max(-17.0, min(17.0, position.z))
+            return
+        }
+        position.z = max(-17.8 + margin, min(72.0 - margin, position.z))
+        let portalHalfWidth: Float = 5.2 - margin * 0.45
+        if position.z < 17.8 - margin {
+            position.x = max(-17.8 + margin, min(17.8 - margin, position.x))
+        } else if position.z > 17.8 + margin {
+            position.x = max(-27.0 + margin, min(27.0 - margin, position.x))
+        } else {
+            // En el umbral del Muro Divisor Sur (Z = 17.8): paso libre por el Gran Pórtico Arcoíris (X: -5.2 .. +5.2)
+            if abs(position.x) <= portalHalfWidth {
+                position.x = max(-portalHalfWidth, min(portalHalfWidth, position.x))
+            } else if previousPosition.z <= 17.8 {
+                position.z = min(position.z, 17.8 - margin)
+                position.x = max(-17.8 + margin, min(17.8 - margin, position.x))
+            } else {
+                position.z = max(position.z, 17.8 + margin)
+                position.x = max(-27.0 + margin, min(27.0 - margin, position.x))
+            }
+        }
+    }
+
+    private func resolveParkourAndCabinCollisions(position: inout SIMD3<Float>) {
+        guard position.z > 17.5 else { return }
+        let playerRadius: Float = 0.36
+        for box in rtRainbowParkourBoxes {
+            let topY = box.center.y + box.size.y * 0.5
+            let bottomY = box.center.y - box.size.y * 0.5
+            // Si es un techo flotante alto (como el techo de una cabaña) y estamos debajo de él, podemos caminar por debajo libremente
+            if bottomY > 1.8 && position.y + 1.55 < bottomY {
+                continue
+            }
+            // Si los pies del jugador ya están sobre o subiendo el escalón superior, no bloquear horizontalmente
+            if position.y >= topY - 0.48 {
+                continue
+            }
+            let halfX = box.size.x * 0.5 + playerRadius
+            let halfZ = box.size.z * 0.5 + playerRadius
+            let dx = position.x - box.center.x
+            let dz = position.z - box.center.z
+            if abs(dx) < halfX && abs(dz) < halfZ {
+                let overlapX = halfX - abs(dx)
+                let overlapZ = halfZ - abs(dz)
+                if overlapX < overlapZ {
+                    position.x += dx >= 0 ? overlapX : -overlapX
+                } else {
+                    position.z += dz >= 0 ? overlapZ : -overlapZ
+                }
+            }
         }
     }
 
@@ -3163,6 +3372,27 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let poolEdgeDistance = simd_distance(point, clampedPoolPoint)
         if poolEdgeDistance < 2.8 || poolStripsCenterDistance < 3.4 {
             candidates.append((.poolStrips, min(poolEdgeDistance, poolStripsCenterDistance)))
+        }
+
+        // 🌈 Terminales de Luz Arcoíris junto a las 4 Cabañas en el Gran Salón Arcoíris (Z > 18)
+        let rainbowPostDist = simd_distance(point, SIMD2<Float>(-12.5, 32.0))
+        if rainbowPostDist < 4.2 {
+            candidates.append((.post, rainbowPostDist))
+        }
+        let rainbowPiscinaDist = simd_distance(point, SIMD2<Float>(12.5, 32.0))
+        if rainbowPiscinaDist < 4.2 {
+            candidates.append((.piscinaNeon, rainbowPiscinaDist))
+        }
+        let rainbowSheeritDist = simd_distance(point, SIMD2<Float>(-12.5, 56.0))
+        if rainbowSheeritDist < 4.2 {
+            candidates.append((.sheeritNeon, rainbowSheeritDist))
+        }
+        let rainbowStripsDist = min(
+            simd_distance(point, SIMD2<Float>(12.5, 56.0)),
+            simd_distance(point, SIMD2<Float>(0.0, 45.0))
+        )
+        if rainbowStripsDist < 4.5 {
+            candidates.append((.poolStrips, rainbowStripsDist))
         }
 
         let nearby = candidates.min(by: { $0.1 < $1.1 })?.0
@@ -3390,8 +3620,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 }
             }
         } else {
-            let bMin = SIMD3<Float>(-17.2, 0.20, -17.2)
-            let bMax = SIMD3<Float>(17.2, 6.85, 17.2)
+            let inRainbowHall = origin.z > 17.5
+            let bMin = inRainbowHall ? SIMD3<Float>(-26.4, 0.20, -17.2) : SIMD3<Float>(-17.2, 0.20, -17.2)
+            let bMax = inRainbowHall ? SIMD3<Float>(26.4, 8.85, 71.4) : SIMD3<Float>(17.2, 6.85, 71.4)
             for i in 0..<3 {
                 let o = origin[i]
                 let d = rayDir[i]
@@ -3865,7 +4096,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     }
 
     private func makeNPCInstanceDescriptor(index: Int) -> MTLAccelerationStructureInstanceDescriptor {
-        let baseScale = npcBaseScales[index]
+        let isColossalGolem = (index == 4 && currentWave >= 3)
+        let baseScale: Float = isColossalGolem ? 1.65 : npcBaseScales[index]
         let isFotofago = index >= 2
         let asIndex: UInt32 = isFotofago ? 11 : 4
         let isAlive = npcHealths[index] > 0 && npcRespawnTimers[index] <= 0 && !isWaveIntermission
@@ -3873,9 +4105,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let isMelting = !isAlive && melt > 0.005 && melt < 1.0 && !isWaveIntermission && !isVersusMode
 
         if isAlive {
-            // Animación pesada de respiración, gravitación de cristales y zancada del Fotófago
-            let bobFreq: Float = isFotofago ? 3.4 : 5.8
-            let bobAmp: Float = isFotofago ? 0.048 : 0.024
+            // Animación pesada de respiración, gravitación de cristales y zancada del Fotófago / Gólem Colosal
+            let bobFreq: Float = isColossalGolem ? 2.4 : (isFotofago ? 3.4 : 5.8)
+            let bobAmp: Float = isColossalGolem ? 0.068 : (isFotofago ? 0.048 : 0.024)
             let strideBob = abs(sin(elapsedTime * bobFreq + Float(index) * 1.4)) * bobAmp
             let breathe = 1.0 + sin(elapsedTime * 2.6 + Float(index)) * 0.028
             let swayPitch = sin(elapsedTime * (bobFreq * 0.5) + Float(index)) * (isFotofago ? 0.042 : 0.020)
@@ -4076,11 +4308,12 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             reflectivity: 0.12,
             kind: 5.0
         )
-        // Hombreras tácticas compactas y peto mate que absorbe la luz
-        builder.addBox(center: SIMD3<Float>(-0.34, 1.04, 0.0), size: SIMD3<Float>(0.14, 0.12, 0.18), material: vantablackArmor)
-        builder.addBox(center: SIMD3<Float>( 0.34, 1.04, 0.0), size: SIMD3<Float>(0.14, 0.12, 0.18), material: vantablackArmor)
-        builder.addBox(center: SIMD3<Float>( 0.00, 0.90, 0.16), size: SIMD3<Float>(0.34, 0.28, 0.08), material: vantablackArmor)
-        builder.addSphere(center: SIMD3<Float>(0.00, 0.92, 0.21), radii: SIMD3<Float>(repeating: 0.065), material: darkCore, segments: 10, rings: 6)
+        // Hombreras monolíticas pesadas, cresta dorsal y peto de basalto Vantablack (imponente como Gólem Colosal en Oleada 3+)
+        builder.addBox(center: SIMD3<Float>(-0.36, 1.06, 0.0), size: SIMD3<Float>(0.20, 0.16, 0.24), material: vantablackArmor)
+        builder.addBox(center: SIMD3<Float>( 0.36, 1.06, 0.0), size: SIMD3<Float>(0.20, 0.16, 0.24), material: vantablackArmor)
+        builder.addBox(center: SIMD3<Float>( 0.00, 0.90, 0.17), size: SIMD3<Float>(0.38, 0.32, 0.10), material: vantablackArmor)
+        builder.addBox(center: SIMD3<Float>( 0.00, 0.96, -0.17), size: SIMD3<Float>(0.32, 0.36, 0.10), material: vantablackArmor)
+        builder.addSphere(center: SIMD3<Float>(0.00, 0.92, 0.23), radii: SIMD3<Float>(repeating: 0.075), material: darkCore, segments: 10, rings: 6)
         return builder
     }
 
@@ -4195,7 +4428,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         builder.addBox(center: SIMD3<Float>(-11.7, -0.12, -1.5), size: SIMD3<Float>(12.6, 0.24, 5.4), material: deck)
         builder.addBox(center: SIMD3<Float>(10.2, -0.12, -1.5), size: SIMD3<Float>(15.6, 0.24, 5.4), material: deck)
         builder.addBox(center: SIMD3<Float>(0, 3.5, -17.8), size: SIMD3<Float>(36, 7, 0.4), material: wall)
-        builder.addBox(center: SIMD3<Float>(0, 3.5, 17.8), size: SIMD3<Float>(36, 7, 0.4), material: wall)
+        // 🌈 Pared Sur con Gran Pórtico Abierto (X: -5.2 a +5.2, altura 4.8m) hacia el Gran Salón Arcoíris
+        builder.addBox(center: SIMD3<Float>(-11.6, 3.5, 17.8), size: SIMD3<Float>(12.8, 7.0, 0.4), material: wall)
+        builder.addBox(center: SIMD3<Float>( 11.6, 3.5, 17.8), size: SIMD3<Float>(12.8, 7.0, 0.4), material: wall)
+        builder.addBox(center: SIMD3<Float>(  0.0, 5.9, 17.8), size: SIMD3<Float>(10.4, 2.2, 0.4), material: wall)
         builder.addBox(center: SIMD3<Float>(-17.8, 3.5, 0), size: SIMD3<Float>(0.4, 7, 36), material: wall)
         builder.addBox(center: SIMD3<Float>(17.8, 3.5, 0), size: SIMD3<Float>(0.4, 7, 36), material: wall)
         let slideCyan = RTMaterial(color: SIMD3<Float>(0.02, 0.65, 0.82), roughness: 0.32, emission: SIMD3<Float>(0.02, 0.12, 0.20), reflectivity: 0.12)
@@ -4355,7 +4591,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         builder.addBox(center: SIMD3<Float>(1.24, 2.05, -17.52), size: SIMD3<Float>(0.16, 2.72, 0.16), material: metal)
         builder.addBox(center: SIMD3<Float>(5.76, 2.05, -17.52), size: SIMD3<Float>(0.16, 2.72, 0.16), material: metal)
         builder.addNeonPoolSign(origin: SIMD2<Float>(-7.7, 3.30), z: -17.58)
-        builder.addNeonSheeritSign(origin: SIMD2<Float>(3.05, 3.28), z: 17.58)
+        builder.addNeonSheeritSign(origin: SIMD2<Float>(6.2, 3.28), z: 17.58)
 
         let lampPosition = SIMD3<Float>(-7.55, 0, 12.65)
         builder.addBox(center: lampPosition + SIMD3<Float>(0, 1.42, 0), size: SIMD3<Float>(0.13, 2.75, 0.13), material: metal)
@@ -4454,6 +4690,95 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         // Cruz Holográfica Médica Neón Central:
         builder.addBox(center: SIMD3<Float>(0, 2.80, 6.2), size: SIMD3<Float>(0.12, 0.45, 0.04), material: podNeonEmerald)
         builder.addBox(center: SIMD3<Float>(0, 2.80, 6.2), size: SIMD3<Float>(0.45, 0.12, 0.04), material: podNeonEmerald)
+
+        // =========================================================================
+        // 🌈 🏰 GRAN SALÓN ARCOÍRIS DE PARKOUR Y CABAÑAS (54m x 54m, Z: 18m a 72m)
+        // =========================================================================
+        // 1. Piso Colosal de Pizarra Húmeda con Charcos Especulares Ray-Traced (2,916 m²)
+        builder.addBox(center: SIMD3<Float>(0, -0.12, 45.0), size: SIMD3<Float>(54.0, 0.24, 54.0), material: deck)
+
+        // 2. Muros Perimetrales Monumentales de 9m de altura del Gran Salón Arcoíris
+        // Muro Sur Final (Z = 72.0)
+        builder.addBox(center: SIMD3<Float>(0, 4.5, 72.0), size: SIMD3<Float>(54.4, 9.0, 0.4), material: wall)
+        // Muro Oeste (X = -27.0) y Muro Este (X = +27.0)
+        builder.addBox(center: SIMD3<Float>(-27.0, 4.5, 45.0), size: SIMD3<Float>(0.4, 9.0, 54.4), material: wall)
+        builder.addBox(center: SIMD3<Float>( 27.0, 4.5, 45.0), size: SIMD3<Float>(0.4, 9.0, 54.4), material: wall)
+        // Alas Norte que conectan el Salón de la Piscina (±17.8) con el ancho del Salón Arcoíris (±27.0) en Z = 17.8
+        builder.addBox(center: SIMD3<Float>(-22.4, 4.5, 17.8), size: SIMD3<Float>(9.6, 9.0, 0.4), material: wall)
+        builder.addBox(center: SIMD3<Float>( 22.4, 4.5, 17.8), size: SIMD3<Float>(9.6, 9.0, 0.4), material: wall)
+
+        // 3. Paleta de 7 Materiales Neón Arcoíris Ray-Traced (se encienden progresivamente con las luces del mapa)
+        let rainbowColors: [(SIMD3<Float>, SIMD3<Float>)] = [
+            (SIMD3<Float>(1.00, 0.14, 0.36), SIMD3<Float>(5.2, 0.6, 1.8)), // Rojo Magenta
+            (SIMD3<Float>(1.00, 0.52, 0.08), SIMD3<Float>(5.0, 2.4, 0.3)), // Naranja Solar
+            (SIMD3<Float>(1.00, 0.92, 0.12), SIMD3<Float>(4.8, 4.2, 0.4)), // Amarillo Dorado
+            (SIMD3<Float>(0.12, 0.98, 0.45), SIMD3<Float>(0.5, 5.2, 2.1)), // Verde Esmeralda
+            (SIMD3<Float>(0.05, 0.88, 1.00), SIMD3<Float>(0.3, 4.4, 5.6)), // Cian Eléctrico
+            (SIMD3<Float>(0.28, 0.38, 1.00), SIMD3<Float>(1.4, 1.9, 5.8)), // Azul Índigo
+            (SIMD3<Float>(0.82, 0.18, 1.00), SIMD3<Float>(4.2, 0.8, 5.5))  // Violeta Prisma
+        ]
+        let rainbowNeonMats: [RTMaterial] = rainbowColors.map { col, em in
+            RTMaterial(color: col, roughness: 0.06, emission: em, reflectivity: 0.82, kind: 5)
+        }
+
+        // 4. Gran Pórtico Arcoíris de Entrada (Z = 17.8, X = -5.2 a +5.2) con 7 arcos concéntricos
+        for (i, mat) in rainbowNeonMats.enumerated() {
+            let zOff = 17.85 + Float(i) * 0.22
+            builder.addBox(center: SIMD3<Float>(-5.12, 2.40, zOff), size: SIMD3<Float>(0.14, 4.80, 0.14), material: mat)
+            builder.addBox(center: SIMD3<Float>( 5.12, 2.40, zOff), size: SIMD3<Float>(0.14, 4.80, 0.14), material: mat)
+            builder.addBox(center: SIMD3<Float>( 0.00, 4.75, zOff), size: SIMD3<Float>(10.38, 0.14, 0.14), material: mat)
+        }
+
+        // 5. Franjas Longitudinales y Perimetrales Arcoíris en Piso y Muros del Gran Salón
+        for i in 0..<7 {
+            let mat = rainbowNeonMats[i]
+            let zStrip = 23.0 + Float(i) * 7.2
+            // Tiras neón en muros Oeste y Este a dos alturas (Y = 2.6m y Y = 5.8m)
+            builder.addBox(center: SIMD3<Float>(-26.76, 2.60, zStrip), size: SIMD3<Float>(0.08, 0.18, 5.8), material: mat)
+            builder.addBox(center: SIMD3<Float>( 26.76, 2.60, zStrip), size: SIMD3<Float>(0.08, 0.18, 5.8), material: mat)
+            builder.addBox(center: SIMD3<Float>(-26.76, 5.80, zStrip), size: SIMD3<Float>(0.08, 0.18, 5.8), material: mat)
+            builder.addBox(center: SIMD3<Float>( 26.76, 5.80, zStrip), size: SIMD3<Float>(0.08, 0.18, 5.8), material: mat)
+            // Tira en el Muro Sur Final (Z = 71.76)
+            let xStrip = -21.0 + Float(i) * 7.0
+            builder.addBox(center: SIMD3<Float>(xStrip, 3.80, 71.76), size: SIMD3<Float>(5.6, 0.22, 0.08), material: mat)
+            builder.addBox(center: SIMD3<Float>(xStrip, 6.60, 71.76), size: SIMD3<Float>(5.6, 0.22, 0.08), material: mat)
+        }
+
+        // 6. Los 4 Pilones / Faroles de Luz Arcoíris Interactivos junto a las 4 Cabañas (conectados a los 4 interruptores de luz)
+        let rainbowPylons: [(SIMD3<Float>, Int)] = [
+            (SIMD3<Float>(-12.5, 0, 32.0), 0), // Sector Noroeste (Cabaña Rubí)
+            (SIMD3<Float>( 12.5, 0, 32.0), 3), // Sector Noreste (Cabaña Esmeralda)
+            (SIMD3<Float>(-12.5, 0, 56.0), 4), // Sector Suroeste (Cabaña Cian)
+            (SIMD3<Float>( 12.5, 0, 56.0), 6)  // Sector Sureste (Cabaña Violeta)
+        ]
+        for (pPos, colorIdx) in rainbowPylons {
+            let pylonMat = rainbowNeonMats[colorIdx % rainbowNeonMats.count]
+            builder.addBox(center: pPos + SIMD3<Float>(0, 0.10, 0), size: SIMD3<Float>(0.85, 0.20, 0.85), material: metal)
+            builder.addBox(center: pPos + SIMD3<Float>(0, 1.85, 0), size: SIMD3<Float>(0.18, 3.50, 0.18), material: metal)
+            builder.addBox(center: pPos + SIMD3<Float>(0, 3.65, 0), size: SIMD3<Float>(0.55, 0.75, 0.55), material: pylonMat)
+            builder.addBox(center: pPos + SIMD3<Float>(0, 4.10, 0), size: SIMD3<Float>(0.78, 0.10, 0.78), material: metal)
+        }
+
+        // 7. Bloques de Parkour de Cuerpo Completo, Pasarelas Elevadas y Las 4 Cabañas Arcoíris
+        for (idx, box) in rtRainbowParkourBoxes.enumerated() {
+            let mat = RTMaterial(
+                color: box.color,
+                roughness: 0.20,
+                emission: box.emission,
+                reflectivity: 0.42,
+                kind: 3
+            )
+            builder.addBox(center: box.center, size: box.size, material: mat)
+
+            // Borde superior neón arcoíris para visualizar las alturas de parkour en la oscuridad al encender las luces
+            let neonTrim = rainbowNeonMats[idx % rainbowNeonMats.count]
+            let topY = box.center.y + box.size.y * 0.5 + 0.02
+            builder.addBox(
+                center: SIMD3<Float>(box.center.x, topY, box.center.z),
+                size: SIMD3<Float>(box.size.x * 0.96, 0.04, box.size.z * 0.96),
+                material: neonTrim
+            )
+        }
 
         return builder
     }
