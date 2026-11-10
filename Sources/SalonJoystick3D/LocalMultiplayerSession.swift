@@ -5,12 +5,14 @@ import UIKit
 enum LocalMatchMode: String, Codable, CaseIterable, Identifiable {
     case cooperative
     case versus
+    case lightBattle
 
     var id: Self { self }
     var label: String {
         switch self {
         case .cooperative: "Cooperativo"
-        case .versus: "Versus"
+        case .versus: "Versus 1v1"
+        case .lightBattle: "Duelo de Luces"
         }
     }
 }
@@ -27,6 +29,7 @@ struct LocalMatchPacket: Codable {
         case enemyHit
         case botDamage
         case scoreAward
+        case lightSync
         case reviveTeammate
         case teamDefeat
         case teamRestart
@@ -78,6 +81,14 @@ struct LocalMatchPacket: Codable {
 
     // Contador de bajas / muertes en cooperativo
     var coopDeaths: Int?
+
+    // Sincronización de luces en tiempo real
+    var lightStates: GameLightStates?
+
+    // Duelo de Luces (Luz vs Oscuridad / Captura de Bandera)
+    var lightScore: Int?
+    var shadowScore: Int?
+    var hasCore: Bool?
 }
 
 enum LocalDeviceRole: String, Codable, CaseIterable, Identifiable {

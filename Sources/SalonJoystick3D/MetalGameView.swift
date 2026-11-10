@@ -76,6 +76,11 @@ struct MetalGameView: UIViewRepresentable {
             renderer.onNearbyLightUpdate = { [weak model] fixture in
                 model?.reportNearbyLight(fixture)
             }
+            renderer.onFlashlightBatteryUpdate = { [weak model] battery in
+                Task { @MainActor in
+                    model?.flashlightBattery = battery
+                }
+            }
             renderer.onCoverStatusUpdate = { [weak model] isNear in
                 Task { @MainActor in
                     model?.updateCoverStatus(isNear: isNear)
@@ -212,7 +217,7 @@ struct MetalGameView: UIViewRepresentable {
             : nil
         context.coordinator.renderer?.isSplitScreenMode = false
         context.coordinator.renderer?.isAuthorityForNPCs = model.isHost
-        let isVersus = model.isAnyMultiplayerConnected && (model.multiplayer.mode == .versus)
+        let isVersus = model.isAnyMultiplayerConnected && (model.multiplayer.mode == .versus || model.multiplayer.mode == .lightBattle)
         context.coordinator.renderer?.isVersusMode = isVersus
         let spawnPos = model.isHost ? SIMD3<Float>(3.8, 0, 3.8) : SIMD3<Float>(-3.8, 0, -3.8)
         let spawnYaw = model.isHost ? Float.pi * 1.25 : Float.pi * 0.25

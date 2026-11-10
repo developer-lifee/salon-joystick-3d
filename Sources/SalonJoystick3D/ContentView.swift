@@ -3,6 +3,7 @@ import AVFoundation
 import Metal
 import StoreKit
 import Combine
+import GameController
 
 enum GameCameraMode: Int {
     case thirdPerson
@@ -62,12 +63,12 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "1.0.0"
-    static let build = "82"
-    static let commitHash = "42fbd30"
+    static let build = "83"
+    static let commitHash = "fbbc4e2"
     static let formatted = "v\(version) • Build \(build) (\(commitHash))"
 }
 
-struct GameLightStates: Equatable {
+struct GameLightStates: Codable, Equatable {
     var post = true
     var piscinaNeon = true
     var sheeritNeon = true
@@ -385,7 +386,59 @@ struct ContentView: View {
 
             // 🧟 Call of Duty Zombies-Style Wave / Round HUD Banner o Duelo Versus 1v1
             VStack(spacing: 4) {
-                if model.isAnyMultiplayerConnected && model.multiplayer.mode == .versus {
+                if model.isAnyMultiplayerConnected && model.multiplayer.mode == .lightBattle {
+                    VStack(spacing: 6) {
+                        HStack(spacing: 12) {
+                            HStack(spacing: 5) {
+                                Image(systemName: "sun.max.fill")
+                                    .foregroundStyle(.yellow)
+                                Text("LUZ: \(model.lightTeamScore)")
+                                    .font(.system(size: 13, weight: .black, design: .monospaced))
+                                    .foregroundStyle(.yellow)
+                            }
+
+                            Divider().frame(height: 18).background(Color.white.opacity(0.4))
+
+                            HStack(spacing: 5) {
+                                Image(systemName: "moon.fill")
+                                    .foregroundStyle(.purple)
+                                Text("SOMBRA: \(model.shadowTeamScore)")
+                                    .font(.system(size: 13, weight: .black, design: .monospaced))
+                                    .foregroundStyle(.purple)
+                            }
+
+                            Divider().frame(height: 18).background(Color.white.opacity(0.4))
+
+                            HStack(spacing: 4) {
+                                Image(systemName: "bolt.fill")
+                                    .foregroundStyle(.cyan)
+                                Text(model.hasEnergyCore ? "¡TIENES NÚCLEO!" : (model.remoteHasEnergyCore ? "RIVAL TIENE NÚCLEO" : "NÚCLEO DISPONIBLE"))
+                                    .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                                    .foregroundStyle(model.hasEnergyCore ? .green : (model.remoteHasEnergyCore ? .red : .cyan))
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .overlay(
+                            Capsule().stroke(
+                                LinearGradient(colors: [.yellow.opacity(0.85), .purple.opacity(0.85)], startPoint: .leading, endPoint: .trailing),
+                                lineWidth: 1.5
+                            )
+                        )
+                        .shadow(color: .black.opacity(0.4), radius: 8)
+
+                        if let winner = model.lightBattleWinner {
+                            Text(winner)
+                                .font(.system(size: 13, weight: .heavy, design: .monospaced))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 5)
+                                .background(Color.black.opacity(0.85), in: Capsule())
+                                .overlay(Capsule().stroke(Color.yellow, lineWidth: 2))
+                        }
+                    }
+                } else if model.isAnyMultiplayerConnected && model.multiplayer.mode == .versus {
                     HStack(spacing: 12) {
                         HStack(spacing: 6) {
                             Image(systemName: "swords")
@@ -621,6 +674,7 @@ struct ContentView: View {
                     model.joystick = vector
                 }, isLiquidGlass: model.isLiquidGlassUIEnabled)
                 .frame(width: 156, height: 156)
+                .opacity(model.touchControlsOpacity)
             }
             .padding(.leading, 18)
             .padding(.bottom, 22)
@@ -751,6 +805,34 @@ struct ContentView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("Menú Radial de Teletransporte")
 
+                    Button {
+                        model.showsSettingsSheet = true
+                    } label: {
+                        Image(systemName: "gearshape.fill")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 34, height: 34)
+                            .background(Color.black.opacity(0.65), in: Circle())
+                            .overlay(Circle().stroke(Color.white.opacity(0.35), lineWidth: 1.2))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Ajustes y Opciones")
+
+                    if model.isGameControllerConnected && !model.isMinimalHUDEnabled {
+                        HStack(spacing: 5) {
+                            Image(systemName: "gamecontroller.fill")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.green)
+                            Text(model.gameControllerName)
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(.white.opacity(0.9))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .overlay(Capsule().stroke(Color.green.opacity(0.5), lineWidth: 1))
+                    }
+
                     if model.isNearRecoveryConsole && model.remotePlayerIsRecovering {
                         Button {
                             model.reviveTeammate()
@@ -825,17 +907,29 @@ struct ContentView: View {
                         Button {
                             model.heldTool = (model.heldTool == .flashlight ? .none : .flashlight)
                         } label: {
-                            VStack(spacing: 2) {
-                                Image(systemName: "flashlight.on.fill")
-                                    .font(.system(size: 17, weight: .bold))
-                                Text("Luz")
-                                    .font(.system(size: 9, weight: .bold))
+                            ZStack {
+                                Circle()
+                                    .stroke(Color.white.opacity(0.15), lineWidth: 2.5)
+                                Circle()
+                                    .trim(from: 0, to: CGFloat(model.flashlightBattery))
+                                    .stroke(
+                                        model.flashlightBattery > 0.35 ? Color.yellow : (model.flashlightBattery > 0.15 ? Color.orange : Color.red),
+                                        style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
+                                    )
+                                    .rotationEffect(.degrees(-90))
+
+                                VStack(spacing: 1) {
+                                    Image(systemName: model.flashlightBattery <= 0.02 ? "battery.0percent" : "flashlight.on.fill")
+                                        .font(.system(size: 15, weight: .bold))
+                                    Text("\(Int((model.flashlightBattery * 100).rounded()))%")
+                                        .font(.system(size: 8, weight: .heavy, design: .monospaced))
+                                }
+                                .foregroundStyle(model.heldTool == .flashlight ? .black : (model.flashlightBattery > 0.20 ? .yellow : .orange))
                             }
-                            .foregroundStyle(model.heldTool == .flashlight ? .black : .yellow)
                             .frame(width: 48, height: 48)
                             .background(
                                 model.heldTool == .flashlight
-                                    ? AnyShapeStyle(Color.yellow)
+                                    ? AnyShapeStyle(model.flashlightBattery > 0.20 ? Color.yellow : Color.orange)
                                     : AnyShapeStyle(Color.black.opacity(0.65)),
                                 in: Circle()
                             )
@@ -886,6 +980,7 @@ struct ContentView: View {
                     .accessibilityLabel("Saltar")
                     .accessibilityIdentifier("jumpButton")
                 }
+                .opacity(model.touchControlsOpacity)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             .padding(.trailing, 28)
@@ -1143,7 +1238,11 @@ final class GameModel: ObservableObject {
             broadcastLocalState()
         }
     }
-    @Published var lightStates = GameLightStates()
+    @Published var lightStates = GameLightStates() {
+        didSet {
+            broadcastLightStates()
+        }
+    }
     @Published private(set) var nearbyLight: GameLightFixture?
     @Published var showsFPS = false
     @Published var invertsCameraY = false
@@ -1193,6 +1292,22 @@ final class GameModel: ObservableObject {
     @Published var versusRound: Int = 1
     @Published var hasRecordedVersusRoundResult: Bool = false
     @Published var coopDeaths: Int = 0
+
+    // Batería de linterna y personalización de HUD
+    @Published var flashlightBattery: Float = 1.0
+    @Published var isMinimalHUDEnabled: Bool = false
+    @Published var touchControlsOpacity: Double = 0.85
+    @Published var isGameControllerConnected: Bool = false
+    @Published var gameControllerName: String = ""
+
+    // Duelo de Luces (Luz vs Sombra / Captura del Núcleo)
+    @Published var lightTeamScore: Int = 0
+    @Published var shadowTeamScore: Int = 0
+    @Published var hasEnergyCore: Bool = false
+    @Published var remoteHasEnergyCore: Bool = false
+    @Published var energyCorePosition: SIMD3<Float> = SIMD3<Float>(0, 0.45, 0)
+    @Published var lightBattleRound: Int = 1
+    @Published var lightBattleWinner: String? = nil
 
     func updateNPCHealths(_ healths: [Float]) {
         self.npcHealths = healths
@@ -1456,7 +1571,126 @@ final class GameModel: ObservableObject {
             UINotificationFeedbackGenerator().notificationOccurred(.success)
             self.startGame(fromNetwork: false)
         }
+
+        setupGameControllers()
     }
+
+    // MARK: - Game Controller Support (Mando Inalámbrico MFi / Xbox / PlayStation / Switch)
+    func setupGameControllers() {
+        NotificationCenter.default.addObserver(
+            forName: .GCControllerDidConnect,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            if let controller = notification.object as? GCController {
+                self?.configureController(controller)
+            }
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: .GCControllerDidDisconnect,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.checkConnectedControllers()
+        }
+
+        checkConnectedControllers()
+    }
+
+    private func checkConnectedControllers() {
+        if let first = GCController.controllers().first {
+            configureController(first)
+        } else {
+            isGameControllerConnected = false
+            gameControllerName = ""
+        }
+    }
+
+    private func configureController(_ controller: GCController) {
+        isGameControllerConnected = true
+        gameControllerName = controller.vendorName ?? "Mando Inalámbrico"
+
+        if let gamepad = controller.extendedGamepad {
+            gamepad.leftThumbstick.valueChangedHandler = { [weak self] _, x, y in
+                DispatchQueue.main.async {
+                    self?.joystick = CGVector(dx: CGFloat(x), dy: CGFloat(y))
+                }
+            }
+
+            gamepad.buttonA.pressedChangedHandler = { [weak self] _, _, pressed in
+                if pressed {
+                    DispatchQueue.main.async { self?.requestJump() }
+                }
+            }
+
+            gamepad.buttonB.pressedChangedHandler = { [weak self] _, _, pressed in
+                if pressed {
+                    DispatchQueue.main.async { self?.heldTool = (self?.heldTool == .laser ? .none : .laser) }
+                }
+            }
+
+            gamepad.buttonY.pressedChangedHandler = { [weak self] _, _, pressed in
+                if pressed {
+                    DispatchQueue.main.async { self?.heldTool = (self?.heldTool == .flashlight ? .none : .flashlight) }
+                }
+            }
+
+            gamepad.buttonX.pressedChangedHandler = { [weak self] _, _, pressed in
+                if pressed {
+                    DispatchQueue.main.async { self?.heldTool = (self?.heldTool == .mirror ? .none : .mirror) }
+                }
+            }
+
+            gamepad.rightTrigger.valueChangedHandler = { [weak self] _, val, pressed in
+                if pressed && val > 0.4 {
+                    DispatchQueue.main.async {
+                        if self?.heldTool != .laser { self?.heldTool = .laser }
+                    }
+                }
+            }
+
+            gamepad.leftTrigger.valueChangedHandler = { [weak self] _, val, pressed in
+                if pressed && val > 0.4 {
+                    DispatchQueue.main.async {
+                        self?.heldTool = (self?.heldTool == .flashlight ? .none : .flashlight)
+                    }
+                }
+            }
+
+            gamepad.leftShoulder.pressedChangedHandler = { [weak self] _, _, pressed in
+                if pressed {
+                    DispatchQueue.main.async { self?.heldTool = (self?.heldTool == .mirror ? .none : .mirror) }
+                }
+            }
+
+            gamepad.dpad.up.pressedChangedHandler = { [weak self] _, _, pressed in
+                if pressed {
+                    DispatchQueue.main.async { self?.toggleNearbyLight() }
+                }
+            }
+
+            gamepad.rightThumbstickButton?.pressedChangedHandler = { [weak self] _, _, pressed in
+                if pressed {
+                    DispatchQueue.main.async { self?.toggleSlowMotion() }
+                }
+            }
+        }
+    }
+
+    func broadcastLightStates() {
+        guard isAnyMultiplayerConnected else { return }
+        let packet = LocalMatchPacket(
+            kind: .lightSync,
+            peerID: multiplayer.localPeer.displayName,
+            timestamp: Date().timeIntervalSince1970,
+            lightStates: lightStates
+        )
+        if multiplayer.isConnected { multiplayer.send(packet) }
+        if gameCenter.isInMatch { gameCenter.sendPacket(packet) }
+    }
+
+    private var lastLightScoreTick: TimeInterval = 0
 
     func updateLocalTransform(position: SIMD3<Float>, yaw: Float) {
         self.localPlayerPosition = position
@@ -1466,6 +1700,49 @@ final class GameModel: ObservableObject {
         let now = Date().timeIntervalSince1970
         if now - lastDamageTime > 4.5 && playerShield < 100.0 && playerHealth > 0 && !isDefeated && !isRecoveringInChamber {
             playerShield = min(100.0, playerShield + 0.15)
+        }
+
+        // ☀️🌑 Mecánicas del Duelo de Luces (Luz vs Sombra / Captura del Núcleo)
+        if multiplayer.mode == .lightBattle && gameState == .playing {
+            let distToCore = simd_distance(position, energyCorePosition)
+            if distToCore < 1.9 && !hasEnergyCore && !remoteHasEnergyCore {
+                hasEnergyCore = true
+                audio.playLaserReflectionSound()
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            }
+
+            if hasEnergyCore {
+                let isTeamLight = isHost
+                let basePos = isTeamLight ? SIMD3<Float>(-7.55, 0.2, 6.65) : SIMD3<Float>(-1.5, 0.2, -1.5)
+                if simd_distance(position, basePos) < 2.6 {
+                    hasEnergyCore = false
+                    audio.playLaserIgnition()
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    if isTeamLight {
+                        lightTeamScore += 25
+                    } else {
+                        shadowTeamScore += 25
+                    }
+                }
+            }
+
+            if isHost && now - lastLightScoreTick >= 1.25 {
+                lastLightScoreTick = now
+                let onCount = [lightStates.post, lightStates.piscinaNeon, lightStates.sheeritNeon, lightStates.poolStrips].filter { $0 }.count
+                let offCount = 4 - onCount
+                let lightMultiplier = hasEnergyCore ? 2 : 1
+                let shadowMultiplier = remoteHasEnergyCore ? 2 : 1
+                lightTeamScore += onCount * lightMultiplier
+                shadowTeamScore += offCount * shadowMultiplier
+
+                if lightTeamScore >= 100 && lightBattleWinner == nil {
+                    lightBattleWinner = "☀️ ¡EQUIPO LUZ HA GANADO EL DUELO!"
+                    audio.playLaserReflectionSound()
+                } else if shadowTeamScore >= 100 && lightBattleWinner == nil {
+                    lightBattleWinner = "🌑 ¡EQUIPO SOMBRA HA GANADO EL DUELO!"
+                    audio.playLaserReflectionSound()
+                }
+            }
         }
         broadcastLocalState()
     }
@@ -1498,6 +1775,11 @@ final class GameModel: ObservableObject {
             versusRemoteWins = 0
             versusRound = 1
             coopDeaths = 0
+            lightTeamScore = 0
+            shadowTeamScore = 0
+            hasEnergyCore = false
+            remoteHasEnergyCore = false
+            lightBattleWinner = nil
         }
         hasRecordedVersusRoundResult = false
 
@@ -1604,7 +1886,11 @@ final class GameModel: ObservableObject {
             versusLocalWins: versusLocalWins,
             versusRemoteWins: versusRemoteWins,
             shield: playerShield,
-            coopDeaths: coopDeaths
+            coopDeaths: coopDeaths,
+            lightStates: lightStates,
+            lightScore: lightTeamScore,
+            shadowScore: shadowTeamScore,
+            hasCore: hasEnergyCore
         )
         if multiplayer.isConnected { multiplayer.send(packet) }
         if gameCenter.isInMatch { gameCenter.sendPacket(packet) }
@@ -1670,9 +1956,21 @@ final class GameModel: ObservableObject {
             if let cd = packet.coopDeaths {
                 self.coopDeaths = max(self.coopDeaths, cd)
             }
+            if let ls = packet.lightStates, ls != self.lightStates {
+                self.lightStates = ls
+            }
+            if let lScore = packet.lightScore {
+                self.lightTeamScore = lScore
+            }
+            if let sScore = packet.shadowScore {
+                self.shadowTeamScore = sScore
+            }
+            if let hasC = packet.hasCore {
+                self.remoteHasEnergyCore = hasC
+            }
             if let h = packet.health {
                 self.remotePlayerHealth = h
-                if multiplayer.mode == .versus && h <= 0 && !hasRecordedVersusRoundResult {
+                if (multiplayer.mode == .versus || multiplayer.mode == .lightBattle) && h <= 0 && !hasRecordedVersusRoundResult {
                     hasRecordedVersusRoundResult = true
                     self.versusLocalWins += 1
                 }
@@ -1723,7 +2021,11 @@ final class GameModel: ObservableObject {
             }
 
         case .hit, .laser:
-            if multiplayer.mode == .versus {
+            if multiplayer.mode == .versus || multiplayer.mode == .lightBattle {
+                if hasEnergyCore {
+                    hasEnergyCore = false // Suelta el núcleo al recibir un impacto de láser
+                    audio.playLaserReflectionSound()
+                }
                 if heldTool == .mirror {
                     // Escudo Espejo bloquea el ataque y lo refleja de vuelta al rival
                     audio.playLaserReflectionSound()
@@ -1737,6 +2039,12 @@ final class GameModel: ObservableObject {
                 }
             } else {
                 // En modo Cooperativo: fuego amigo desactivado (sin daño, sin curación infinita ni puntos anómalos)
+            }
+
+        case .lightSync:
+            if let ls = packet.lightStates, ls != self.lightStates {
+                self.lightStates = ls
+                audio.playLaserReflectionSound()
             }
 
         case .enemySync:
@@ -1805,7 +2113,11 @@ final class GameModel: ObservableObject {
             versusLocalWins: versusLocalWins,
             versusRemoteWins: versusRemoteWins,
             shield: playerShield,
-            coopDeaths: coopDeaths
+            coopDeaths: coopDeaths,
+            lightStates: lightStates,
+            lightScore: lightTeamScore,
+            shadowScore: shadowTeamScore,
+            hasCore: hasEnergyCore
         )
         if multiplayer.isConnected {
             multiplayer.send(pkt)
@@ -5368,38 +5680,113 @@ struct GameOptionsSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Cámara y Vista") {
+                Section("🎮 Mando Inalámbrico (Gamepad)") {
                     HStack {
-                        Label("Vista", systemImage: "eye.fill")
+                        Label(
+                            model.isGameControllerConnected ? "Mando Conectado" : "Sin Mando",
+                            systemImage: model.isGameControllerConnected ? "gamecontroller.fill" : "gamecontroller"
+                        )
+                        .foregroundStyle(model.isGameControllerConnected ? Color.green : Color.secondary)
+
                         Spacer()
-                        Text("1ª Persona")
+
+                        Text(model.isGameControllerConnected ? model.gameControllerName : "Ninguno detectado")
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
 
-                    Toggle("Invertir eje Y", isOn: $model.invertsCameraY)
+                    if model.isGameControllerConnected {
+                        DisclosureGroup("Mapeo de Botones (Xbox / PS / Switch)") {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("• **Stick Izquierdo**: Movimiento de personaje").font(.caption)
+                                Text("• **Stick Derecho**: Cámara / Apuntar").font(.caption)
+                                Text("• **Botón A / ✕**: Saltar").font(.caption)
+                                Text("• **Botón B / ◯ / RT / R2**: Disparar Láser").font(.caption)
+                                Text("• **Botón Y / △ / LT / L2**: Linterna (Prender/Apagar)").font(.caption)
+                                Text("• **Botón X / ▢ / LB / L1**: Escudo Espejo").font(.caption)
+                                Text("• **D-Pad Arriba**: Conmutar Luz de arena").font(.caption)
+                                Text("• **R3 (Pulsar Stick Der.)**: Cámara Lenta").font(.caption)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    } else {
+                        Text("Puedes conectar mandos Bluetooth de Xbox, PlayStation o Nintendo Switch a tu iPhone para jugar.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Section("📱 Interfaz y Controles Táctiles") {
+                    Toggle("Modo Cinemático (HUD Minimalista)", isOn: $model.isMinimalHUDEnabled)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Opacidad de Botones")
+                            Spacer()
+                            Text("\(Int(model.touchControlsOpacity * 100))%")
+                                .font(.caption.bold())
+                                .foregroundStyle(.secondary)
+                        }
+                        Slider(value: $model.touchControlsOpacity, in: 0.2...1.0, step: 0.05)
+                    }
+
+                    Toggle("Invertir eje Y (Cámara)", isOn: $model.invertsCameraY)
                     Toggle("Mostrar contador de FPS", isOn: $model.showsFPS)
                 }
 
-                Section("Interruptores de Luces Individuales") {
+                Section("💡 Luces de la Arena (Sincronizadas)") {
                     Toggle("Farol del Patio (Poste)", isOn: $model.lightStates.post)
                     Toggle("Neón Piscina (Rojo/Cian)", isOn: $model.lightStates.piscinaNeon)
                     Toggle("Letrero Neón SHEERIT", isOn: $model.lightStates.sheeritNeon)
                     Toggle("Tiras LED de la Piscina", isOn: $model.lightStates.poolStrips)
+
+                    HStack(spacing: 12) {
+                        Button {
+                            model.lightStates.post = false
+                            model.lightStates.piscinaNeon = false
+                            model.lightStates.sheeritNeon = false
+                            model.lightStates.poolStrips = false
+                        } label: {
+                            HStack {
+                                Image(systemName: "lightbulb.slash.fill")
+                                Text("Apagón Total")
+                            }
+                            .font(.subheadline.bold())
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red.opacity(0.8))
+
+                        Button {
+                            model.lightStates.post = true
+                            model.lightStates.piscinaNeon = true
+                            model.lightStates.sheeritNeon = true
+                            model.lightStates.poolStrips = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "lightbulb.fill")
+                                Text("Encender Todo")
+                            }
+                            .font(.subheadline.bold())
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.yellow.opacity(0.8))
+                    }
+                    .padding(.top, 4)
                 }
 
-                Section("Personalización Visual de la Interfaz") {
-                    Toggle("Tema Vidrio Líquido (Apple Liquid Glass)", isOn: $model.isLiquidGlassUIEnabled)
-                }
-
-                Section("Rendimiento Gráfico") {
+                Section("⚙️ Rendimiento Gráfico & Ray Tracing") {
                     Picker("Resolución interna", selection: $model.renderResolution) {
                         ForEach(GameRenderResolution.allCases) { resolution in
                             Text(resolution.label).tag(resolution)
                         }
                     }
+
+                    Toggle("Tema Vidrio Líquido (Apple Liquid Glass)", isOn: $model.isLiquidGlassUIEnabled)
                 }
 
-                Section("Audio y Efectos") {
+                Section("🎵 Audio y Efectos") {
                     Toggle("Música de fondo", isOn: $model.musicEnabled)
                     Toggle("Efectos de sonido y pasos", isOn: $model.footstepsEnabled)
                     Toggle("Sonido de agua", isOn: $model.waterSoundEnabled)

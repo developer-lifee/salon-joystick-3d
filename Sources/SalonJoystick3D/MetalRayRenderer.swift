@@ -866,6 +866,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     var onFPSUpdate: ((Double) -> Void)?
     var onNearbyLightUpdate: ((GameLightFixture?) -> Void)?
     var onToolStatusUpdate: ((GameToolStatus) -> Void)?
+    var onFlashlightBatteryUpdate: ((Float) -> Void)?
+    var flashlightBattery: Float = 1.0
     var onScoreUpdate: ((Int) -> Void)?
     var onDamageTaken: ((Float) -> Void)?
     var onWaveUpdate: ((Int, Int, Int, Bool, Float) -> Void)?
@@ -2082,12 +2084,21 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
         }
 
+        if heldTool == .flashlight {
+            flashlightBattery = max(0.0, flashlightBattery - dt / 50.0)
+        } else {
+            flashlightBattery = min(1.0, flashlightBattery + dt / 22.0)
+        }
+        onFlashlightBatteryUpdate?(flashlightBattery)
+
         toolStatusCountdown -= dt
         if toolStatusCountdown <= 0 {
             toolStatusCountdown = 0.08
             let active: Float
             let cooldown: Float
             switch heldTool {
+            case .flashlight:
+                active = flashlightBattery; cooldown = 0
             case .laser:
                 active = 10.0; cooldown = laserCooldownRemaining
             case .mirror:
@@ -2100,6 +2111,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 label = String(format: "Recarga %.1f s", cooldown)
             } else if heldTool == .mirror && active > 0.01 {
                 label = String(format: "Activo %.1f s", active)
+            } else if heldTool == .flashlight {
+                label = String(format: "Batería %d%%", Int((flashlightBattery * 100).rounded()))
             } else {
                 label = ""
             }
@@ -3586,8 +3599,12 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         var effectiveToolOrigin = toolOrigin
         var effectiveToolDirection = toolDirection
-        var effectiveToolParamY = laserPropagationDistance
-        if renderTool == .mirror {
+        var effectiveToolParamY: Float = 0
+        if renderTool == .flashlight {
+            effectiveToolParamY = flashlightBattery
+        } else if renderTool == .laser {
+            effectiveToolParamY = laserPropagationDistance
+        } else if renderTool == .mirror {
             let effYaw = playerYaw + shieldYawOffset
             let baseMirrorPitch: Float = (cameraMode == .firstPerson) ? firstPersonPitch : -(orbitPitch - 0.22) * 1.15
             let effPitch = max(-0.95, min(0.95, baseMirrorPitch + shieldPitchOffset))

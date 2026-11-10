@@ -1124,9 +1124,11 @@ kernel void raytracePatio(
             float wideSpill = smoothstep(0.62f, 0.85f, dotDir) * 0.35f;
             float cone = centerBeam + wideSpill;
             
-            if (cone > 0.001f && toolDistance < 38.0f) {
+            float battery = clamp(uniforms.toolParameters.y, 0.0f, 1.0f);
+            float flicker = (battery < 0.22f && battery > 0.01f) ? (0.75f + 0.25f * sin(uniforms.viewport.z * 24.0f)) : 1.0f;
+            if (cone > 0.001f && toolDistance < 38.0f && battery > 0.001f) {
                 float incidence = saturate(dot(normal, -toolToSurface));
-                float flashlightPower = 52.0f / (1.0f + toolDistance * toolDistance * 0.032f);
+                float flashlightPower = (52.0f / (1.0f + toolDistance * toolDistance * 0.032f)) * battery * flicker;
                 float3 flashlightColor = float3(1.0f, 0.94f, 0.82f);
                 direct += albedo * flashlightColor * flashlightPower * cone * (0.22f + incidence * 0.78f);
                 
@@ -1318,11 +1320,14 @@ kernel void raytracePatio(
             }
 
             if (uniforms.toolParameters.x > 0.5f && uniforms.toolParameters.x < 1.5f) {
-                direct += mirroredLightContribution(
-                    position, normal, currentRay.direction, albedo,
-                    uniforms.toolOrigin.xyz, uniforms.toolDirection.xyz,
-                    float3(1.0f, 0.88f, 0.68f), 19.0f, true
-                );
+                float battery = clamp(uniforms.toolParameters.y, 0.0f, 1.0f);
+                if (battery > 0.001f) {
+                    direct += mirroredLightContribution(
+                        position, normal, currentRay.direction, albedo,
+                        uniforms.toolOrigin.xyz, uniforms.toolDirection.xyz,
+                        float3(1.0f, 0.88f, 0.68f), 19.0f * battery, true
+                    );
+                }
             }
         }
 
