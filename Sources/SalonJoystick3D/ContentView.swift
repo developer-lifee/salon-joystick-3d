@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "89"
-    static let commitHash = "d4b9b9d"
+    static let build = "90"
+    static let commitHash = "5aa552e"
     static let formatted = "v\(version) • Build \(build) (\(commitHash))"
 }
 
@@ -188,6 +188,62 @@ struct ContentView: View {
     var body: some View {
         if model.multiplayer.isConnected && model.multiplayer.role == .remoteController {
             TacticalRemoteControllerView(model: model)
+        } else if model.duoScreenMode == .tacticalButtons && model.gameState == .playing {
+            // 📱📱 MODO IPHONE DUO (OPCIÓN 1): Mitad Izquierda/Superior = Vista 3D Ray-Traced 100% Limpia | Mitad Derecha/Inferior = Panel de Mando Táctico
+            GeometryReader { geo in
+                let isHorizontalSplit = geo.size.width >= geo.size.height
+                if isHorizontalSplit {
+                    HStack(spacing: 0) {
+                        ZStack {
+                            MetalGameView(model: model)
+                                .ignoresSafeArea(.all)
+                            if model.heldTool == .laser {
+                                Circle()
+                                    .stroke(Color.red.opacity(0.85), lineWidth: 1.5)
+                                    .frame(width: 24, height: 24)
+                                    .overlay(Circle().fill(Color.cyan).frame(width: 4, height: 4))
+                            }
+                        }
+                        .frame(width: geo.size.width * 0.56)
+
+                        Rectangle()
+                            .fill(LinearGradient(colors: [.cyan, .purple], startPoint: .top, endPoint: .bottom))
+                            .frame(width: 3)
+
+                        DuoTacticalControllerDeckView(model: model)
+                            .frame(width: max(1, geo.size.width * 0.44 - 3))
+                    }
+                    .ignoresSafeArea(.all)
+                } else {
+                    VStack(spacing: 0) {
+                        ZStack {
+                            MetalGameView(model: model)
+                                .ignoresSafeArea(.all)
+                            if model.heldTool == .laser {
+                                Circle()
+                                    .stroke(Color.red.opacity(0.85), lineWidth: 1.5)
+                                    .frame(width: 24, height: 24)
+                                    .overlay(Circle().fill(Color.cyan).frame(width: 4, height: 4))
+                            }
+                        }
+                        .frame(height: geo.size.height * 0.54)
+
+                        Rectangle()
+                            .fill(LinearGradient(colors: [.cyan, .purple], startPoint: .leading, endPoint: .trailing))
+                            .frame(height: 3)
+
+                        DuoTacticalControllerDeckView(model: model)
+                            .frame(height: max(1, geo.size.height * 0.46 - 3))
+                    }
+                    .ignoresSafeArea(.all)
+                }
+            }
+            .sheet(isPresented: $model.showsMultiplayerSheet) {
+                MultiplayerSettingsSheet(model: model)
+            }
+            .sheet(isPresented: $model.showsSettingsSheet) {
+                GameOptionsSheet(model: model)
+            }
         } else {
             ZStack(alignment: .bottomLeading) {
                 MetalGameView(model: model)
@@ -387,10 +443,10 @@ struct ContentView: View {
             .padding(.top, 48)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
-            // 🧟 Call of Duty Zombies-Style Wave / Round HUD Banner o Duelo Versus 1v1
-            VStack(spacing: 4) {
+                // 🧟 Call of Duty Zombies-Style Wave / Round HUD Banner o Duelo Versus / Equipos
+                VStack(spacing: 4) {
                 if model.isAnyMultiplayerConnected && model.multiplayer.mode == .lightBattle {
-                    let isTeamLight = model.isHost
+                    let isTeamLight = model.isLocalTeamAlpha
                     let onCount = [model.lightStates.post, model.lightStates.piscinaNeon, model.lightStates.sheeritNeon, model.lightStates.poolStrips].filter { $0 }.count
                     let offCount = 4 - onCount
                     let myLightsReady = isTeamLight ? (onCount == 4) : (offCount == 4)
@@ -693,6 +749,30 @@ struct ContentView: View {
                     .background(.black.opacity(0.75), in: Capsule())
                     .overlay(Capsule().stroke(Color.cyan.opacity(0.85), lineWidth: 1.5))
                     .shadow(color: .cyan.opacity(0.45), radius: 6)
+                    .padding(.top, 3)
+                } else if model.duoScreenMode == .squadCamera {
+                    Button {
+                        model.cycleSquadCameraMember()
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    } label: {
+                        HStack(spacing: 10) {
+                            Label("TU CÁMARA", systemImage: "person.fill.viewfinder")
+                                .font(.system(size: 10, weight: .black, design: .monospaced))
+                                .foregroundStyle(.white)
+                            Text("|")
+                                .font(.system(size: 11, weight: .black, design: .monospaced))
+                                .foregroundStyle(.cyan)
+                            Label("CÁMARA ESCUADRA: \(model.selectedSquadCameraAgent.peerID.uppercased()) (TOCA PARA CAMBIAR)", systemImage: "video.fill")
+                                .font(.system(size: 10, weight: .black, design: .monospaced))
+                                .foregroundStyle(.cyan)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 5)
+                        .background(.black.opacity(0.78), in: Capsule())
+                        .overlay(Capsule().stroke(Color.cyan.opacity(0.85), lineWidth: 1.5))
+                        .shadow(color: .cyan.opacity(0.45), radius: 6)
+                    }
+                    .buttonStyle(.plain)
                     .padding(.top, 3)
                 }
 
@@ -1496,6 +1576,103 @@ final class GameModel: ObservableObject {
     @AppStorage("hudSkillsScale") var hudSkillsScale: Double = 1.0
     @Published var isGameControllerConnected: Bool = false
     @Published var gameControllerName: String = ""
+    @AppStorage("duoScreenModeRaw") var duoScreenModeRaw: Int = 0
+    @Published var selectedSquadMemberIndex: Int = 0
+    @Published var remoteAgentsDict: [String: RemoteAgentState] = [:]
+
+    var duoScreenMode: DuoScreenMode {
+        get { DuoScreenMode(rawValue: duoScreenModeRaw) ?? .off }
+        set {
+            duoScreenModeRaw = newValue.rawValue
+            objectWillChange.send()
+        }
+    }
+
+    var localPlayerDisplayName: String {
+        if gameCenter.isInMatch {
+            return gameCenter.localPlayerAlias
+        }
+        return multiplayer.localPeer.displayName
+    }
+
+    var allParticipantIDsSorted: [String] {
+        var names = Set<String>([localPlayerDisplayName])
+        for p in multiplayer.peers { names.insert(p.displayName) }
+        for g in gameCenter.connectedPlayerNames { names.insert(g) }
+        for k in remoteAgentsDict.keys { names.insert(k) }
+        return names.sorted()
+    }
+
+    var localParticipantIndex: Int {
+        allParticipantIDsSorted.firstIndex(of: localPlayerDisplayName) ?? 0
+    }
+
+    var isLocalTeamAlpha: Bool {
+        if multiplayer.mode == .cooperative { return true }
+        return localParticipantIndex % 2 == 0
+    }
+
+    func isPeerOnSameTeam(_ peerID: String) -> Bool {
+        if multiplayer.mode == .cooperative { return true }
+        let idx = allParticipantIDsSorted.firstIndex(of: peerID) ?? 1
+        return (idx % 2 == 0) == isLocalTeamAlpha
+    }
+
+    private static let arenaTeamSpawns: [(SIMD3<Float>, Float)] = [
+        (SIMD3<Float>( 3.8, 0,  3.8), Float.pi * 1.25),
+        (SIMD3<Float>(-3.8, 0, -3.8), Float.pi * 0.25),
+        (SIMD3<Float>( 6.4, 0,  5.2), Float.pi * 1.20),
+        (SIMD3<Float>(-6.4, 0, -5.2), Float.pi * 0.20),
+        (SIMD3<Float>(-8.2, 0, 26.0), Float.pi * 0.00),
+        (SIMD3<Float>( 8.2, 0, 26.0), Float.pi * 0.00),
+        (SIMD3<Float>(-8.2, 0, 52.0), Float.pi * 1.00),
+        (SIMD3<Float>( 8.2, 0, 52.0), Float.pi * 1.00)
+    ]
+
+    var localSpawnPosition: SIMD3<Float> {
+        let slot = localParticipantIndex % Self.arenaTeamSpawns.count
+        return Self.arenaTeamSpawns[slot].0
+    }
+
+    var localSpawnYaw: Float {
+        let slot = localParticipantIndex % Self.arenaTeamSpawns.count
+        return Self.arenaTeamSpawns[slot].1
+    }
+
+    var sortedRemoteAgents: [RemoteAgentState] {
+        let list = remoteAgentsDict.values.sorted { $0.peerID < $1.peerID }
+        return list.map { agent in
+            var copy = agent
+            copy.isSameTeam = isPeerOnSameTeam(agent.peerID)
+            return copy
+        }
+    }
+
+    var squadMateCandidates: [RemoteAgentState] {
+        let all = sortedRemoteAgents
+        let sameTeam = all.filter { $0.isSameTeam }
+        if !sameTeam.isEmpty { return sameTeam }
+        if !all.isEmpty { return all }
+        return [
+            RemoteAgentState(
+                peerID: "Escolta Táctico Alfa",
+                position: localPlayerPosition + SIMD3<Float>(2.6, 0, -2.6),
+                yaw: localPlayerYaw,
+                isSameTeam: true
+            )
+        ]
+    }
+
+    var selectedSquadCameraAgent: RemoteAgentState {
+        let candidates = squadMateCandidates
+        let idx = max(0, min(candidates.count - 1, selectedSquadMemberIndex))
+        return candidates[idx]
+    }
+
+    func cycleSquadCameraMember() {
+        let count = max(1, squadMateCandidates.count)
+        selectedSquadMemberIndex = (selectedSquadMemberIndex + 1) % count
+    }
 
     func resetHUDLayout() {
         hudJoystickX = 0; hudJoystickY = 0; hudJoystickScale = 1.0
@@ -1604,15 +1781,7 @@ final class GameModel: ObservableObject {
     }
 
     var isHost: Bool {
-        if multiplayer.isConnected {
-            guard let remotePeer = multiplayer.peers.first else { return true }
-            return multiplayer.localPeer.displayName < remotePeer.displayName
-        }
-        if gameCenter.isInMatch {
-            guard let firstRemote = gameCenter.connectedPlayerNames.first else { return true }
-            return gameCenter.localPlayerAlias <= firstRemote
-        }
-        return true
+        return localParticipantIndex == 0
     }
 
     var onRemoteNPCSyncReceived: (([SIMD3<Float>], [Float], Int, Int, Int, Bool, Float, [SIMD3<Float>]?, [SIMD3<Float>]?) -> Void)?
@@ -1701,16 +1870,17 @@ final class GameModel: ObservableObject {
         }
     }
 
-    func sendHitToRemotePlayer(damage: Float) {
+    func sendHitToRemotePlayer(damage: Float, targetPeerID: String? = nil) {
         guard isAnyMultiplayerConnected else { return }
         let packet = LocalMatchPacket(
             kind: .hit,
-            peerID: multiplayer.localPeer.displayName,
+            peerID: localPlayerDisplayName,
             mode: multiplayer.mode,
             timestamp: Date().timeIntervalSince1970,
             health: playerHealth,
             score: playerScore,
-            hitDamage: damage
+            hitDamage: damage,
+            targetPeerID: targetPeerID
         )
         if multiplayer.isConnected {
             multiplayer.send(packet)
@@ -1720,7 +1890,15 @@ final class GameModel: ObservableObject {
         }
     }
 
+    var connectedPlayersCount: Int {
+        max(1, allParticipantIDsSorted.count)
+    }
+
     var activePeerDisplayName: String {
+        let count = connectedPlayersCount
+        if count > 2 {
+            return "\(count) Jugadores (\(multiplayer.teamSize.shortLabel))"
+        }
         if multiplayer.isConnected, let localPeer = multiplayer.peers.first?.displayName {
             return localPeer
         }
@@ -1907,9 +2085,9 @@ final class GameModel: ObservableObject {
             playerShield = min(100.0, playerShield + 0.15)
         }
 
-        // ☀️🌑 Mecánicas del Duelo de Luces (3 Pasos: 1. Prender/Apagar 4 Luces -> 2. Recoger Núcleo en Piscina -> 3. Llevar a tu Base)
+        // ☀️🌑 Mecánicas del Duelo de Luces (3 Pasos: 1. Prender/Apagar 4 Luces -> 2. Recoger Núcleo en Salón Arcoíris -> 3. Llevar a tu Base)
         if multiplayer.mode == .lightBattle && gameState == .playing && lightBattleWinner == nil {
-            let isTeamLight = isHost
+            let isTeamLight = isLocalTeamAlpha
             let onCount = [lightStates.post, lightStates.piscinaNeon, lightStates.sheeritNeon, lightStates.poolStrips].filter { $0 }.count
             let offCount = 4 - onCount
             let myLightsReady = isTeamLight ? (onCount == 4) : (offCount == 4)
@@ -2005,9 +2183,9 @@ final class GameModel: ObservableObject {
         }
         hasRecordedVersusRoundResult = false
 
-        // Spawns opuestos en extremos de la arena para evitar encimarse
-        let spawnPos = isHost ? SIMD3<Float>(3.8, 0, 3.8) : SIMD3<Float>(-3.8, 0, -3.8)
-        let spawnYaw = isHost ? Float.pi * 1.25 : Float.pi * 0.25
+        // Spawns distribuidos por escuadra en el Salón de la Piscina y Gran Salón Arcoíris
+        let spawnPos = localSpawnPosition
+        let spawnYaw = localSpawnYaw
         self.localPlayerPosition = spawnPos
         self.localPlayerYaw = spawnYaw
         self.remotePlayerPosition = isHost ? SIMD3<Float>(-3.8, 0, -3.8) : SIMD3<Float>(3.8, 0, 3.8)
@@ -2019,13 +2197,15 @@ final class GameModel: ObservableObject {
         if !fromNetwork {
             let startPacket = LocalMatchPacket(
                 kind: .start,
-                peerID: multiplayer.localPeer.displayName,
+                peerID: localPlayerDisplayName,
                 mode: multiplayer.mode,
                 position: localPlayerPosition,
                 yaw: localPlayerYaw,
                 timestamp: Date().timeIntervalSince1970,
                 health: playerHealth,
                 score: playerScore,
+                targetPeerID: nil,
+                teamSizeRaw: multiplayer.teamSize.rawValue,
                 versusRound: versusRound,
                 versusLocalWins: versusLocalWins,
                 versusRemoteWins: versusRemoteWins,
@@ -2119,8 +2299,27 @@ final class GameModel: ObservableObject {
     }
 
     func handleMultiplayerPacket(_ packet: LocalMatchPacket) {
-        if !packet.peerID.isEmpty {
+        if !packet.peerID.isEmpty && packet.peerID != localPlayerDisplayName {
             remotePlayerName = packet.peerID
+            var entry = remoteAgentsDict[packet.peerID] ?? RemoteAgentState(
+                peerID: packet.peerID,
+                position: packet.position ?? SIMD3<Float>(-3.8, 0, 3.8),
+                yaw: packet.yaw ?? .pi
+            )
+            if let pos = packet.position { entry.position = pos }
+            if let y = packet.yaw { entry.yaw = y }
+            if let t = packet.tool { entry.heldToolRaw = t }
+            if let h = packet.health { entry.health = h }
+            if let s = packet.shield { entry.shield = s }
+            if let sc = packet.score { entry.score = sc }
+            if let isRec = packet.isRecovering { entry.isRecovering = isRec }
+            if let prog = packet.recoveryProgress { entry.recoveryProgress = prog }
+            if let hasC = packet.hasCore { entry.hasCore = hasC }
+            entry.isSameTeam = isPeerOnSameTeam(packet.peerID)
+            remoteAgentsDict[packet.peerID] = entry
+        }
+        if let tsRaw = packet.teamSizeRaw, let ts = MatchTeamSize(rawValue: tsRaw) {
+            multiplayer.teamSize = ts
         }
         switch packet.kind {
         case .start:
@@ -2249,16 +2448,20 @@ final class GameModel: ObservableObject {
             }
 
         case .hit, .laser:
+            // Si el disparo iba dirigido a un jugador específico en una sala de 4v4 y no somos nosotros, ignorar
+            if let targetID = packet.targetPeerID, !targetID.isEmpty, targetID != localPlayerDisplayName {
+                return
+            }
             if multiplayer.mode == .versus || multiplayer.mode == .lightBattle {
                 if hasEnergyCore {
                     hasEnergyCore = false // Suelta el núcleo al recibir un impacto de láser
                     audio.playLaserReflectionSound()
                 }
                 if heldTool == .mirror {
-                    // Escudo Espejo bloquea el ataque y lo refleja de vuelta al rival
+                    // Escudo Espejo bloquea el ataque y lo refleja de vuelta al rival que nos disparó
                     audio.playLaserReflectionSound()
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    sendHitToRemotePlayer(damage: 25.0)
+                    sendHitToRemotePlayer(damage: 25.0, targetPeerID: packet.peerID)
                 } else {
                     let dmg = packet.hitDamage ?? 15.0
                     takeDamage(dmg, broadcast: true)
@@ -5573,6 +5776,197 @@ struct TacticalRemoteControllerView: View {
     }
 }
 
+struct DuoTacticalControllerDeckView: View {
+    @ObservedObject var model: GameModel
+    @State private var feedback = UIImpactFeedbackGenerator(style: .medium)
+
+    var body: some View {
+        ZStack {
+            Color(red: 0.04, green: 0.05, blue: 0.09).ignoresSafeArea()
+
+            VStack(spacing: 10) {
+                // Barra superior de telemetría y acciones rápidas
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "rectangle.split.2x1.fill")
+                                .foregroundStyle(.cyan)
+                                .font(.caption.bold())
+                            Text("MANDO TÁCTICO DUO")
+                                .font(.system(size: 11, weight: .black, design: .rounded))
+                                .foregroundStyle(.cyan)
+                        }
+                        HStack(spacing: 8) {
+                            Text("❤️ \(Int(model.playerHealth))")
+                                .font(.system(size: 11, weight: .black, design: .monospaced))
+                                .foregroundStyle(.green)
+                            Text("🛡️ \(Int(model.playerShield))")
+                                .font(.system(size: 11, weight: .black, design: .monospaced))
+                                .foregroundStyle(.cyan)
+                            Text("⭐ \(model.playerScore)")
+                                .font(.system(size: 11, weight: .black, design: .monospaced))
+                                .foregroundStyle(.yellow)
+                        }
+                    }
+
+                    Spacer()
+
+                    Button {
+                        model.duoScreenMode = .squadCamera
+                    } label: {
+                        Label("Cámara Escuadra", systemImage: "video.badge.Viewfinder")
+                            .font(.system(size: 10, weight: .bold))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(Color.purple.opacity(0.28), in: Capsule())
+                            .overlay(Capsule().stroke(Color.purple, lineWidth: 1))
+                            .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        model.showsSettingsSheet = true
+                    } label: {
+                        Image(systemName: "gearshape.fill")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 32, height: 32)
+                            .background(Color.white.opacity(0.14), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        model.duoScreenMode = .off
+                    } label: {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.yellow)
+                            .frame(width: 32, height: 32)
+                            .background(Color.yellow.opacity(0.18), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 10)
+
+                // Habilidades Rápidas (Slow-Mo, Luz Cercana, Cobertura)
+                HStack(spacing: 8) {
+                    Button {
+                        feedback.impactOccurred()
+                        model.toggleSlowMotion()
+                    } label: {
+                        Label("Slow-Mo", systemImage: "hourglass")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(model.isSlowMotionActive ? .black : .yellow)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(model.isSlowMotionActive ? Color.yellow : Color.white.opacity(0.10), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+
+                    if let near = model.nearbyLight {
+                        Button {
+                            feedback.impactOccurred()
+                            model.toggleNearbyLight()
+                        } label: {
+                            Label(near.label, systemImage: "lightbulb.fill")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.black)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Color.yellow, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    if model.isNearCoverRock || model.isCoverActive {
+                        Button {
+                            feedback.impactOccurred()
+                            model.toggleCover()
+                        } label: {
+                            Label(model.isCoverActive ? "Salir" : "Cubrirse", systemImage: "shield.lefthalf.filled")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(model.isCoverActive ? .black : .green)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(model.isCoverActive ? Color.green : Color.white.opacity(0.10), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                Spacer(minLength: 4)
+
+                // Controles Principales: Joystick 360° + Armas y Salto
+                HStack(alignment: .center, spacing: 16) {
+                    JoystickView(onChanged: { vec in
+                        model.joystick = vec
+                    }, isLiquidGlass: true)
+                    .frame(width: 145, height: 145)
+
+                    VStack(spacing: 12) {
+                        HStack(spacing: 10) {
+                            Button {
+                                feedback.impactOccurred()
+                                model.heldTool = (model.heldTool == .flashlight ? .none : .flashlight)
+                            } label: {
+                                VStack(spacing: 2) {
+                                    Image(systemName: "flashlight.on.fill")
+                                        .font(.system(size: 18, weight: .bold))
+                                    Text("\(Int(model.flashlightBattery * 100))%")
+                                        .font(.system(size: 9, weight: .heavy, design: .monospaced))
+                                }
+                                .foregroundStyle(model.heldTool == .flashlight ? .black : .yellow)
+                                .frame(width: 54, height: 54)
+                                .background(model.heldTool == .flashlight ? Color.yellow : Color.yellow.opacity(0.18), in: Circle())
+                            }
+                            .buttonStyle(.plain)
+
+                            Button {
+                                feedback.impactOccurred()
+                                model.heldTool = (model.heldTool == .laser ? .none : .laser)
+                            } label: {
+                                VStack(spacing: 2) {
+                                    Image(systemName: "bolt.fill")
+                                        .font(.system(size: 18, weight: .bold))
+                                    Text("LÁSER")
+                                        .font(.system(size: 9, weight: .heavy))
+                                }
+                                .foregroundStyle(.white)
+                                .frame(width: 54, height: 54)
+                                .background(model.heldTool == .laser ? Color.red : Color.red.opacity(0.22), in: Circle())
+                            }
+                            .buttonStyle(.plain)
+
+                            MirrorShieldJoystickButton(model: model)
+                        }
+
+                        Button {
+                            feedback.impactOccurred()
+                            model.requestJump()
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "arrow.up.circle.fill")
+                                    .font(.system(size: 18, weight: .black))
+                                Text("SALTAR / PARKOUR")
+                                    .font(.system(size: 12, weight: .black, design: .rounded))
+                            }
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Color.white, in: Capsule())
+                            .overlay(Capsule().stroke(Color.yellow, lineWidth: 2))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.bottom, 14)
+            }
+        }
+    }
+}
+
 
 
 struct PauseMenuView: View {
@@ -5753,13 +6147,34 @@ struct MultiplayerSettingsSheet: View {
                     }
                 }
 
-                Section("Modo de Juego") {
+                Section("Modo de Juego y Tamaño de Sala") {
                     Picker("Modo", selection: $multiplayer.mode) {
                         ForEach(LocalMatchMode.allCases) { mode in
                             Text(mode.label).tag(mode)
                         }
                     }
                     .pickerStyle(.segmented)
+
+                    Picker("Capacidad Máxima (Equipo)", selection: $multiplayer.teamSize) {
+                        ForEach(MatchTeamSize.allCases) { size in
+                            Text(size.label).tag(size)
+                        }
+                    }
+
+                    Text("💡 No es obligatorio llenar el grupo: si eliges 4 vs 4 (hasta 8) y solo hay 3 o 5 amigos conectados, puedes iniciar la partida en cualquier momento.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section("📱📱 Modo Doble Pantalla (iPhone Duo)") {
+                    Picker("Pantalla iPhone Duo", selection: Binding(
+                        get: { model.duoScreenMode },
+                        set: { model.duoScreenMode = $0 }
+                    )) {
+                        ForEach(DuoScreenMode.allCases) { dMode in
+                            Text(dMode.label).tag(dMode)
+                        }
+                    }
                 }
 
                 Section("Rol de este Dispositivo") {
@@ -5838,9 +6253,13 @@ struct MultiplayerSettingsSheet: View {
                             HStack {
                                 Image(systemName: "checkmark.circle.fill")
                                     .foregroundStyle(.green)
-                                Text("Conectado con: \(multiplayer.peers.first?.displayName ?? "Jugador 2")")
+                                Text("Sala activa: \(multiplayer.peers.count + 1)/\(multiplayer.teamSize.maxPlayers) jugadores conectados")
                                     .font(.subheadline.bold())
                                     .foregroundStyle(.green)
+                            }
+                            ForEach(multiplayer.peers, id: \.displayName) { peer in
+                                Label(peer.displayName, systemImage: "iphone.gen3")
+                                    .font(.caption.bold())
                             }
 
                             Button {
@@ -5851,7 +6270,7 @@ struct MultiplayerSettingsSheet: View {
                             } label: {
                                 HStack {
                                     Image(systemName: "play.fill")
-                                    Text("INICIAR PARTIDA MULTIJUGADOR AHORA")
+                                    Text("INICIAR PARTIDA AHORA (\(multiplayer.peers.count + 1) JUGADORES)")
                                         .font(.subheadline.bold())
                                 }
                                 .frame(maxWidth: .infinity)
@@ -5898,10 +6317,10 @@ struct MultiplayerSettingsSheet: View {
                         }
                     } else {
                         Button {
-                            model.gameCenter.presentMatchmaker()
+                            model.gameCenter.presentMatchmaker(maxPlayers: multiplayer.teamSize.maxPlayers)
                         } label: {
                             HStack {
-                                Label("Invitar Amigos / Matchmaking", systemImage: "gamecontroller.fill")
+                                Label("Invitar Amigos / Matchmaking (\(multiplayer.teamSize.shortLabel))", systemImage: "gamecontroller.fill")
                                 Spacer()
                                 Image(systemName: "chevron.right")
                                     .font(.caption)
@@ -5915,7 +6334,7 @@ struct MultiplayerSettingsSheet: View {
                             HStack {
                                 Image(systemName: "globe.americas.fill")
                                     .foregroundStyle(.green)
-                                Text("Partida de Game Center lista (\(model.gameCenter.connectedPlayerNames.count + 1) jugadores)")
+                                Text("Sala Game Center: \(model.gameCenter.connectedPlayerNames.count + 1)/\(multiplayer.teamSize.maxPlayers) jugadores (listo para iniciar)")
                                     .font(.caption.bold())
                                     .foregroundStyle(.green)
                             }
@@ -5924,6 +6343,7 @@ struct MultiplayerSettingsSheet: View {
                                     .font(.caption.bold())
                             }
                             Button {
+                                model.gameCenter.startMatchNowWithConnectedPlayers()
                                 dismiss()
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                                     model.startGame(fromNetwork: false)
@@ -5931,7 +6351,7 @@ struct MultiplayerSettingsSheet: View {
                             } label: {
                                 HStack {
                                     Image(systemName: "play.fill")
-                                    Text("INICIAR PARTIDA DE GAME CENTER AHORA")
+                                    Text("INICIAR CON LOS \(model.gameCenter.connectedPlayerNames.count + 1) CONECTADOS AHORA")
                                         .font(.subheadline.bold())
                                 }
                                 .frame(maxWidth: .infinity)
@@ -6018,6 +6438,29 @@ struct GameOptionsSheet: View {
                         Text("3ª Persona").tag(GameCameraMode.thirdPerson)
                     }
                     .pickerStyle(.segmented)
+
+                    Picker("Modo Doble Pantalla (iPhone Duo)", selection: Binding(
+                        get: { model.duoScreenMode },
+                        set: { model.duoScreenMode = $0 }
+                    )) {
+                        ForEach(DuoScreenMode.allCases) { dMode in
+                            Text(dMode.label).tag(dMode)
+                        }
+                    }
+
+                    if model.duoScreenMode == .squadCamera {
+                        Button {
+                            model.cycleSquadCameraMember()
+                        } label: {
+                            HStack {
+                                Label("Compañero en 2ª Pantalla", systemImage: "person.2.crop.square.stack.fill")
+                                Spacer()
+                                Text(model.selectedSquadCameraAgent.peerID)
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.cyan)
+                            }
+                        }
+                    }
 
                     Button {
                         dismiss()

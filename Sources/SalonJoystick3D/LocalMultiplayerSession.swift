@@ -10,11 +10,75 @@ enum LocalMatchMode: String, Codable, CaseIterable, Identifiable {
     var id: Self { self }
     var label: String {
         switch self {
-        case .cooperative: "Cooperativo"
-        case .versus: "Versus 1v1"
+        case .cooperative: "Cooperativo (Escuadrón)"
+        case .versus: "Versus / Equipos"
         case .lightBattle: "Duelo de Luces"
         }
     }
+}
+
+enum MatchTeamSize: Int, Codable, CaseIterable, Identifiable {
+    case duel1v1 = 2
+    case squad2v2 = 4
+    case squad3v3 = 6
+    case battle4v4 = 8
+
+    var id: Self { self }
+    var maxPlayers: Int { rawValue }
+    var label: String {
+        switch self {
+        case .duel1v1: "1 vs 1 (Hasta 2)"
+        case .squad2v2: "2 vs 2 (Hasta 4)"
+        case .squad3v3: "3 vs 3 (Hasta 6)"
+        case .battle4v4: "4 vs 4 (Hasta 8)"
+        }
+    }
+    var shortLabel: String {
+        switch self {
+        case .duel1v1: "1v1 (2)"
+        case .squad2v2: "2v2 (4)"
+        case .squad3v3: "3v3 (6)"
+        case .battle4v4: "4v4 (8)"
+        }
+    }
+}
+
+enum DuoScreenMode: Int, Codable, CaseIterable, Identifiable {
+    case off = 0
+    case tacticalButtons = 1
+    case squadCamera = 2
+
+    var id: Self { self }
+    var label: String {
+        switch self {
+        case .off: "Pantalla Estándar (1 Vista)"
+        case .tacticalButtons: "iPhone Duo: 3D Limpio + Mando Táctico"
+        case .squadCamera: "iPhone Duo: Doble Cámara de Escuadra"
+        }
+    }
+    var shortLabel: String {
+        switch self {
+        case .off: "Estándar"
+        case .tacticalButtons: "Duo: Controles"
+        case .squadCamera: "Duo: Cámara Escuadra"
+        }
+    }
+}
+
+struct RemoteAgentState: Identifiable, Equatable {
+    var id: String { peerID }
+    var peerID: String
+    var position: SIMD3<Float>
+    var yaw: Float
+    var pitch: Float = 0
+    var heldToolRaw: Int = 1
+    var health: Float = 100.0
+    var shield: Float = 100.0
+    var score: Int = 0
+    var isRecovering: Bool = false
+    var recoveryProgress: Float = 1.0
+    var hasCore: Bool = false
+    var isSameTeam: Bool = true
 }
 
 struct LocalMatchPacket: Codable {
@@ -63,9 +127,11 @@ struct LocalMatchPacket: Codable {
     var botLaserStarts: [SIMD3<Float>]?
     var botLaserEnds: [SIMD3<Float>]?
 
-    // Daño colaborativo a enemigos (Cliente -> Host)
+    // Daño colaborativo a enemigos (Cliente -> Host) o a un jugador específico en salas de hasta 8 jugadores
     var hitEnemyIndex: Int?
     var hitDamage: Float?
+    var targetPeerID: String?
+    var teamSizeRaw: Int?
 
     // Cámara de Recuperación Cooperativa
     var isRecovering: Bool?
@@ -113,6 +179,7 @@ final class LocalMultiplayerSession: NSObject, ObservableObject {
     @Published private(set) var discoveredPeers: [MCPeerID] = []
     @Published private(set) var statusMessage: String = "Listo para enlazar"
     @Published var mode: LocalMatchMode = .cooperative
+    @Published var teamSize: MatchTeamSize = .battle4v4
     @Published var role: LocalDeviceRole = .full3DRender
     @Published private(set) var lastError: String?
 
@@ -161,6 +228,8 @@ final class LocalMultiplayerSession: NSObject, ObservableObject {
         case "iPhone15,3": return "iPhone 14 Pro Max"
         case "iPhone17,1": return "iPhone 16 Pro"
         case "iPhone17,2": return "iPhone 16 Pro Max"
+        case "iPhone18,1", "iPhone18,2": return "iPhone 17 Pro"
+        case "iPhone18,4", "iPhone19,1", "iPhone19,2": return "iPhone Duo"
         default:
             if identifier.hasPrefix("iPad") { return "iPad" }
             return "iPhone"
@@ -263,10 +332,14 @@ extension LocalMultiplayerSession: MCSessionDelegate {
 
             switch state {
             case .connected:
-                self.statusMessage = "¡Enlazado con \(peerID.displayName)!"
-                self.isHosting = false
-                self.isSearching = false
-                self.stopDiscovery()
+                let totalPlayers = session.connectedPeers.count + 1
+                self.statusMessage = "¡Sala activa (\(totalPlayers)/\(self.teamSize.maxPlayers) jugadores) • Último: \(peerID.displayName)!"
+                // Solo detener el buscador si ya alcanzamos el cupo máximo elegido; si hay menos (ej. 5 de 8), sigue abierto o puedes iniciar ya
+                if totalPlayers >= self.teamSize.maxPlayers {
+                    self.isHosting = false
+                    self.isSearching = false
+                    self.stopDiscovery()
+                }
                 if !wasConnected && connectedNow {
                     self.onConnected?()
                 }

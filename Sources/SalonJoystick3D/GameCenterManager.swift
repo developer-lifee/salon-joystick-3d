@@ -92,7 +92,7 @@ final class GameCenterManager: NSObject, ObservableObject {
 
     private var activeCoordinator: GameCenterMatchmakerCoordinator?
 
-    func presentMatchmaker() {
+    func presentMatchmaker(maxPlayers: Int = 8) {
         let localPlayer = GKLocalPlayer.local
         guard localPlayer.isAuthenticated else {
             self.isAuthenticated = false
@@ -101,11 +101,12 @@ final class GameCenterManager: NSObject, ObservableObject {
             return
         }
 
+        let clampedMax = max(2, min(16, maxPlayers))
         let request = GKMatchRequest()
         request.minPlayers = 2
-        request.maxPlayers = 4
-        request.defaultNumberOfPlayers = 2
-        request.inviteMessage = "¡Únete a mi partida en Salón Joystick 3D!"
+        request.maxPlayers = clampedMax
+        request.defaultNumberOfPlayers = clampedMax
+        request.inviteMessage = "¡Únete a mi escuadrón en Laser Tracer 3D (hasta \(clampedMax) jugadores)!"
 
         guard let vc = GKMatchmakerViewController(matchRequest: request) else { return }
         let coordinator = GameCenterMatchmakerCoordinator(gameCenter: self)
@@ -115,6 +116,12 @@ final class GameCenterManager: NSObject, ObservableObject {
         if let topVC = UIApplication.topViewController {
             topVC.present(vc, animated: true)
         }
+    }
+
+    func startMatchNowWithConnectedPlayers() {
+        guard let activeMatch, !activeMatch.players.isEmpty else { return }
+        GKMatchmaker.shared().finishMatchmaking(for: activeMatch)
+        onMatchStarted?()
     }
 
     func startMatch(_ match: GKMatch) {

@@ -18,6 +18,8 @@ struct RTUniforms {
     float4 toolDirection;
     float4 toolParameters;
     float4 lightStates;
+    float4 secondaryCameraPosition;
+    float4 secondaryCameraForward;
 };
 
 struct RTLaserResult {
@@ -864,25 +866,39 @@ kernel void raytracePatio(
                                              mirrorForward);
         }
     } else if (isSplitScreen) {
-        uint halfHeight = height / 2;
-        bool isBottomViewport = (tid.y >= halfHeight);
-        float subScreenHeight = float(halfHeight);
-        float localY = isBottomViewport ? float(tid.y - halfHeight) : float(tid.y);
-        uv.y = ((localY + 0.5f) / subScreenHeight) * 2.0f - 1.0f;
-        uv.y = -uv.y;
-
-        if (isBottomViewport) {
-            float3 p2Origin = float3(-3.8f, 1.15f, -3.8f);
-            float3 p2Forward = normalize(float3(0.0f, 0.5f, 0.0f) - p2Origin);
-            float3 p2Right = normalize(cross(p2Forward, float3(0.0f, 1.0f, 0.0f)));
-            float3 p2Up = cross(p2Right, p2Forward);
-            currentRay.origin = p2Origin;
-            currentRay.direction = normalize(uv.x * p2Right + uv.y * p2Up + p2Forward);
-        }
-
-        if (abs(int(tid.y) - int(halfHeight)) <= 2) {
-            output.write(half4(0.0h, 0.85h, 1.0h, 1.0h), tid);
+        // 📱📱 Modo iPhone Duo: Doble Cámara de Escuadra (Izquierda: Tu Vista | Derecha: Cámara en Vivo de tu Compañero de Escuadra)
+        uint halfWidth = width / 2;
+        if (abs(int(tid.x) - int(halfWidth)) <= 2) {
+            output.write(half4(0.08h, 0.90h, 1.0h, 1.0h), tid);
             return;
+        }
+        bool isSquadViewport = (tid.x >= halfWidth);
+        float subScreenWidth = float(halfWidth);
+        float localX = isSquadViewport ? float(tid.x - halfWidth) : float(tid.x);
+        float2 splitUV = float2(((localX + 0.5f) / subScreenWidth) * 2.0f - 1.0f, uv.y);
+        float halfAspectScale = 0.52f;
+
+        if (!isSquadViewport) {
+            currentRay.origin = uniforms.cameraPosition.xyz;
+            currentRay.direction = normalize(splitUV.x * halfAspectScale * uniforms.cameraRight.xyz +
+                                             splitUV.y * uniforms.cameraUp.xyz +
+                                             uniforms.cameraForward.xyz);
+        } else {
+            firstPerson = false;
+            float3 sqOrigin = uniforms.secondaryCameraPosition.xyz;
+            float3 sqForward = normalize(uniforms.secondaryCameraForward.xyz);
+            float3 sqRight = cross(sqForward, float3(0.0f, 1.0f, 0.0f));
+            if (length_squared(sqRight) < 1e-4f) {
+                sqRight = float3(1.0f, 0.0f, 0.0f);
+            } else {
+                sqRight = normalize(sqRight);
+            }
+            float3 sqUp = normalize(cross(sqRight, sqForward));
+            float subAspect = (subScreenWidth / max(1.0f, float(height))) * 0.58f;
+            currentRay.origin = sqOrigin;
+            currentRay.direction = normalize(splitUV.x * sqRight * subAspect +
+                                             splitUV.y * sqUp * 0.58f +
+                                             sqForward);
         }
     }
 

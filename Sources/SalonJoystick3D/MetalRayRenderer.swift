@@ -24,6 +24,8 @@ private struct RTUniforms {
     var toolDirection: SIMD4<Float>
     var toolParameters: SIMD4<Float>
     var lightStates: SIMD4<Float>
+    var secondaryCameraPosition: SIMD4<Float>
+    var secondaryCameraForward: SIMD4<Float>
 }
 
 private struct RTLaserResult {
@@ -989,7 +991,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     var remotePlayerPosition: SIMD3<Float> = SIMD3<Float>(-3.8, 0, 3.8)
     var remotePlayerYaw: Float = .pi
     var remotePlayerHeldTool: GameHeldTool = .laser
+    var remoteAgents: [RemoteAgentState] = []
+    var secondaryCameraPos: SIMD3<Float> = SIMD3<Float>(-3.8, 1.45, 3.8)
+    var secondaryCameraFwd: SIMD3<Float> = SIMD3<Float>(0, 0, -1)
     private var smoothedRemotePos: SIMD3<Float> = SIMD3<Float>(-3.8, 0, 3.8)
+    private var smoothedRemoteAgents: [String: SIMD3<Float>] = [:]
     private var netSyncTimer: Float = 0
 
     // Sincronización multijugador autoritativa de enemigos
@@ -1000,6 +1006,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     var onNPCSyncUpdate: (([SIMD3<Float>], [Float], Int, Int, Int, Bool, Float, [SIMD3<Float>], [SIMD3<Float>]) -> Void)?
     var onClientNPCHit: ((Int, Float) -> Void)?
     var onRemotePlayerHit: ((Float) -> Void)?
+    var onRemoteAgentHit: ((String, Float) -> Void)?
     var onBotDamageToRemotePlayer: ((Float) -> Void)?
     var onRemoteNPCEliminated: ((Int) -> Void)?
     private var remotePlayerHitCooldown: Float = 0
@@ -1246,7 +1253,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         self.floatMesh = try Self.makeMesh(builder: floatBuilder, device: device, queue: commandQueue)
         self.mirrorShieldMesh = try Self.makeMesh(builder: mirrorShieldBuilder, device: device, queue: commandQueue)
 
-        let instanceLength = MemoryLayout<MTLAccelerationStructureInstanceDescriptor>.stride * 12
+        let instanceLength = MemoryLayout<MTLAccelerationStructureInstanceDescriptor>.stride * 24
         guard let instanceBuffer = device.makeBuffer(length: instanceLength, options: .storageModeShared) else {
             throw MetalRayRendererError.resourceCreationFailed
         }
@@ -1280,7 +1287,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 playerClimbAS,   // 10 (climb escalera)
                 fotofagoAS       // 11 (El Fotófago - Golem Devorador de Luz)
             ]
-            descriptor.instanceCount = 12
+            descriptor.instanceCount = 24
             descriptor.instanceDescriptorBuffer = instanceBuffer
             self.instanceDescriptor = descriptor
 
@@ -1636,6 +1643,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if isRemotePlayerConnected {
             let interp = min(1.0, rawDt * 14.0)
             smoothedRemotePos += (remotePlayerPosition - smoothedRemotePos) * interp
+            for agent in remoteAgents {
+                let prev = smoothedRemoteAgents[agent.peerID] ?? agent.position
+                smoothedRemoteAgents[agent.peerID] = prev + (agent.position - prev) * interp
+            }
             netSyncTimer += rawDt
             if netSyncTimer >= 0.065 {
                 netSyncTimer = 0
@@ -3059,48 +3070,56 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
         }
 
-        // Detección de impacto de láser sobre el otro jugador (1v1 Versus únicamente - sin fuego amigo en cooperativo)
+        // Detección de impacto de láser sobre otros jugadores (Versus / Equipos 1v1, 2v2, 3v3, 4v4 - sin fuego amigo a compañeros de escuadra)
         if isRemotePlayerConnected && isVersusMode {
             remotePlayerHitCooldown = max(0, remotePlayerHitCooldown - dt)
-            let alongRay = simd_dot((remotePlayerPosition + SIMD3<Float>(0, 0.95, 0)) - origin, direction)
-            if alongRay > 0.4 && alongRay < 35.0 {
-                let closestPoint = origin + direction * alongRay
-                
-                // Hitbox humanoide completa: segmento vertical desde pies hasta cabeza
-                let clampedY = max(remotePlayerPosition.y + 0.15, min(remotePlayerPosition.y + 1.85, closestPoint.y))
-                let segmentPoint = SIMD3<Float>(remotePlayerPosition.x, clampedY, remotePlayerPosition.z)
-                let distToBody = simd_distance(closestPoint, segmentPoint)
-                
-                if distToBody < 0.75 && remotePlayerHitCooldown <= 0 {
-                    var hitRock = false
-                    for rock in rtRiverRocks {
-                        let center = rock.center
-                        let radius = max(rock.radii.x, rock.radii.z)
-                        let toCenter = center - origin
-                        let proj = simd_dot(toCenter, direction)
-                        if proj > 0.1 && proj < alongRay {
-                            let closestPointOnRay = origin + direction * proj
-                            if simd_distance(center, closestPointOnRay) < (radius + 0.35) {
-                                hitRock = true
-                                break
+            let targets: [RemoteAgentState] = remoteAgents.isEmpty
+                ? [RemoteAgentState(peerID: "", position: remotePlayerPosition, yaw: remotePlayerYaw, heldToolRaw: remotePlayerHeldTool.rawValue, isSameTeam: false)]
+                : remoteAgents.filter { !$0.isSameTeam && $0.health > 0 }
+
+            for target in targets {
+                let tPos = target.position
+                let alongRay = simd_dot((tPos + SIMD3<Float>(0, 0.95, 0)) - origin, direction)
+                if alongRay > 0.4 && alongRay < 68.0 {
+                    let closestPoint = origin + direction * alongRay
+                    let clampedY = max(tPos.y + 0.15, min(tPos.y + 1.85, closestPoint.y))
+                    let segmentPoint = SIMD3<Float>(tPos.x, clampedY, tPos.z)
+                    let distToBody = simd_distance(closestPoint, segmentPoint)
+
+                    if distToBody < 0.78 && remotePlayerHitCooldown <= 0 {
+                        var hitObstacle = false
+                        for rock in rtRiverRocks {
+                            let center = rock.center
+                            let radius = max(rock.radii.x, rock.radii.z)
+                            let toCenter = center - origin
+                            let proj = simd_dot(toCenter, direction)
+                            if proj > 0.1 && proj < alongRay {
+                                let closestPointOnRay = origin + direction * proj
+                                if simd_distance(center, closestPointOnRay) < (radius + 0.35) {
+                                    hitObstacle = true
+                                    break
+                                }
                             }
                         }
-                    }
-                    if !hitRock {
-                        // Comprobar si el rival tiene su escudo espejo activo apuntando hacia este láser
-                        let rivalFacing = SIMD3<Float>(sin(remotePlayerYaw), 0, cos(remotePlayerYaw))
-                        let facingDot = simd_dot(-direction, rivalFacing)
-                        if remotePlayerHeldTool == .mirror && facingDot > -0.20 {
-                            // ¡El rival tiene el espejo activo y bloquea nuestro disparo reflejándolo!
-                            remotePlayerHitCooldown = 0.35
-                            audio.playLaserReflectionSound()
-                            // El disparo reflejado nos daña a nosotros
-                            accumulateDamage(25.0)
-                        } else {
-                            remotePlayerHitCooldown = 0.35
-                            audio.playLaserPlayerHitSound()
-                            onRemotePlayerHit?(15.0)
+                        if !hitObstacle {
+                            let rivalFacing = SIMD3<Float>(sin(target.yaw), 0, cos(target.yaw))
+                            let facingDot = simd_dot(-direction, rivalFacing)
+                            let targetTool = GameHeldTool(rawValue: target.heldToolRaw) ?? .none
+                            if targetTool == .mirror && facingDot > -0.20 {
+                                remotePlayerHitCooldown = 0.35
+                                audio.playLaserReflectionSound()
+                                accumulateDamage(25.0)
+                            } else {
+                                remotePlayerHitCooldown = 0.35
+                                audio.playLaserPlayerHitSound()
+                                if !target.peerID.isEmpty {
+                                    onRemoteAgentHit?(target.peerID, 15.0)
+                                } else {
+                                    onRemotePlayerHit?(15.0)
+                                }
+                            }
                         }
+                        break
                     }
                 }
             }
@@ -3960,7 +3979,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 lightStates.effectiveIntensity(.piscinaNeon),
                 lightStates.effectiveIntensity(.sheeritNeon),
                 lightStates.effectiveIntensity(.poolStrips)
-            )
+            ),
+            secondaryCameraPosition: SIMD4<Float>(secondaryCameraPos, 1.0),
+            secondaryCameraForward: SIMD4<Float>(secondaryCameraFwd, 0.0)
         )
         lastCameraPosition = cameraPosition
         lastCameraRight = right * aspect * imagePlaneHeight
@@ -4060,7 +4081,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             playerASIndex = 1 // 🧍 Stand articulado
         }
 
-        let descriptors = [
+        var descriptors: [MTLAccelerationStructureInstanceDescriptor] = [
             Self.makeInstanceDescriptor(translation: .zero, yaw: 0, pitch: 0, mask: 0x01, accelerationStructureIndex: 0),
             Self.makeInstanceDescriptor(translation: playerRenderPos, yaw: playerYaw, pitch: pPitch, scale: pScale, mask: playerInstanceMask, accelerationStructureIndex: playerASIndex),
             Self.makeInstanceDescriptor(translation: .zero, yaw: 0, pitch: 0, mask: 0x04, accelerationStructureIndex: 2),
@@ -4070,25 +4091,63 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             makeNPCInstanceDescriptor(index: 2),
             makeNPCInstanceDescriptor(index: 3),
             makeNPCInstanceDescriptor(index: 4),
-            Self.makeInstanceDescriptor(translation: shieldPos, yaw: effYaw, pitch: effPitch, mask: shieldMask, accelerationStructureIndex: 5),
-            Self.makeInstanceDescriptor(
-                translation: isRemotePlayerConnected ? (remotePlayerIsRecovering ? SIMD3<Float>(isHost ? 0.95 : -0.95, 0.45, 6.2) : smoothedRemotePos) : SIMD3<Float>(0, -500, 0),
-                yaw: remotePlayerIsRecovering ? Float.pi : remotePlayerYaw,
-                pitch: 0,
-                scale: rScale,
-                mask: isRemotePlayerConnected ? 0x01 : 0x00,
-                accelerationStructureIndex: (simd_distance_squared(smoothedRemotePos, remotePlayerPosition) > 0.002 && !remotePlayerIsRecovering) ? 9 : 1
-            ),
-            Self.makeInstanceDescriptor(
-                translation: (isRemotePlayerConnected && remotePlayerHeldTool == .mirror && !remotePlayerIsRecovering)
-                    ? (smoothedRemotePos + SIMD3<Float>(0, 1.08, 0) + SIMD3<Float>(sin(remotePlayerYaw), 0, cos(remotePlayerYaw)) * 0.52)
-                    : SIMD3<Float>(0, -500, 0),
-                yaw: remotePlayerYaw,
-                pitch: 0,
-                mask: (isRemotePlayerConnected && remotePlayerHeldTool == .mirror && !remotePlayerIsRecovering) ? 0x01 : 0x00,
-                accelerationStructureIndex: 5
-            )
+            Self.makeInstanceDescriptor(translation: shieldPos, yaw: effYaw, pitch: effPitch, mask: shieldMask, accelerationStructureIndex: 5)
         ]
+
+        // Hasta 7 jugadores remotos simultáneos (8 jugadores totales en sala para 4 vs 4 o escuadrón)
+        let activeAgents: [RemoteAgentState]
+        if !remoteAgents.isEmpty {
+            activeAgents = Array(remoteAgents.prefix(7))
+        } else if isRemotePlayerConnected {
+            activeAgents = [RemoteAgentState(
+                peerID: "remote_primary",
+                position: remotePlayerPosition,
+                yaw: remotePlayerYaw,
+                heldToolRaw: remotePlayerHeldTool.rawValue,
+                isRecovering: remotePlayerIsRecovering
+            )]
+        } else {
+            activeAgents = []
+        }
+
+        for slot in 0..<7 {
+            if slot < activeAgents.count {
+                let agent = activeAgents[slot]
+                let smoothPos = smoothedRemoteAgents[agent.peerID] ?? (slot == 0 ? smoothedRemotePos : agent.position)
+                let podPos = SIMD3<Float>(slot % 2 == 0 ? 0.95 : -0.95, 0.45, 6.2)
+                let renderPos = agent.isRecovering ? podPos : smoothPos
+                let isMovingAgent = simd_distance_squared(smoothPos, agent.position) > 0.002 && !agent.isRecovering
+                let agentAS: UInt32 = isMovingAgent ? 9 : 1
+                let agentScale: SIMD3<Float> = slot == 0 ? rScale : SIMD3<Float>(1, 1, 1)
+                let agentTool = GameHeldTool(rawValue: agent.heldToolRaw) ?? .none
+                let hasShield = (agentTool == .mirror && !agent.isRecovering)
+
+                descriptors.append(
+                    Self.makeInstanceDescriptor(
+                        translation: renderPos,
+                        yaw: agent.isRecovering ? Float.pi : agent.yaw,
+                        pitch: 0,
+                        scale: agentScale,
+                        mask: 0x01,
+                        accelerationStructureIndex: agentAS
+                    )
+                )
+                descriptors.append(
+                    Self.makeInstanceDescriptor(
+                        translation: hasShield
+                            ? (smoothPos + SIMD3<Float>(0, 1.08, 0) + SIMD3<Float>(sin(agent.yaw), 0, cos(agent.yaw)) * 0.52)
+                            : SIMD3<Float>(0, -500, 0),
+                        yaw: agent.yaw,
+                        pitch: 0,
+                        mask: hasShield ? 0x01 : 0x00,
+                        accelerationStructureIndex: 5
+                    )
+                )
+            } else {
+                descriptors.append(Self.makeInstanceDescriptor(translation: SIMD3<Float>(0, -500, 0), yaw: 0, pitch: 0, mask: 0x00, accelerationStructureIndex: 1))
+                descriptors.append(Self.makeInstanceDescriptor(translation: SIMD3<Float>(0, -500, 0), yaw: 0, pitch: 0, mask: 0x00, accelerationStructureIndex: 5))
+            }
+        }
         descriptors.withUnsafeBytes { bytes in
             guard let baseAddress = bytes.baseAddress else { return }
             instanceBuffer.contents().copyMemory(from: baseAddress, byteCount: bytes.count)

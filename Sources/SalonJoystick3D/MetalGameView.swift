@@ -190,6 +190,12 @@ struct MetalGameView: UIViewRepresentable {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 }
             }
+            renderer.onRemoteAgentHit = { [weak model] targetPeerID, damage in
+                Task { @MainActor in
+                    model?.sendHitToRemotePlayer(damage: damage, targetPeerID: targetPeerID)
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                }
+            }
             view.delegate = renderer
         } catch {
             if let onFallbackRequested {
@@ -219,18 +225,22 @@ struct MetalGameView: UIViewRepresentable {
         context.coordinator.renderer?.onFPSUpdate = model.showsFPS
             ? context.coordinator.onFPSUpdate
             : nil
-        context.coordinator.renderer?.isSplitScreenMode = false
+        context.coordinator.renderer?.isSplitScreenMode = (model.duoScreenMode == .squadCamera)
+        let squadTarget = model.selectedSquadCameraAgent
+        context.coordinator.renderer?.secondaryCameraPos = squadTarget.position + SIMD3<Float>(0, 1.38, 0) - SIMD3<Float>(sin(squadTarget.yaw), -0.18, cos(squadTarget.yaw)) * 2.2
+        context.coordinator.renderer?.secondaryCameraFwd = simd_normalize(SIMD3<Float>(sin(squadTarget.yaw), -0.10, cos(squadTarget.yaw)))
         context.coordinator.renderer?.isAuthorityForNPCs = model.isHost
         let isVersus = model.isAnyMultiplayerConnected && (model.multiplayer.mode == .versus || model.multiplayer.mode == .lightBattle)
         context.coordinator.renderer?.isVersusMode = isVersus
-        let spawnPos = model.isHost ? SIMD3<Float>(3.8, 0, 3.8) : SIMD3<Float>(-3.8, 0, -3.8)
-        let spawnYaw = model.isHost ? Float.pi * 1.25 : Float.pi * 0.25
+        let spawnPos = model.localSpawnPosition
+        let spawnYaw = model.localSpawnYaw
         context.coordinator.renderer?.initialSpawnPosition = spawnPos
         context.coordinator.renderer?.initialSpawnYaw = spawnYaw
         context.coordinator.renderer?.isRemotePlayerConnected = model.isAnyMultiplayerConnected
         context.coordinator.renderer?.remotePlayerPosition = model.remotePlayerPosition
         context.coordinator.renderer?.remotePlayerYaw = model.remotePlayerYaw
         context.coordinator.renderer?.remotePlayerHeldTool = model.remotePlayerHeldTool
+        context.coordinator.renderer?.remoteAgents = model.sortedRemoteAgents
         let isPaused = model.gameState != .playing
         context.coordinator.renderer?.setInput(
             joystick: model.joystick,
