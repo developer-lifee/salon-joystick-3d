@@ -12,14 +12,14 @@
 [![iOS 17+](https://img.shields.io/badge/iOS-17.0%2B-ff69b4?style=for-the-badge&logo=apple&logoColor=white)](https://apple.com)
 [![Metal 3.0](https://img.shields.io/badge/Metal-3.0_Ray_Tracing-00ffff?style=for-the-badge&logo=apple&logoColor=white)](https://developer.apple.com/metal/)
 [![Swift 5.10](https://img.shields.io/badge/Swift-5.10-orange?style=for-the-badge&logo=swift&logoColor=white)](https://swift.org)
-[![Build](https://img.shields.io/badge/Version-v1.0.0_(Build_83)-blue?style=for-the-badge&logo=git)](https://github.com)
+[![Build](https://img.shields.io/badge/Version-v2.1_(Build_84)-blue?style=for-the-badge&logo=git)](https://github.com)
 [![Aesthetic](https://img.shields.io/badge/Aesthetic-Cyberpunk_Kawaii_UwU-purple?style=for-the-badge)](https://github.com)
 [![FPS](https://img.shields.io/badge/FPS-60_Locked_⚡️-brightgreen?style=for-the-badge)](https://apple.com)
 
 > ₍⸍⸏────────────────────────────────────────────────────────────⸏⸌₎
 > **LASER TRACER 3D** es un motor de combate táctico 3D y demostración técnica avanzada desarrollado **100% en código nativo Swift y Metal Shaders (MSL)**. Diseñado desde cero para exprimir los hardware **Ray Tracing Cores** de los chips **Apple A17 Pro (iPhone 15 Pro / Max)** y **Apple Silicon M-series** a 60 FPS estables sin sobrecalentar la batería (uwu) ♡.
 > 
-> 🏷️ **Versión Actual:** `v1.0.0` • **Build:** `83` (`fbbc4e2`)
+> 🏷️ **Versión Actual:** `v2.1` • **Build:** `84` (`3357fbb`)
 > └──────────────────────────────────────────────────────────────┘
 
 ---
