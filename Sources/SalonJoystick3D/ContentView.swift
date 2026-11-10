@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "85"
-    static let commitHash = "c8aaaa4"
+    static let build = "86"
+    static let commitHash = "c0b6f29"
     static let formatted = "v\(version) • Build \(build) (\(commitHash))"
 }
 
@@ -5717,6 +5717,12 @@ struct GameOptionsSheet: View {
                 }
 
                 Section("📱 Interfaz y Controles Táctiles") {
+                    Picker("Perspectiva de Cámara", selection: $model.cameraMode) {
+                        Text("1ª Persona").tag(GameCameraMode.firstPerson)
+                        Text("3ª Persona").tag(GameCameraMode.thirdPerson)
+                    }
+                    .pickerStyle(.segmented)
+
                     Toggle("Modo Cinemático (HUD Minimalista)", isOn: $model.isMinimalHUDEnabled)
 
                     VStack(alignment: .leading, spacing: 6) {

@@ -1086,28 +1086,38 @@ kernel void raytracePatio(
             float2 grid = fract(position.xz * 2.2f);
             float grout = step(0.04f, grid.x) * step(0.04f, grid.y);
             float3 groutBump = float3((1.0f - grout) * 0.09f, 0.0f, (1.0f - grout) * 0.09f);
-            float3 wetRipple = shallowPuddleNormal(position * 0.7f, uniforms.waterSimulation.y * 0.6f) * 0.16f;
-            normal = normalize(normal + groutBump + float3(wetRipple.x, 0.0f, wetRipple.z));
-        } else if (obsidianSurface) {
-            // 🌑 Armadura de Obsidiana Vantablack del Fotófago: facetas cristalinas + fisuras bioluminiscentes ultravioletas
-            float time = uniforms.waterSimulation.y;
-            float3 pCrystal = position * 14.0f;
-            float3 facetBump = float3(
-                cos(pCrystal.x * 1.3f) * sin(pCrystal.y),
-                sin(pCrystal.y * 1.3f) * cos(pCrystal.z),
-                cos(pCrystal.z * 1.3f) * sin(pCrystal.x)
-            ) * 0.085f;
-            normal = normalize(normal + facetBump);
+            if (position.y > -0.15f && position.y < 0.06f) {
+                // 💧 Zonas orgánicas de piso húmedo vs. losa seca (charcos realistas por zonas, no en todo el piso)
+                float2 pWet = position.xz;
+                float wetWave1 = sin(pWet.x * 0.42f + cos(pWet.y * 0.38f) * 1.6f) * cos(pWet.y * 0.45f - sin(pWet.x * 0.34f) * 1.4f);
+                float wetWave2 = sin((pWet.x + pWet.y) * 0.27f + 1.2f) * cos((pWet.x - pWet.y) * 0.31f - 0.8f);
+                float poolProximity = smoothstep(4.2f, 0.8f, abs(length(pWet - float2(0.0f, 1.5f)) - 5.2f)) * 0.25f;
+                float wetField = wetWave1 * 0.58f + wetWave2 * 0.42f + poolProximity;
+                float wetMask = smoothstep(0.14f, 0.46f, wetField);
 
-            float veinWave = abs(sin(position.x * 17.0f + position.y * 11.0f - time * 3.6f) * cos(position.z * 17.0f - position.y * 9.0f));
-            float veinMask = smoothstep(0.065f, 0.008f, veinWave);
+                float3 wetRipple = shallowPuddleNormal(position * 0.85f, uniforms.waterSimulation.y * 0.55f) * (0.14f * wetMask);
+                normal = normalize(normal + groutBump * (1.0f - wetMask * 0.72f) + float3(wetRipple.x, 0.0f, wetRipple.z));
+
+                float3 dryAlbedo = float3(0.11f, 0.14f, 0.16f) * (0.82f + 0.18f * grout);
+                float3 wetAlbedo = float3(0.022f, 0.032f, 0.044f);
+                albedo = mix(dryAlbedo, wetAlbedo, wetMask);
+                roughness = mix(0.76f, 0.015f, wetMask);
+
+                float viewCosine = saturate(dot(-currentRay.direction, normal));
+                float fresnel = pow(1.0f - viewCosine, 2.2f);
+                float wetRefl = mix(0.62f, 0.94f, fresnel);
+                baseReflectivity = mix(0.03f, wetRefl, wetMask);
+            } else {
+                normal = normalize(normal + groutBump);
+            }
+        } else if (obsidianSurface) {
+            // 🌑 Armadura Sólida Mate Vantablack del Fotófago (opaca, absorbe la luz sin transparencias ni destellos invasivos)
             float viewCos = saturate(dot(-currentRay.direction, normal));
-            float edgeFresnel = pow(1.0f - viewCos, 2.5f);
-            float3 uvGlow = mix(float3(0.52f, 0.08f, 1.0f), float3(1.0f, 0.12f, 0.48f), 0.5f + 0.5f * sin(position.y * 6.0f + time * 2.5f));
-            albedo = float3(0.006f, 0.005f, 0.012f);
-            emission += uvGlow * (veinMask * 3.8f + edgeFresnel * 0.90f);
-            baseReflectivity = mix(0.28f, 0.90f, edgeFresnel);
-            roughness = 0.04f;
+            float edgeRim = pow(1.0f - viewCos, 3.5f);
+            albedo = float3(0.012f, 0.012f, 0.018f);
+            emission = float3(0.14f, 0.04f, 0.26f) * edgeRim;
+            baseReflectivity = 0.04f;
+            roughness = 0.85f;
         } else if (jellySurface) {
             // 🧪 Diablillo de Gelatina: Textura orgánica húmeda con micro-relieve, SSS Fresnel y motas luminosas internas
             float3 pCell = position * 28.0f;
@@ -1151,12 +1161,11 @@ kernel void raytracePatio(
             roughness = mix(roughness, 0.02f, botMelt);
         }
 
-        if ((kind > 1.5f && kind < 3.5f) || puddleSurface) {
+        if (waterSurface) {
             float viewCosine = saturate(dot(-currentRay.direction, normal));
             float fresnel = pow(1.0f - viewCosine, 2.2f);
-            float minRefl = puddleSurface ? 0.68f : (poolWaterSurface ? 0.52f : baseReflectivity);
-            float maximumReflectivity = waterSurface ? 0.95f : 0.96f;
-            baseReflectivity = mix(minRefl, maximumReflectivity, fresnel);
+            float minRefl = puddleSurface ? 0.68f : 0.52f;
+            baseReflectivity = mix(minRefl, 0.95f, fresnel);
         }
         float reflectivity = rayBouncesEnabled ? baseReflectivity : 0.0f;
         float totalLights = uniforms.lightStates.x + uniforms.lightStates.y + uniforms.lightStates.z + uniforms.lightStates.w;
@@ -1178,25 +1187,18 @@ kernel void raytracePatio(
         }
         emission *= emitterIntensity;
 
-        // 🕳️ Aura de Singularidad del Fotófago: "Se Come la Luz" en su radio y proyecta anillos gravitacionales en el piso
+        // 🕳️ Aura de Absorción Fotónica del Fotófago: "Se Come la Luz" suavemente en su entorno sin anillos ni destellos molestos
         float fotofagoDrain = 1.0f;
-        float3 fotofagoFloorRing = 0.0f;
         for (uint fIdx = 6; fIdx <= 8; ++fIdx) {
             float3 fPos = float3(instances[fIdx].transformationMatrix[3][0],
                                  instances[fIdx].transformationMatrix[3][1],
                                  instances[fIdx].transformationMatrix[3][2]);
             if (fPos.y > -5.0f) {
                 float dFotofago = distance(position.xz, fPos.xz);
-                float drain = smoothstep(0.7f, 4.8f, dFotofago);
-                fotofagoDrain = min(fotofagoDrain, mix(0.30f, 1.0f, drain));
-                if (abs(position.y - fPos.y) < 0.25f && dFotofago < 2.3f) {
-                    float ringPulse = fract(dFotofago * 1.4f + uniforms.waterSimulation.y * 1.3f);
-                    float ringLine = smoothstep(0.12f, 0.02f, abs(ringPulse - 0.5f)) * (1.0f - dFotofago / 2.3f);
-                    fotofagoFloorRing += float3(0.65f, 0.08f, 1.0f) * ringLine * 2.2f;
-                }
+                float drain = smoothstep(0.8f, 4.5f, dFotofago);
+                fotofagoDrain = min(fotofagoDrain, mix(0.35f, 1.0f, drain));
             }
         }
-        emission += fotofagoFloorRing;
 
         float ambientBase = 0.032f * lightScale * fotofagoDrain;
         float skyAmbient = ambientBase + ambientBase * saturate(normal.y);

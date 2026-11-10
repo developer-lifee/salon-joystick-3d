@@ -974,7 +974,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private var npcRespawnTimers = [Float](repeating: 0, count: 5)
     private let npcMaxHealths: [Float] = [80.0, 120.0, 180.0, 250.0, 350.0]
     private var npcHealths: [Float] = [80.0, 120.0, 180.0, 250.0, 350.0]
-    private let npcBaseScales: [Float] = [0.90, 1.05, 1.18, 1.38, 1.65]
+    private let npcBaseScales: [Float] = [0.94, 1.00, 1.06, 1.12, 1.20]
     private var npcMeltProgress = [Float](repeating: 0, count: 5)
     private var npcDeathPositions = [SIMD3<Float>](repeating: .zero, count: 5)
     var onNPCHealthsUpdate: (([Float]) -> Void)?
@@ -2530,13 +2530,66 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             let distance = simd_length(offset)
             let rawDirection = distance > 0.001 ? offset / distance : SIMD2<Float>(0, 1)
 
-            // Dynamic difficulty scaling per wave (Call of Duty Black Ops Zombies style!)
-            let speed: Float = min(4.2, 2.0 + Float(currentWave) * 0.35 + Float(index) * 0.3)
-            let botCooldown: Float = max(1.4, 4.5 - Float(currentWave) * 0.40)
-            let aimSpeedScale: Float = min(12.0, 5.5 + Float(currentWave) * 0.75)
+            // Dynamic difficulty scaling per wave
+            let speed: Float = min(3.9, 1.9 + Float(currentWave) * 0.28 + Float(index == 0 ? 0.45 : 0.15))
+            let botCooldown: Float = max(1.8, 4.8 - Float(currentWave) * 0.35)
+            let aimSpeedScale: Float = min(11.0, 5.2 + Float(currentWave) * 0.65)
+
+            // 👻 IA Táctica estilo Fantasmas de Pac-Man + Distancia de Puntería Técnica (NUNCA se pegan al jugador)
+            // Cada bot mantiene su propia distancia ideal de duelo (7.5m a 13.0m) y personalidad de movimiento:
+            let idealStandoffDist: [Float] = [7.6, 9.4, 12.8, 10.4, 12.2]
+            let idealDist = idealStandoffDist[index % idealStandoffDist.count]
+            let minSafeDist = idealDist - 1.2
+            let maxComfortDist = idealDist + 2.2
+
+            let orbitSign: Float = (index % 2 == 0) ? 1.0 : -1.0
+            let lateralTangent = SIMD2<Float>(-rawDirection.y * orbitSign, rawDirection.x * orbitSign)
+            var tacticalDesiredDir: SIMD2<Float>
+
+            if distance < minSafeDist {
+                // 🛡️ Si el jugador se acerca demasiado, el bot retrocede en diagonal buscando línea de tiro lejana
+                tacticalDesiredDir = simd_normalize(-rawDirection * 0.78 + lateralTangent * 0.62)
+            } else {
+                switch index {
+                case 0:
+                    // 🔴 Bot 0 (Blinky - Rastreador de Media Distancia): Flanquea en arco manteniendo ~7.6m
+                    tacticalDesiredDir = distance > maxComfortDist
+                        ? simd_normalize(rawDirection * 0.80 + lateralTangent * 0.60)
+                        : lateralTangent
+                case 1:
+                    // 🩷 Bot 1 (Pinky - Emboscador Predictivo): Apunta 4.5m por delante de hacia dónde se mueve el jugador
+                    let predTarget = SIMD2<Float>(targetPos.x, targetPos.z) + horizontalVelocity * 2.8
+                    let toPred = predTarget - SIMD2<Float>(npcPositions[index].x, npcPositions[index].z)
+                    let predLen = simd_length(toPred)
+                    let predDir = predLen > 0.01 ? toPred / predLen : rawDirection
+                    tacticalDesiredDir = distance > maxComfortDist
+                        ? predDir
+                        : simd_normalize(predDir * 0.45 + lateralTangent * 0.89)
+                case 2:
+                    // 🩵 Bot 2 (Inky - Francotirador de Espejos): Se posiciona en el sector norte / espejo o bordes largos (12.8m)
+                    let sniperSpot = SIMD2<Float>(targetPos.x > 0 ? -9.5 : 9.5, -11.5)
+                    let toSniper = sniperSpot - SIMD2<Float>(npcPositions[index].x, npcPositions[index].z)
+                    let sniperLen = simd_length(toSniper)
+                    tacticalDesiredDir = sniperLen > 2.2 ? (toSniper / sniperLen) : lateralTangent
+                case 3:
+                    // 🧡 Bot 3 (Clyde - Acechador de Cobertura): Patrulla entre las rocas y cambia de flanco si lo miras de frente
+                    let playerLook2D = SIMD2<Float>(sin(playerYaw), cos(playerYaw))
+                    let playerLookingAtBot = simd_dot(playerLook2D, -rawDirection) > 0.72
+                    if playerLookingAtBot {
+                        tacticalDesiredDir = simd_normalize(lateralTangent * 0.88 - rawDirection * 0.48)
+                    } else {
+                        tacticalDesiredDir = distance > maxComfortDist ? rawDirection : lateralTangent * 0.75
+                    }
+                default:
+                    // 🌑 Bot 4 (El Fotófago - Guardián del Perímetro): Camina imponente por el borde exterior absorbiendo la luz
+                    tacticalDesiredDir = distance > maxComfortDist
+                        ? simd_normalize(rawDirection * 0.65 + lateralTangent * 0.76)
+                        : lateralTangent
+                }
+            }
 
             // 🪨 Dynamic Rock Evasion & Flanking Steering:
-            var moveDirection = rawDirection
+            var moveDirection = tacticalDesiredDir
             let botPos2D = SIMD2<Float>(npcPositions[index].x, npcPositions[index].z)
             var strongestAvoidance = SIMD2<Float>.zero
             var maxAvoidanceWeight: Float = 0
@@ -2552,7 +2605,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 let dirToRock = toRock / distToRock
 
                 let isNearRock = distToRock < (rockRadius + 0.35)
-                let forwardDot = simd_dot(rawDirection, dirToRock)
+                let forwardDot = simd_dot(tacticalDesiredDir, dirToRock)
                 let isHeadingIntoRock = forwardDot > 0.10 && distToRock < (rockRadius + 2.4)
 
                 if isNearRock || isHeadingIntoRock {
@@ -2560,9 +2613,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     let tangentL = SIMD2<Float>(-dirToRock.y, dirToRock.x)
                     let tangentR = SIMD2<Float>(dirToRock.y, -dirToRock.x)
 
-                    // Pick the tangent that aligns best with the direction towards the player
-                    let dotL = simd_dot(tangentL, rawDirection)
-                    let dotR = simd_dot(tangentR, rawDirection)
+                    let dotL = simd_dot(tangentL, tacticalDesiredDir)
+                    let dotR = simd_dot(tangentR, tacticalDesiredDir)
                     let chosenTangent = (dotL >= dotR) ? tangentL : tangentR
 
                     let normalAway = -dirToRock
@@ -2580,17 +2632,18 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
             if maxAvoidanceWeight > 0 {
                 let blend = min(0.96, maxAvoidanceWeight * 0.92)
-                moveDirection = simd_normalize(rawDirection * (1.0 - blend) + strongestAvoidance * blend)
+                moveDirection = simd_normalize(tacticalDesiredDir * (1.0 - blend) + strongestAvoidance * blend)
             }
 
-            let stepFactor: Float = distance > 1.45 ? 1.0 : 0.0
+            // Cuando el bot está disparando activamente, planta los pies para apuntar con precisión
+            let stepFactor: Float = (botLaserActiveTimers[index] > 0 && distance >= minSafeDist) ? 0.22 : 1.0
             var proposedX = npcPositions[index].x + (moveDirection.x * speed * stepFactor + npcPushVelocities[index].x) * dt
             var proposedZ = npcPositions[index].z + (moveDirection.y * speed * stepFactor + npcPushVelocities[index].y) * dt
             npcPushVelocities[index] *= exp(-dt * 7.5)
 
             // Outer Patio Wall Colliders (Expanded 34m x 34m Arena)
-            proposedX = max(-17.0, min(17.0, proposedX))
-            proposedZ = max(-17.0, min(17.0, proposedZ))
+            proposedX = max(-16.5, min(16.5, proposedX))
+            proposedZ = max(-16.5, min(16.5, proposedZ))
 
             // Solid Pool Coping Wall Colliders for NPCs
             let isInsidePool = proposedX >= -5.60 && proposedX <= 2.60 && proposedZ >= -4.45 && proposedZ <= 1.45
@@ -2601,42 +2654,36 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 npcPushVelocities[index] *= -0.35
             }
 
-            // 🤝 Colisión Bot contra Bot (evita que los personajes rivales se apilen o atraviesen entre sí)
-            let minBotSeparation: Float = 0.88
+            // 🤝 Separación amplia Bot contra Bot (para que rodeen el mapa desde distintos ángulos sin amontonarse)
+            let minBotSeparation: Float = 2.60
             for otherIdx in npcPositions.indices where otherIdx != index && npcHealths[otherIdx] > 0 && npcRespawnTimers[otherIdx] <= 0 {
                 let toSelf = SIMD2<Float>(proposedX - npcPositions[otherIdx].x, proposedZ - npcPositions[otherIdx].z)
                 let botDist = simd_length(toSelf)
                 if botDist < minBotSeparation {
                     let sepDir = botDist > 0.001 ? toSelf / botDist : SIMD2<Float>(cos(Float(index)), sin(Float(index)))
                     let overlap = minBotSeparation - botDist
-                    proposedX += sepDir.x * (overlap * 0.55)
-                    proposedZ += sepDir.y * (overlap * 0.55)
-                    npcPositions[otherIdx].x -= sepDir.x * (overlap * 0.45)
-                    npcPositions[otherIdx].z -= sepDir.y * (overlap * 0.45)
-                    npcPushVelocities[otherIdx] -= sepDir * 1.4
+                    proposedX += sepDir.x * (overlap * 0.50)
+                    proposedZ += sepDir.y * (overlap * 0.50)
                 }
             }
 
-            // 🤜🤛 Colisión Sólida y Empuje Mutuo con el Jugador (sin atravesarse nunca con la cámara)
-            let minPlayerBotSeparation: Float = 1.35
-            if abs(playerPosition.y - npcPositions[index].y) < 1.55 {
+            // 🤜🤛 Barrera de Distancia Mínima con el Jugador (nunca tapar la cámara ni acercarse cuerpo a cuerpo)
+            let minPlayerBotSeparation: Float = 4.50
+            if abs(playerPosition.y - npcPositions[index].y) < 1.85 {
                 let toBot = SIMD2<Float>(proposedX - playerPosition.x, proposedZ - playerPosition.z)
                 let playerDist = simd_length(toBot)
                 if playerDist < minPlayerBotSeparation {
-                    let pushDir = playerDist > 0.001 ? toBot / playerDist : -moveDirection
-                    let overlap = minPlayerBotSeparation - playerDist
-                    // El bot se mantiene fuera del radio de la cámara y empuja suavemente al jugador
+                    let pushDir = playerDist > 0.001 ? toBot / playerDist : -rawDirection
                     proposedX = playerPosition.x + pushDir.x * minPlayerBotSeparation
                     proposedZ = playerPosition.z + pushDir.y * minPlayerBotSeparation
-                    horizontalVelocity -= pushDir * min(3.2, overlap * 9.5 + 0.65)
                 }
             }
 
             // Apply Scenario Rock Collisions to NPCs (Same rules as player!)
             var npcPos = SIMD3<Float>(proposedX, npcPositions[index].y, proposedZ)
             resolveRockCollisions(position: &npcPos)
-            proposedX = max(-17.0, min(17.0, npcPos.x))
-            proposedZ = max(-17.0, min(17.0, npcPos.z))
+            proposedX = max(-16.5, min(16.5, npcPos.x))
+            proposedZ = max(-16.5, min(16.5, npcPos.z))
 
             npcPositions[index].x = proposedX
             npcPositions[index].z = proposedZ
@@ -2661,17 +2708,27 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
             let targetIsUsingMirror = isTargetingRemote ? (remotePlayerHeldTool == .mirror) : (heldTool == .mirror && mirrorActiveRemaining > 0)
 
+            // 🎯 Director de Ataque por Turnos (Attack Token): evita que los 5 bots disparen al mismo tiempo
+            let activeShootersCount = npcPositions.indices.filter {
+                $0 != index && npcHealths[$0] > 0 && npcRespawnTimers[$0] <= 0 && botLaserActiveTimers[$0] > 0
+            }.count
+            let maxConcurrentShooters = currentWave >= 4 ? 2 : 1
+
             // Bot Laser Combat AI with symmetric active/cooldown windows & 3D visual beams
             if botLaserCooldownTimers[index] > 0 {
-                let cooldownRate: Float = (targetIsUsingMirror && distance < 18.0) ? 4.8 : 1.0
+                let cooldownRate: Float = (targetIsUsingMirror && distance < 22.0) ? 3.2 : 1.0
                 botLaserCooldownTimers[index] = max(0, botLaserCooldownTimers[index] - dt * cooldownRate)
-                let maxEngageDist: Float = targetIsUsingMirror ? 18.0 : 12.0
-                if botLaserCooldownTimers[index] == 0 && distance < maxEngageDist && botTeleportReactionTimers[index] <= 0 {
-                    botLaserActiveTimers[index] = targetIsUsingMirror ? 3.2 : 2.2
-                    // Reset propagation when bot fires a new burst
-                    botLaserPropagationDistances[index] = 0
-                    botLaserOrigins[index] = npcPositions[index] + SIMD3<Float>(0.42, 0.88, 0.20)
-                    botLaserDistancesToPlayer[index] = simd_distance(botLaserOrigins[index], currentAimTarget)
+                let maxEngageDist: Float = 24.0
+                if botLaserCooldownTimers[index] == 0 && distance < maxEngageDist && distance >= 4.2 && botTeleportReactionTimers[index] <= 0 {
+                    if activeShootersCount < maxConcurrentShooters {
+                        botLaserActiveTimers[index] = targetIsUsingMirror ? 2.6 : 1.9
+                        botLaserPropagationDistances[index] = 0
+                        botLaserOrigins[index] = npcPositions[index] + SIMD3<Float>(0.42, 0.88, 0.20)
+                        botLaserDistancesToPlayer[index] = simd_distance(botLaserOrigins[index], currentAimTarget)
+                    } else {
+                        // Espera su turno de disparo mientras flanquea tácticamente
+                        botLaserCooldownTimers[index] = 0.75 + Float(index) * 0.25
+                    }
                 }
             } else if botLaserActiveTimers[index] > 0 && botTeleportReactionTimers[index] <= 0 {
                 botLaserActiveTimers[index] = max(0, botLaserActiveTimers[index] - dt)
@@ -2766,7 +2823,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                         let aimRay = simd_normalize(botAimTargets[index] - botHandOrigin)
                         let targetRay = simd_normalize(targetCenter - botHandOrigin)
                         let aimAlignment = simd_dot(aimRay, targetRay)
-                        if aimAlignment > 0.94 && distance < 16.0 {
+                        if aimAlignment > 0.94 && distance < 24.0 {
                             if isTargetingRemote {
                                 if !remotePlayerIsRecovering {
                                     remoteDamageAccumulator += 28.0 * rawDt
@@ -3992,118 +4049,32 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private static func makeNPCMesh() -> RTMeshBuilder {
         var builder = RTMeshBuilder()
         builder.addCharacter(origin: .zero, color: SIMD3<Float>(0.92, 0.18, 0.34), holdsTool: true)
-        // Cristales de obsidiana flotantes y hombreras oscuras para los Scouts de Plasma
-        let obsidian = RTMaterial(color: SIMD3<Float>(0.018, 0.014, 0.028), roughness: 0.05, emission: SIMD3<Float>(0.04, 0.01, 0.08), reflectivity: 0.80, kind: 10.0)
-        let shardGlow = RTMaterial(color: SIMD3<Float>(0.85, 0.12, 0.55), roughness: 0.04, emission: SIMD3<Float>(3.8, 0.25, 2.2), reflectivity: 0.85, kind: 5.0)
-        builder.addBox(center: SIMD3<Float>(-0.34, 1.02, 0.0), size: SIMD3<Float>(0.18, 0.14, 0.22), material: obsidian)
-        builder.addBox(center: SIMD3<Float>( 0.34, 1.02, 0.0), size: SIMD3<Float>(0.18, 0.14, 0.22), material: obsidian)
-        builder.addBox(center: SIMD3<Float>(-0.38, 1.24, -0.08), size: SIMD3<Float>(0.07, 0.22, 0.07), material: shardGlow)
-        builder.addBox(center: SIMD3<Float>( 0.38, 1.24, -0.08), size: SIMD3<Float>(0.07, 0.22, 0.07), material: shardGlow)
         return builder
     }
 
     private static func makeFotofagoMesh() -> RTMeshBuilder {
         var builder = RTMeshBuilder()
-        // 🌑 EL FOTÓFAGO COLOSAL: Golem de Obsidiana Vantablack y Singularidad Devoradora de Luz
-        let obsidian = RTMaterial(
-            color: SIMD3<Float>(0.012, 0.010, 0.020),
-            roughness: 0.04,
-            emission: SIMD3<Float>(0.02, 0.004, 0.05),
-            reflectivity: 0.84,
+        // 🌑 EL FOTÓFAGO: Silueta humanoide limpia y sólida en Vantablack mate (sin bloques flotantes ni transparencias raras)
+        builder.addCharacter(origin: .zero, color: SIMD3<Float>(0.018, 0.018, 0.025), holdsTool: true)
+        let vantablackArmor = RTMaterial(
+            color: SIMD3<Float>(0.012, 0.012, 0.018),
+            roughness: 0.85,
+            emission: .zero,
+            reflectivity: 0.04,
             kind: 10.0
         )
-        let vantablack = RTMaterial(
-            color: SIMD3<Float>(0.006, 0.005, 0.010),
-            roughness: 0.10,
-            emission: SIMD3<Float>(0.01, 0.0, 0.02),
-            reflectivity: 0.52,
-            kind: 10.0
-        )
-        let singularityCore = RTMaterial(
-            color: SIMD3<Float>(0.01, 0.0, 0.02),
-            roughness: 0.01,
-            emission: SIMD3<Float>(1.4, 0.08, 3.2),
-            reflectivity: 0.96,
-            kind: 1.0
-        )
-        let accretionMagenta = RTMaterial(
-            color: SIMD3<Float>(1.0, 0.12, 0.45),
-            roughness: 0.04,
-            emission: SIMD3<Float>(7.8, 0.45, 3.6),
-            reflectivity: 0.85,
+        let darkCore = RTMaterial(
+            color: SIMD3<Float>(0.02, 0.01, 0.04),
+            roughness: 0.35,
+            emission: SIMD3<Float>(0.35, 0.05, 0.65),
+            reflectivity: 0.12,
             kind: 5.0
         )
-        let ultravioletShard = RTMaterial(
-            color: SIMD3<Float>(0.48, 0.10, 1.0),
-            roughness: 0.04,
-            emission: SIMD3<Float>(3.6, 0.40, 7.8),
-            reflectivity: 0.88,
-            kind: 5.0
-        )
-        let cyanHorizon = RTMaterial(
-            color: SIMD3<Float>(0.05, 0.95, 1.0),
-            roughness: 0.04,
-            emission: SIMD3<Float>(0.5, 5.8, 7.5),
-            reflectivity: 0.88,
-            kind: 5.0
-        )
-
-        // 1. 🦿 Piernas Acorazadas de Obsidiana y Grebas Pesadas
-        builder.addBox(center: SIMD3<Float>(-0.22, 0.09, 0.04), size: SIMD3<Float>(0.24, 0.18, 0.34), material: obsidian)
-        builder.addBox(center: SIMD3<Float>( 0.22, 0.09, 0.04), size: SIMD3<Float>(0.24, 0.18, 0.34), material: obsidian)
-        builder.addBox(center: SIMD3<Float>(-0.22, 0.30, 0.00), size: SIMD3<Float>(0.22, 0.32, 0.24), material: vantablack)
-        builder.addBox(center: SIMD3<Float>( 0.22, 0.30, 0.00), size: SIMD3<Float>(0.22, 0.32, 0.24), material: vantablack)
-        // Rodilleras de cristal facetado con fisuras ultravioleta
-        builder.addBox(center: SIMD3<Float>(-0.22, 0.46, 0.12), size: SIMD3<Float>(0.18, 0.16, 0.10), material: obsidian)
-        builder.addBox(center: SIMD3<Float>( 0.22, 0.46, 0.12), size: SIMD3<Float>(0.18, 0.16, 0.10), material: obsidian)
-        builder.addBox(center: SIMD3<Float>(-0.22, 0.46, 0.17), size: SIMD3<Float>(0.08, 0.10, 0.03), material: ultravioletShard)
-        builder.addBox(center: SIMD3<Float>( 0.22, 0.46, 0.17), size: SIMD3<Float>(0.08, 0.10, 0.03), material: ultravioletShard)
-        // Muslos colosales y cintura gravitacional
-        builder.addBox(center: SIMD3<Float>(-0.22, 0.62, 0.00), size: SIMD3<Float>(0.25, 0.28, 0.26), material: obsidian)
-        builder.addBox(center: SIMD3<Float>( 0.22, 0.62, 0.00), size: SIMD3<Float>(0.25, 0.28, 0.26), material: obsidian)
-        builder.addBox(center: SIMD3<Float>( 0.00, 0.76, 0.00), size: SIMD3<Float>(0.54, 0.16, 0.32), material: vantablack)
-
-        // 2. 🌌 Torso Colosal en V con Vórtice de Singularidad (Agujero Negro Fotónico)
-        builder.addBox(center: SIMD3<Float>( 0.00, 1.06, -0.02), size: SIMD3<Float>(0.68, 0.52, 0.36), material: vantablack)
-        // Placas pectorales angulares que enmarcan el horizonte de sucesos
-        builder.addBox(center: SIMD3<Float>(-0.24, 1.10, 0.14), size: SIMD3<Float>(0.22, 0.42, 0.12), material: obsidian)
-        builder.addBox(center: SIMD3<Float>( 0.24, 1.10, 0.14), size: SIMD3<Float>(0.22, 0.42, 0.12), material: obsidian)
-        builder.addBox(center: SIMD3<Float>( 0.00, 1.30, 0.12), size: SIMD3<Float>(0.56, 0.12, 0.14), material: obsidian)
-        // Núcleo de Singularidad Esférico + Anillos de Acreción
-        builder.addSphere(center: SIMD3<Float>(0.00, 1.06, 0.14), radii: SIMD3<Float>(repeating: 0.13), material: singularityCore, segments: 12, rings: 8)
-        builder.addTorus(center: SIMD3<Float>(0.00, 1.06, 0.16), majorRadius: 0.17, minorRadius: 0.026, material: accretionMagenta, majorSegments: 16, minorSegments: 8)
-        builder.addTorus(center: SIMD3<Float>(0.00, 1.06, 0.19), majorRadius: 0.10, minorRadius: 0.018, material: cyanHorizon, majorSegments: 14, minorSegments: 6)
-
-        // 3. 💎 Hombreras Colosales (Pauldrons) y Corona de Cristales de Obsidiana Flotantes
-        builder.addBox(center: SIMD3<Float>(-0.46, 1.24, 0.00), size: SIMD3<Float>(0.28, 0.24, 0.36), material: obsidian)
-        builder.addBox(center: SIMD3<Float>( 0.46, 1.24, 0.00), size: SIMD3<Float>(0.28, 0.24, 0.36), material: obsidian)
-        builder.addBox(center: SIMD3<Float>(-0.52, 1.38, -0.02), size: SIMD3<Float>(0.14, 0.22, 0.18), material: obsidian)
-        builder.addBox(center: SIMD3<Float>( 0.52, 1.38, -0.02), size: SIMD3<Float>(0.14, 0.22, 0.18), material: obsidian)
-
-        // Corona de 7 fragmentos de cristal flotantes (Floating Shards alrededor de espalda y hombros)
-        builder.addBox(center: SIMD3<Float>(-0.60, 1.54, -0.10), size: SIMD3<Float>(0.09, 0.30, 0.09), material: ultravioletShard)
-        builder.addBox(center: SIMD3<Float>( 0.60, 1.54, -0.10), size: SIMD3<Float>(0.09, 0.30, 0.09), material: ultravioletShard)
-        builder.addBox(center: SIMD3<Float>(-0.38, 1.70, -0.14), size: SIMD3<Float>(0.10, 0.34, 0.10), material: obsidian)
-        builder.addBox(center: SIMD3<Float>( 0.38, 1.70, -0.14), size: SIMD3<Float>(0.10, 0.34, 0.10), material: obsidian)
-        builder.addBox(center: SIMD3<Float>(-0.38, 1.72, -0.10), size: SIMD3<Float>(0.05, 0.26, 0.05), material: accretionMagenta)
-        builder.addBox(center: SIMD3<Float>( 0.38, 1.72, -0.10), size: SIMD3<Float>(0.05, 0.26, 0.05), material: accretionMagenta)
-        builder.addBox(center: SIMD3<Float>( 0.00, 1.80, -0.16), size: SIMD3<Float>(0.11, 0.36, 0.11), material: ultravioletShard)
-
-        // 4. 👹 Cabeza Monolítica con Cuernos de Obsidiana y Visor Óptico Carmesí
-        builder.addBox(center: SIMD3<Float>( 0.00, 1.48, 0.04), size: SIMD3<Float>(0.34, 0.28, 0.30), material: obsidian)
-        builder.addBox(center: SIMD3<Float>(-0.18, 1.64, 0.02), size: SIMD3<Float>(0.07, 0.24, 0.09), material: obsidian)
-        builder.addBox(center: SIMD3<Float>( 0.18, 1.64, 0.02), size: SIMD3<Float>(0.07, 0.24, 0.09), material: obsidian)
-        builder.addBox(center: SIMD3<Float>( 0.00, 1.49, 0.18), size: SIMD3<Float>(0.28, 0.06, 0.06), material: accretionMagenta)
-
-        // 5. 🦾 Brazos Pesados y Cañón Fotónico Devorador de Luz
-        builder.addBox(center: SIMD3<Float>(-0.46, 0.96, 0.04), size: SIMD3<Float>(0.20, 0.34, 0.22), material: vantablack)
-        builder.addBox(center: SIMD3<Float>( 0.46, 0.96, 0.04), size: SIMD3<Float>(0.20, 0.34, 0.22), material: vantablack)
-        builder.addBox(center: SIMD3<Float>(-0.46, 0.76, 0.16), size: SIMD3<Float>(0.22, 0.22, 0.28), material: obsidian)
-        builder.addBox(center: SIMD3<Float>( 0.46, 0.84, 0.24), size: SIMD3<Float>(0.24, 0.22, 0.42), material: obsidian)
-        // Rieles emisores del cañón derecho
-        builder.addBox(center: SIMD3<Float>( 0.46, 0.86, 0.48), size: SIMD3<Float>(0.14, 0.14, 0.22), material: ultravioletShard)
-        builder.addSphere(center: SIMD3<Float>(0.46, 0.86, 0.60), radii: SIMD3<Float>(repeating: 0.07), material: cyanHorizon, segments: 8, rings: 6)
-
+        // Hombreras tácticas compactas y peto mate que absorbe la luz
+        builder.addBox(center: SIMD3<Float>(-0.34, 1.04, 0.0), size: SIMD3<Float>(0.14, 0.12, 0.18), material: vantablackArmor)
+        builder.addBox(center: SIMD3<Float>( 0.34, 1.04, 0.0), size: SIMD3<Float>(0.14, 0.12, 0.18), material: vantablackArmor)
+        builder.addBox(center: SIMD3<Float>( 0.00, 0.90, 0.16), size: SIMD3<Float>(0.34, 0.28, 0.08), material: vantablackArmor)
+        builder.addSphere(center: SIMD3<Float>(0.00, 0.92, 0.21), radii: SIMD3<Float>(repeating: 0.065), material: darkCore, segments: 10, rings: 6)
         return builder
     }
 
@@ -4386,13 +4357,6 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         builder.addBox(center: lampPosition + SIMD3<Float>(0, 2.99, 0), size: SIMD3<Float>(0.54, 0.08, 0.54), material: metal)
         builder.addBox(center: lampPosition + SIMD3<Float>(0, 2.45, 0), size: SIMD3<Float>(0.46, 0.08, 0.46), material: metal)
         builder.addBox(center: lampPosition + SIMD3<Float>(0, 0.08, 0), size: SIMD3<Float>(0.62, 0.16, 0.62), material: metal)
-
-        builder.addPuddle(center: SIMD2<Float>(4.2, -1.1), scale: SIMD2<Float>(1.5, 0.95), rotation: 0.35, material: shallowWater)
-        builder.addPuddle(center: SIMD2<Float>(5.8, 2.2), scale: SIMD2<Float>(2.1, 1.35), rotation: -0.5, material: shallowWater)
-        builder.addPuddle(center: SIMD2<Float>(-7.0, 4.6), scale: SIMD2<Float>(2.2, 1.45), rotation: 0.8, material: shallowWater)
-        builder.addPuddle(center: SIMD2<Float>(0.0, 5.2), scale: SIMD2<Float>(2.8, 1.85), rotation: 0.15, material: shallowWater)
-        builder.addPuddle(center: SIMD2<Float>(-3.6, 3.8), scale: SIMD2<Float>(1.9, 1.25), rotation: -0.35, material: shallowWater)
-        builder.addPuddle(center: SIMD2<Float>(0.2, -7.2), scale: SIMD2<Float>(2.5, 1.60), rotation: 0.42, material: shallowWater)
 
         for (index, rock) in rtRiverRocks.enumerated() {
             let stone = RTMaterial(color: rock.color, roughness: 0.32, reflectivity: 0.18, kind: 3)
