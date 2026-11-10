@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "86"
-    static let commitHash = "c0b6f29"
+    static let build = "87"
+    static let commitHash = "842b436"
     static let formatted = "v\(version) • Build \(build) (\(commitHash))"
 }
 
@@ -387,57 +387,101 @@ struct ContentView: View {
             // 🧟 Call of Duty Zombies-Style Wave / Round HUD Banner o Duelo Versus 1v1
             VStack(spacing: 4) {
                 if model.isAnyMultiplayerConnected && model.multiplayer.mode == .lightBattle {
-                    VStack(spacing: 6) {
-                        HStack(spacing: 12) {
-                            HStack(spacing: 5) {
-                                Image(systemName: "sun.max.fill")
-                                    .foregroundStyle(.yellow)
-                                Text("LUZ: \(model.lightTeamScore)")
-                                    .font(.system(size: 13, weight: .black, design: .monospaced))
-                                    .foregroundStyle(.yellow)
-                            }
+                    let isTeamLight = model.isHost
+                    let onCount = [model.lightStates.post, model.lightStates.piscinaNeon, model.lightStates.sheeritNeon, model.lightStates.poolStrips].filter { $0 }.count
+                    let offCount = 4 - onCount
+                    let myLightsReady = isTeamLight ? (onCount == 4) : (offCount == 4)
+                    let rivalLightsReady = isTeamLight ? (offCount == 4) : (onCount == 4)
+                    let distToCore = Int(round(simd_distance(model.localPlayerPosition, model.energyCorePosition)))
+                    let myBasePos = isTeamLight ? SIMD3<Float>(-7.55, 0.2, 12.65) : SIMD3<Float>(-7.0, 0.2, -15.5)
+                    let distToBase = Int(round(simd_distance(model.localPlayerPosition, myBasePos)))
 
-                            Divider().frame(height: 18).background(Color.white.opacity(0.4))
-
-                            HStack(spacing: 5) {
-                                Image(systemName: "moon.fill")
-                                    .foregroundStyle(.purple)
-                                Text("SOMBRA: \(model.shadowTeamScore)")
-                                    .font(.system(size: 13, weight: .black, design: .monospaced))
-                                    .foregroundStyle(.purple)
-                            }
-
-                            Divider().frame(height: 18).background(Color.white.opacity(0.4))
-
+                    VStack(spacing: 5) {
+                        // 1. Rol del Jugador + Marcador de Capturas (Primero a 3 gana)
+                        HStack(spacing: 10) {
                             HStack(spacing: 4) {
-                                Image(systemName: "bolt.fill")
-                                    .foregroundStyle(.cyan)
-                                Text(model.hasEnergyCore ? "¡TIENES NÚCLEO!" : (model.remoteHasEnergyCore ? "RIVAL TIENE NÚCLEO" : "NÚCLEO DISPONIBLE"))
-                                    .font(.system(size: 10, weight: .heavy, design: .monospaced))
-                                    .foregroundStyle(model.hasEnergyCore ? .green : (model.remoteHasEnergyCore ? .red : .cyan))
+                                Image(systemName: isTeamLight ? "sun.max.fill" : "moon.stars.fill")
+                                    .foregroundStyle(isTeamLight ? .yellow : .purple)
+                                Text(isTeamLight ? "ERES EQUIPO LUZ (PRENDER)" : "ERES EQUIPO SOMBRA (APAGAR)")
+                                    .font(.system(size: 11, weight: .black, design: .rounded))
+                                    .foregroundStyle(isTeamLight ? .yellow : .purple)
+                            }
+
+                            Divider().frame(height: 14).background(Color.white.opacity(0.4))
+
+                            Text("☀️ \(model.lightTeamScore)/3")
+                                .font(.system(size: 12, weight: .black, design: .monospaced))
+                                .foregroundStyle(.yellow)
+
+                            Text("vs")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(.white.opacity(0.5))
+
+                            Text("🌑 \(model.shadowTeamScore)/3")
+                                .font(.system(size: 12, weight: .black, design: .monospaced))
+                                .foregroundStyle(.purple)
+                        }
+
+                        // 2. Estado de las 4 Luces en Vivo
+                        HStack(spacing: 6) {
+                            ForEach(GameLightFixture.allCases) { fixture in
+                                let isOn = model.lightStates.isEnabled(fixture)
+                                HStack(spacing: 3) {
+                                    Image(systemName: isOn ? "lightbulb.fill" : "lightbulb.slash.fill")
+                                        .font(.system(size: 9, weight: .bold))
+                                    Text(fixture.label)
+                                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                }
+                                .foregroundStyle(isOn ? .black : .white)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background(
+                                    Capsule().fill(isOn ? Color.yellow : Color.purple.opacity(0.65))
+                                )
                             }
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .overlay(
-                            Capsule().stroke(
-                                LinearGradient(colors: [.yellow.opacity(0.85), .purple.opacity(0.85)], startPoint: .leading, endPoint: .trailing),
-                                lineWidth: 1.5
-                            )
-                        )
-                        .shadow(color: .black.opacity(0.4), radius: 8)
 
-                        if let winner = model.lightBattleWinner {
-                            Text(winner)
-                                .font(.system(size: 13, weight: .heavy, design: .monospaced))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 5)
-                                .background(Color.black.opacity(0.85), in: Capsule())
-                                .overlay(Capsule().stroke(Color.yellow, lineWidth: 2))
+                        // 3. Instrucción Paso a Paso en Tiempo Real ("¿Qué toca hacer ahora?")
+                        Group {
+                            if let winner = model.lightBattleWinner {
+                                Text(winner)
+                                    .foregroundStyle(.yellow)
+                            } else if model.hasEnergyCore {
+                                Text(isTeamLight
+                                     ? "🏁 PASO 3: ¡LLEVA EL NÚCLEO AL FAROL DEL PATIO (TU BASE A \(distToBase)m)!"
+                                     : "🏁 PASO 3: ¡LLEVA EL NÚCLEO AL NEÓN PISCINA (TU BASE A \(distToBase)m)!")
+                                    .foregroundStyle(.green)
+                            } else if model.remoteHasEnergyCore {
+                                Text("🚨 ¡EL RIVAL LLEVA EL NÚCLEO! DISPÁRALE CON EL LÁSER O CAMBIA UNA LUZ")
+                                    .foregroundStyle(.red)
+                            } else if myLightsReady {
+                                Text("⚡ PASO 2: ¡4/4 LUCES LISTAS! RECOGE EL NÚCLEO EN EL CENTRO DE LA PISCINA (A \(distToCore)m)")
+                                    .foregroundStyle(.cyan)
+                            } else if rivalLightsReady {
+                                Text(isTeamLight
+                                     ? "🚨 ¡EL RIVAL APAGÓ TODO! PRENDE UNA LUZ YA PARA BLOQUEARLE EL NÚCLEO"
+                                     : "🚨 ¡EL RIVAL PRENDIÓ TODO! APAGA UNA LUZ YA PARA BLOQUEARLE EL NÚCLEO")
+                                    .foregroundStyle(.orange)
+                            } else {
+                                Text(isTeamLight
+                                     ? "💡 PASO 1: PRENDE LAS 4 LUCES PARA DESBLOQUEAR EL NÚCLEO (\(onCount)/4 ENCENDIDAS)"
+                                     : "🌑 PASO 1: APAGA LAS 4 LUCES PARA DESBLOQUEAR EL NÚCLEO (\(offCount)/4 APAGADAS)")
+                                    .foregroundStyle(.white)
+                            }
                         }
+                        .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                        .multilineTextAlignment(.center)
                     }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(
+                            LinearGradient(colors: [.yellow.opacity(0.85), .purple.opacity(0.85)], startPoint: .leading, endPoint: .trailing),
+                            lineWidth: 1.5
+                        )
+                    )
+                    .shadow(color: .black.opacity(0.45), radius: 8)
                 } else if model.isAnyMultiplayerConnected && model.multiplayer.mode == .versus {
                     HStack(spacing: 12) {
                         HStack(spacing: 6) {
@@ -594,7 +638,7 @@ struct ContentView: View {
                 }
 
                 // Active 5 Mobile NPCs Health Meters HUD with Class Tiers (solo en cooperativo o singleplayer)
-                if !(model.isAnyMultiplayerConnected && model.multiplayer.mode == .versus) {
+                if !(model.isAnyMultiplayerConnected && (model.multiplayer.mode == .versus || model.multiplayer.mode == .lightBattle)) {
                     HStack(spacing: 5) {
                         let botNames = ["SCOUT", "SOLDIER", "GUARD", "HEAVY", "TITAN"]
                         ForEach(0..<5, id: \.self) { idx in
@@ -1390,7 +1434,7 @@ final class GameModel: ObservableObject {
     @Published var remotePlayerYaw: Float = .pi
     @Published var remotePlayerHeldTool: GameHeldTool = .laser
     @Published var showConnectedToast: Bool = false
-    private var localPlayerPosition = SIMD3<Float>(3.8, 0, 3.8)
+    @Published private(set) var localPlayerPosition = SIMD3<Float>(3.8, 0, 3.8)
     private var localPlayerYaw: Float = .pi
     private var cancellables = Set<AnyCancellable>()
 
@@ -1702,45 +1746,52 @@ final class GameModel: ObservableObject {
             playerShield = min(100.0, playerShield + 0.15)
         }
 
-        // ☀️🌑 Mecánicas del Duelo de Luces (Luz vs Sombra / Captura del Núcleo)
-        if multiplayer.mode == .lightBattle && gameState == .playing {
+        // ☀️🌑 Mecánicas del Duelo de Luces (3 Pasos: 1. Prender/Apagar 4 Luces -> 2. Recoger Núcleo en Piscina -> 3. Llevar a tu Base)
+        if multiplayer.mode == .lightBattle && gameState == .playing && lightBattleWinner == nil {
+            let isTeamLight = isHost
+            let onCount = [lightStates.post, lightStates.piscinaNeon, lightStates.sheeritNeon, lightStates.poolStrips].filter { $0 }.count
+            let offCount = 4 - onCount
+            let myLightsReady = isTeamLight ? (onCount == 4) : (offCount == 4)
+
+            // Si llevas el núcleo pero el rival saboteó una luz (ya no están las 4 de tu equipo), el núcleo regresa al centro
+            if hasEnergyCore && !myLightsReady {
+                hasEnergyCore = false
+                audio.playLaserPlayerHitSound()
+            }
+
+            // Paso 2: Recoger el Núcleo en el centro de la piscina (0, 0.45, 0) SOLO cuando las 4 luces de tu equipo están listas
             let distToCore = simd_distance(position, energyCorePosition)
-            if distToCore < 1.9 && !hasEnergyCore && !remoteHasEnergyCore {
+            if myLightsReady && distToCore < 2.4 && !hasEnergyCore && !remoteHasEnergyCore {
                 hasEnergyCore = true
                 audio.playLaserReflectionSound()
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
             }
 
+            // Paso 3: Llevar el Núcleo a tu Base para anotar 1 Captura (de 3 para ganar)
             if hasEnergyCore {
-                let isTeamLight = isHost
-                let basePos = isTeamLight ? SIMD3<Float>(-7.55, 0.2, 6.65) : SIMD3<Float>(-1.5, 0.2, -1.5)
-                if simd_distance(position, basePos) < 2.6 {
+                let basePos = isTeamLight ? SIMD3<Float>(-7.55, 0.2, 12.65) : SIMD3<Float>(-7.0, 0.2, -15.5)
+                if simd_distance(position, basePos) < 3.0 {
                     hasEnergyCore = false
                     audio.playLaserIgnition()
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
                     if isTeamLight {
-                        lightTeamScore += 25
+                        lightTeamScore += 1
                     } else {
-                        shadowTeamScore += 25
+                        shadowTeamScore += 1
                     }
-                }
-            }
+                    // Reiniciar luces 2 encendidas / 2 apagadas para la siguiente ronda de captura
+                    lightStates.post = true
+                    lightStates.piscinaNeon = false
+                    lightStates.sheeritNeon = true
+                    lightStates.poolStrips = false
 
-            if isHost && now - lastLightScoreTick >= 1.25 {
-                lastLightScoreTick = now
-                let onCount = [lightStates.post, lightStates.piscinaNeon, lightStates.sheeritNeon, lightStates.poolStrips].filter { $0 }.count
-                let offCount = 4 - onCount
-                let lightMultiplier = hasEnergyCore ? 2 : 1
-                let shadowMultiplier = remoteHasEnergyCore ? 2 : 1
-                lightTeamScore += onCount * lightMultiplier
-                shadowTeamScore += offCount * shadowMultiplier
-
-                if lightTeamScore >= 100 && lightBattleWinner == nil {
-                    lightBattleWinner = "☀️ ¡EQUIPO LUZ HA GANADO EL DUELO!"
-                    audio.playLaserReflectionSound()
-                } else if shadowTeamScore >= 100 && lightBattleWinner == nil {
-                    lightBattleWinner = "🌑 ¡EQUIPO SOMBRA HA GANADO EL DUELO!"
-                    audio.playLaserReflectionSound()
+                    if lightTeamScore >= 3 && lightBattleWinner == nil {
+                        lightBattleWinner = "☀️ ¡EQUIPO LUZ GANÓ EL DUELO (3/3 CAPTURAS)!"
+                        audio.playLaserReflectionSound()
+                    } else if shadowTeamScore >= 3 && lightBattleWinner == nil {
+                        lightBattleWinner = "🌑 ¡EQUIPO SOMBRA GANÓ EL DUELO (3/3 CAPTURAS)!"
+                        audio.playLaserReflectionSound()
+                    }
                 }
             }
         }
@@ -1780,6 +1831,13 @@ final class GameModel: ObservableObject {
             hasEnergyCore = false
             remoteHasEnergyCore = false
             lightBattleWinner = nil
+        }
+        if multiplayer.mode == .lightBattle {
+            // Iniciar Duelo de Luces con 2 luces encendidas y 2 apagadas (50/50 justo para ambos equipos)
+            lightStates.post = true
+            lightStates.piscinaNeon = false
+            lightStates.sheeritNeon = true
+            lightStates.poolStrips = false
         }
         hasRecordedVersusRoundResult = false
 
@@ -1960,10 +2018,16 @@ final class GameModel: ObservableObject {
                 self.lightStates = ls
             }
             if let lScore = packet.lightScore {
-                self.lightTeamScore = lScore
+                self.lightTeamScore = max(self.lightTeamScore, lScore)
+                if self.lightTeamScore >= 3 && self.lightBattleWinner == nil {
+                    self.lightBattleWinner = "☀️ ¡EQUIPO LUZ GANÓ EL DUELO (3/3 CAPTURAS)!"
+                }
             }
             if let sScore = packet.shadowScore {
-                self.shadowTeamScore = sScore
+                self.shadowTeamScore = max(self.shadowTeamScore, sScore)
+                if self.shadowTeamScore >= 3 && self.lightBattleWinner == nil {
+                    self.lightBattleWinner = "🌑 ¡EQUIPO SOMBRA GANÓ EL DUELO (3/3 CAPTURAS)!"
+                }
             }
             if let hasC = packet.hasCore {
                 self.remoteHasEnergyCore = hasC
