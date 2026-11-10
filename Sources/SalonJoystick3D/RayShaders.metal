@@ -1099,11 +1099,12 @@ kernel void raytracePatio(
         } else if (puddleSurface) {
             normal = shallowPuddleNormal(position, uniforms.waterSimulation.y);
         } else if (kind > 2.5f && kind < 3.5f) {
-            float2 grid = fract(position.xz * 2.2f);
-            float grout = step(0.04f, grid.x) * step(0.04f, grid.y);
-            float3 groutBump = float3((1.0f - grout) * 0.09f, 0.0f, (1.0f - grout) * 0.09f);
             if (position.y > -0.15f && position.y < 0.06f) {
                 // 💧 Zonas orgánicas de piso húmedo vs. losa seca (charcos realistas por zonas, no en todo el piso)
+                float2 grid = fract(position.xz * 2.2f);
+                float grout = step(0.04f, grid.x) * step(0.04f, grid.y);
+                float3 groutBump = float3((1.0f - grout) * 0.09f, 0.0f, (1.0f - grout) * 0.09f);
+
                 float2 pWet = position.xz;
                 float wetWave1 = sin(pWet.x * 0.42f + cos(pWet.y * 0.38f) * 1.6f) * cos(pWet.y * 0.45f - sin(pWet.x * 0.34f) * 1.4f);
                 float wetWave2 = sin((pWet.x + pWet.y) * 0.27f + 1.2f) * cos((pWet.x - pWet.y) * 0.31f - 0.8f);
@@ -1124,8 +1125,52 @@ kernel void raytracePatio(
                 float wetRefl = mix(0.62f, 0.94f, fresnel);
                 baseReflectivity = mix(0.03f, wetRefl, wetMask);
             } else {
-                normal = normalize(normal + groutBump);
+                // 🪨 Textura Geológica Procedural de Roca Búlder / Basalto & Granito Realista
+                float3 rP = position * 4.8f;
+                // Ruido multi-frecuencia orgánico 3D de micro-grietas y crags
+                float cragNoise1 = sin(rP.x * 1.8f + cos(rP.z * 1.6f) * 2.4f) * cos(rP.y * 2.2f);
+                float cragNoise2 = sin(rP.y * 3.8f + rP.x * 2.1f) * cos(rP.z * 3.4f);
+                float fineGrain = sin(rP.x * 14.0f) * sin(rP.y * 14.0f) * sin(rP.z * 14.0f);
+
+                // Estratos horizontales geológicos sedimentarios
+                float strata = sin(position.y * 11.0f + sin(position.x * 2.2f) * 0.35f + cos(position.z * 2.2f) * 0.35f) * 0.12f;
+
+                // Perturbación de normales para relieve rocoso auténtico
+                float3 rockBump = float3(
+                    cragNoise1 * 0.16f + fineGrain * 0.04f + strata * 0.25f,
+                    cragNoise2 * 0.12f + fineGrain * 0.04f,
+                    (cragNoise1 - cragNoise2) * 0.16f + fineGrain * 0.04f
+                );
+                normal = normalize(normal + rockBump);
+
+                // Variación de color: vetas minerales oscuras y musgo/líquenes en la cumbre
+                float topExposure = saturate(dot(normal, float3(0.0f, 1.0f, 0.0f)));
+                float crevice = smoothstep(-0.2f, 0.4f, cragNoise1 * cragNoise2);
+                float3 mineralVein = mix(float3(0.70f, 0.72f, 0.75f), float3(1.25f, 1.20f, 1.15f), crevice);
+                float3 mossTint = float3(0.24f, 0.30f, 0.20f); // Líquenes secos en la parte superior
+                albedo = mix(albedo * mineralVein, mossTint, topExposure * 0.28f);
+                roughness = 0.82f;
+                baseReflectivity = 0.04f;
             }
+        } else if (kind < 0.5f && abs(normal.y) < 0.35f && (abs(position.x) > 16.5f || abs(position.z) > 16.5f || abs(position.x) > 25.5f || position.z > 69.5f)) {
+            // 🧱 Muros Perimetrales: Paneles Modulares Cyber / Titanio con Juntas y Remaches
+            float wallCoordH = (abs(normal.x) > 0.5f) ? position.z : position.x;
+            float wallCoordV = position.y;
+
+            // Juntas modulares de paneles cada 2.4m horizontales y 2.0m verticales
+            float seamH = smoothstep(0.012f, 0.038f, abs(fract(wallCoordH * 0.416f) - 0.5f));
+            float seamV = smoothstep(0.012f, 0.038f, abs(fract(wallCoordV * 0.500f) - 0.5f));
+            float panelSeam = min(seamH, seamV); // 0 en la junta hundida, 1 en el panel
+
+            // Micro-relieve de textura de concreto reforzado / placa de titanio mate
+            float microGrain = sin(wallCoordH * 16.0f) * sin(wallCoordV * 16.0f) * 0.035f;
+            normal = normalize(normal + float3(microGrain, (1.0f - panelSeam) * -0.08f, microGrain));
+
+            // Sombra ambiental en las hendiduras de las juntas de los paneles
+            float seamShadow = mix(0.38f, 1.0f, panelSeam);
+            albedo = albedo * seamShadow;
+            roughness = mix(0.45f, 0.78f, panelSeam);
+            baseReflectivity = 0.05f;
         } else if (obsidianSurface) {
             // 🌑 Armadura Sólida Mate Vantablack del Fotófago (opaca, absorbe la luz sin transparencias ni destellos invasivos)
             float viewCos = saturate(dot(-currentRay.direction, normal));

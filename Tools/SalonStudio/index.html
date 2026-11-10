@@ -449,6 +449,7 @@
         <h3>📦 Paleta de Objetos (Click para Spawnear)</h3>
         <div class="preset-grid">
           <button class="preset-btn" onclick="spawnMapProp('neon_post')">🏮 Poste de Neón</button>
+          <button class="preset-btn" onclick="spawnMapProp('nano_rock')">🪨 Roca Esculpida (Nano)</button>
           <button class="preset-btn" onclick="spawnMapProp('rainbow_cabin')">🌈 Cabaña Arcoíris</button>
           <button class="preset-btn" onclick="spawnMapProp('mirror_panel')">🛡️ Espejo Táctico</button>
           <button class="preset-btn" onclick="spawnMapProp('block_low')">🧱 Bloque Bajo (0.7m)</button>
@@ -474,6 +475,25 @@
             <button class="preset-btn" style="background: rgba(0, 230, 118, 0.25);" onclick="setPropColor(0x00e676)">Verde</button>
             <button class="preset-btn" style="background: rgba(255, 214, 0, 0.25);" onclick="setPropColor(0xffd600)">Dorado</button>
           </div>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <h3>🪨 Texturas & Relieve Geológico (Piedras & Muros)</h3>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">
+          Configura facetas angulares, estrías geológicas y micro-relieve sin reflejos molestos.
+        </p>
+        <div class="slider-row">
+          <div class="slider-label"><span>Facetas / Crags Esculpidos</span><span class="slider-val" id="val-rockCrag">1.0x</span></div>
+          <input type="range" id="rockCrag" min="0.2" max="2.5" step="0.1" value="1.0" oninput="updateRockProceduralStyle()">
+        </div>
+        <div class="slider-row">
+          <div class="slider-label"><span>Estratos Sedimentarios</span><span class="slider-val" id="val-rockStrata">1.0x</span></div>
+          <input type="range" id="rockStrata" min="0.0" max="2.0" step="0.1" value="1.0" oninput="updateRockProceduralStyle()">
+        </div>
+        <div class="slider-row">
+          <div class="slider-label"><span>Juntas de Paneles en Muros</span><span class="slider-val" id="val-wallSeams">Activo</span></div>
+          <input type="range" id="wallSeams" min="0.0" max="1.0" step="0.1" value="1.0" oninput="updateRockProceduralStyle()">
         </div>
       </div>
 

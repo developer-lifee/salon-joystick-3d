@@ -1399,6 +1399,31 @@ function createPropMesh(type, colorHex) {
     cap.position.y = 4.05;
     cap.rotation.y = Math.PI / 4;
     group.add(base, pole, lantern, cap);
+  } else if (type === 'nano_rock') {
+    // 🪨 Roca Orgánica Facetada (Estilo Nano-Banana / Escultura Geológica de Precisión)
+    const geom = new THREE.DodecahedronGeometry(1.35, 2);
+    const posAttr = geom.attributes.position;
+    const v = new THREE.Vector3();
+    for (let i = 0; i < posAttr.count; i++) {
+      v.fromBufferAttribute(posAttr, i);
+      const crag1 = Math.sin(v.x * 2.8 + Math.cos(v.z * 2.4) * 1.8) * Math.cos(v.y * 2.5);
+      const crag2 = Math.sin(v.y * 4.2 + v.x * 2.6) * Math.cos(v.z * 3.8);
+      const strata = Math.sin(v.y * 9.0 + v.x * 1.5) * 0.12;
+      const facet = Math.abs(v.x * 0.6 + v.z * 0.8);
+      const disp = 1.0 + crag1 * 0.18 + crag2 * 0.10 + strata - facet * 0.08;
+      const bottomCut = v.y < -0.2 ? Math.max(0.3, 1.0 + (v.y + 0.2) * 1.4) : 1.0;
+      v.multiplyScalar(disp).setY(v.y * bottomCut);
+      posAttr.setXYZ(i, v.x, v.y + 0.95, v.z);
+    }
+    geom.computeVertexNormals();
+    const rockMat = new THREE.MeshStandardMaterial({
+      color: 0x475569,
+      roughness: 0.82,
+      metalness: 0.04,
+      flatShading: true
+    });
+    const rockMesh = new THREE.Mesh(geom, rockMat);
+    group.add(rockMesh);
   } else if (type === 'rainbow_cabin') {
     // Cabaña de Cobertura Táctica (3.6m x 3.6m x 3.2m)
     for (let x of [-1.6, 1.6]) {
@@ -1824,6 +1849,24 @@ async function saveEnemyMaterials() {
     console.error('Error guardando materiales:', err);
     alert('Materiales configurados localmente (inicia server.py para persistir en disco)');
   }
+}
+
+function updateRockProceduralStyle() {
+  const crag = parseFloat(document.getElementById('rockCrag')?.value || 1.0);
+  const strata = parseFloat(document.getElementById('rockStrata')?.value || 1.0);
+  const seams = parseFloat(document.getElementById('wallSeams')?.value || 1.0);
+
+  if (document.getElementById('val-rockCrag')) document.getElementById('val-rockCrag').innerText = crag.toFixed(1) + 'x';
+  if (document.getElementById('val-rockStrata')) document.getElementById('val-rockStrata').innerText = strata.toFixed(1) + 'x';
+  if (document.getElementById('val-wallSeams')) document.getElementById('val-wallSeams').innerText = seams > 0.5 ? 'Activo' : 'Liso';
+
+  scene.traverse(obj => {
+    if (obj.userData?.parentPropGroup?.userData?.type === 'nano_rock' && obj.isMesh) {
+      obj.material.roughness = 0.82;
+      obj.material.flatShading = true;
+      obj.material.needsUpdate = true;
+    }
+  });
 }
 
 // Inicializar estado inicial

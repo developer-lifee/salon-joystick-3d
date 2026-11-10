@@ -291,22 +291,44 @@ private struct RTMeshBuilder {
         radii: SIMD3<Float>,
         seed: Float,
         material: RTMaterial,
-        segments: Int = 14,
-        rings: Int = 7
+        segments: Int = 18,
+        rings: Int = 10
     ) {
         func point(ring: Int, segment: Int) -> SIMD3<Float> {
             let latitude = -.pi / 2 + .pi * Float(ring) / Float(rings)
             let longitude = 2 * .pi * Float(segment) / Float(segments)
-            let noise = 1
-                + sin(longitude * 3.0 + seed * 1.7) * 0.075
-                + cos(longitude * 5.0 - latitude * 2.0 + seed) * 0.045
-                + sin(latitude * 4.0 + seed * 2.3) * 0.035
-            let latitudeCosine = cos(latitude)
-            let lowerFlattening: Float = latitude < 0 ? 0.82 : 1
+            let latCos = cos(latitude)
+            let latSin = sin(latitude)
+            let lonCos = cos(longitude)
+            let lonSin = sin(longitude)
+
+            // Vector normal esférico base
+            let n = SIMD3<Float>(latCos * lonCos, latSin, latCos * lonSin)
+
+            // 1. Facetas cristalinas / fracturas planas (Voronoi cleavage planes)
+            let plane1 = abs(n.x * 0.707 + n.z * 0.707)
+            let plane2 = abs(n.x * -0.707 + n.z * 0.707)
+            let plane3 = abs(n.x * 0.894 + n.y * 0.447)
+            let facetPlateau = max(plane1, max(plane2, plane3))
+
+            // 2. Ruido orgánico asimétrico de crag y hendiduras
+            let crag1 = sin(longitude * 3.0 + seed * 2.1) * 0.16
+            let crag2 = cos(longitude * 5.0 - latitude * 3.0 + seed * 1.3) * 0.10
+            let crag3 = sin(latitude * 4.0 + longitude * 2.0 + seed * 0.7) * 0.08
+
+            // 3. Estratos sedimentarios escalonados
+            let strata = sin(latitude * 8.0 + seed * 1.5) * 0.06
+
+            // Factor de desplazamiento geológico combinado (estilo roca esculpida / Nano Banana)
+            let geoDisp = 1.0 + crag1 + crag2 + crag3 + strata - (facetPlateau * 0.12)
+
+            // 4. Base plana de apoyo al suelo y parte superior erosionada
+            let baseFlattening: Float = latitude < -0.2 ? max(0.35, 1.0 + (latitude + 0.2) * 1.35) : 1.0
+
             return center + SIMD3<Float>(
-                latitudeCosine * cos(longitude) * radii.x * noise,
-                sin(latitude) * radii.y * lowerFlattening,
-                latitudeCosine * sin(longitude) * radii.z * noise
+                latCos * lonCos * radii.x * geoDisp,
+                latSin * radii.y * baseFlattening * geoDisp,
+                latCos * lonSin * radii.z * geoDisp
             )
         }
 
