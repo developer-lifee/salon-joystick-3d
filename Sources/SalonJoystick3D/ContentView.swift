@@ -62,8 +62,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "1.0.0"
-    static let build = "79"
-    static let commitHash = "12a71f4"
+    static let build = "80"
+    static let commitHash = "9b90dc0"
     static let formatted = "v\(version) • Build \(build) (\(commitHash))"
 }
 
@@ -191,13 +191,23 @@ struct ContentView: View {
                     .ignoresSafeArea(.all)
                     .overlay {
                         if model.isDefeated {
-                            DefeatOverlayView(isTeamDefeat: model.isTeamDefeated, onRespawn: {
-                                if model.isTeamDefeated {
-                                    model.restartCooperativeMatch()
-                                } else {
-                                    model.respawnPlayer()
+                            DefeatOverlayView(
+                                isTeamDefeat: model.isTeamDefeated,
+                                isVersus: model.isAnyMultiplayerConnected && model.multiplayer.mode == .versus,
+                                versusRound: model.versusRound,
+                                localWins: model.versusLocalWins,
+                                remoteWins: model.versusRemoteWins,
+                                remotePlayerName: model.remotePlayerName,
+                                onRespawn: {
+                                    if model.isAnyMultiplayerConnected && model.multiplayer.mode == .versus {
+                                        model.startNextVersusRound(fromNetwork: false)
+                                    } else if model.isTeamDefeated {
+                                        model.restartCooperativeMatch()
+                                    } else {
+                                        model.respawnPlayer()
+                                    }
                                 }
-                            })
+                            )
                             .transition(.opacity)
                         } else if model.isRecoveringInChamber {
                             RecoveryChamberOverlayView(model: model)
@@ -211,8 +221,8 @@ struct ContentView: View {
                                     )
                                     .shadow(color: .orange.opacity(0.8), radius: 10)
 
-                                Text("¡VICTORIA!")
-                                    .font(.system(size: 34, weight: .black, design: .rounded))
+                                Text("¡VICTORIA EN RONDA \(model.versusRound)!")
+                                    .font(.system(size: 28, weight: .black, design: .rounded))
                                     .foregroundStyle(
                                         LinearGradient(colors: [.white, .yellow], startPoint: .top, endPoint: .bottom)
                                     )
@@ -222,16 +232,45 @@ struct ContentView: View {
                                     .font(.system(size: 13, weight: .bold, design: .monospaced))
                                     .foregroundStyle(.white.opacity(0.9))
 
+                                HStack(spacing: 18) {
+                                    VStack(spacing: 2) {
+                                        Text("TÚ")
+                                            .font(.system(size: 11, weight: .black, design: .monospaced))
+                                            .foregroundStyle(.cyan)
+                                        Text("\(model.versusLocalWins)")
+                                            .font(.system(size: 26, weight: .black, design: .rounded))
+                                            .foregroundStyle(.white)
+                                    }
+                                    Text("—")
+                                        .font(.system(size: 20, weight: .bold))
+                                        .foregroundStyle(.white.opacity(0.4))
+                                    VStack(spacing: 2) {
+                                        Text(model.remotePlayerName.isEmpty ? "RIVAL" : model.remotePlayerName.uppercased())
+                                            .font(.system(size: 11, weight: .black, design: .monospaced))
+                                            .foregroundStyle(.red)
+                                        Text("\(model.versusRemoteWins)")
+                                            .font(.system(size: 26, weight: .black, design: .rounded))
+                                            .foregroundStyle(.white)
+                                    }
+                                }
+                                .padding(.horizontal, 22)
+                                .padding(.vertical, 8)
+                                .background(Color.black.opacity(0.4), in: RoundedRectangle(cornerRadius: 14))
+
                                 Button(action: {
-                                    model.startGame(fromNetwork: false)
+                                    model.startNextVersusRound(fromNetwork: false)
                                 }) {
-                                    Text("REVANCHA")
-                                        .font(.system(size: 14, weight: .black, design: .monospaced))
-                                        .foregroundStyle(.black)
-                                        .padding(.horizontal, 28)
-                                        .padding(.vertical, 12)
-                                        .background(Capsule().fill(Color.yellow))
-                                        .shadow(color: .yellow.opacity(0.6), radius: 8)
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "arrow.right.circle.fill")
+                                            .font(.system(size: 16, weight: .bold))
+                                        Text("SIGUIENTE RONDA")
+                                            .font(.system(size: 14, weight: .black, design: .monospaced))
+                                    }
+                                    .foregroundStyle(.black)
+                                    .padding(.horizontal, 28)
+                                    .padding(.vertical, 12)
+                                    .background(Capsule().fill(Color.yellow))
+                                    .shadow(color: .yellow.opacity(0.6), radius: 8)
                                 }
                                 .padding(.top, 6)
                             }
@@ -334,14 +373,14 @@ struct ContentView: View {
                 if model.isAnyMultiplayerConnected && model.multiplayer.mode == .versus {
                     HStack(spacing: 12) {
                         HStack(spacing: 6) {
-                            Image(systemName: "cross.fill")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.red)
+                            Image(systemName: "swords")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.yellow)
 
-                            Text("MODO VERSUS 1V1")
+                            Text("RONDA \(model.versusRound)")
                                 .font(.system(size: 13, weight: .black, design: .monospaced))
                                 .foregroundStyle(
-                                    LinearGradient(colors: [.white, .red], startPoint: .top, endPoint: .bottom)
+                                    LinearGradient(colors: [.white, .yellow], startPoint: .top, endPoint: .bottom)
                                 )
                         }
 
@@ -349,8 +388,26 @@ struct ContentView: View {
                             .frame(height: 18)
                             .background(Color.white.opacity(0.4))
 
+                        HStack(spacing: 8) {
+                            Text("TÚ: \(model.versusLocalWins)")
+                                .font(.system(size: 12, weight: .black, design: .monospaced))
+                                .foregroundStyle(.cyan)
+
+                            Text("—")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.white.opacity(0.5))
+
+                            Text("RIVAL: \(model.versusRemoteWins)")
+                                .font(.system(size: 12, weight: .black, design: .monospaced))
+                                .foregroundStyle(.red)
+                        }
+
+                        Divider()
+                            .frame(height: 18)
+                            .background(Color.white.opacity(0.4))
+
                         HStack(spacing: 6) {
-                            Text("RIVAL HP: \(Int(max(0, model.remotePlayerHealth)))%")
+                            Text("HP: \(Int(max(0, model.remotePlayerHealth)))%")
                                 .font(.system(size: 12, weight: .black, design: .monospaced))
                                 .foregroundStyle(model.remotePlayerHealth > 30 ? Color.green : Color.red)
                         }
@@ -360,9 +417,9 @@ struct ContentView: View {
                     .background(.ultraThinMaterial, in: Capsule())
                     .overlay(
                         Capsule()
-                            .stroke(LinearGradient(colors: [.red.opacity(0.85), .purple.opacity(0.60)], startPoint: .leading, endPoint: .trailing), lineWidth: 1.5)
+                            .stroke(LinearGradient(colors: [.yellow.opacity(0.85), .orange.opacity(0.60)], startPoint: .leading, endPoint: .trailing), lineWidth: 1.5)
                     )
-                    .shadow(color: .red.opacity(0.35), radius: 8, x: 0, y: 4)
+                    .shadow(color: .orange.opacity(0.35), radius: 8, x: 0, y: 4)
                 } else if model.isWaveIntermission {
                     VStack(spacing: 4) {
                         Text("¡OLEADA COMPLETADA!")
@@ -1127,6 +1184,12 @@ final class GameModel: ObservableObject {
     @Published private(set) var respawnRequestID = 0
     @Published var showsLightRadialMenu = false
 
+    // Marcador y rondas para Modo Versus 1v1
+    @Published var versusLocalWins: Int = 0
+    @Published var versusRemoteWins: Int = 0
+    @Published var versusRound: Int = 1
+    @Published var hasRecordedVersusRoundResult: Bool = false
+
     func updateNPCHealths(_ healths: [Float]) {
         self.npcHealths = healths
     }
@@ -1379,6 +1442,14 @@ final class GameModel: ObservableObject {
         remotePlayerIsRecovering = false
         remotePlayerRecoveryTime = 0
         isTeamDefeated = false
+        isDefeated = false
+
+        if !fromNetwork && gameState == .mainMenu {
+            versusLocalWins = 0
+            versusRemoteWins = 0
+            versusRound = 1
+        }
+        hasRecordedVersusRoundResult = false
 
         // Spawns opuestos en extremos de la arena para evitar encimarse
         let spawnPos = isHost ? SIMD3<Float>(3.8, 0, 3.8) : SIMD3<Float>(-3.8, 0, -3.8)
@@ -1400,7 +1471,10 @@ final class GameModel: ObservableObject {
                 yaw: localPlayerYaw,
                 timestamp: Date().timeIntervalSince1970,
                 health: playerHealth,
-                score: playerScore
+                score: playerScore,
+                versusRound: versusRound,
+                versusLocalWins: versusLocalWins,
+                versusRemoteWins: versusRemoteWins
             )
             if multiplayer.isConnected {
                 remotePlayerName = multiplayer.peers.first?.displayName ?? "Jugador 2"
@@ -1411,6 +1485,71 @@ final class GameModel: ObservableObject {
                 gameCenter.sendPacket(startPacket)
             }
         }
+    }
+
+    func startNextVersusRound(fromNetwork: Bool = false) {
+        if !fromNetwork {
+            versusRound += 1
+        }
+        hasRecordedVersusRoundResult = false
+        playerHealth = 100.0
+        remotePlayerHealth = 100.0
+        isDefeated = false
+        isTeamDefeated = false
+        heldTool = .none
+        remotePlayerHeldTool = .none
+        isSlowMotionActive = false
+
+        let spawnPos = isHost ? SIMD3<Float>(3.8, 0, 3.8) : SIMD3<Float>(-3.8, 0, -3.8)
+        let spawnYaw = isHost ? Float.pi * 1.25 : Float.pi * 0.25
+        self.localPlayerPosition = spawnPos
+        self.localPlayerYaw = spawnYaw
+        self.remotePlayerPosition = isHost ? SIMD3<Float>(-3.8, 0, -3.8) : SIMD3<Float>(3.8, 0, 3.8)
+        self.remotePlayerYaw = isHost ? Float.pi * 0.25 : Float.pi * 1.25
+
+        resetRequestID += 1
+        gameState = .playing
+
+        if !fromNetwork {
+            let startPacket = LocalMatchPacket(
+                kind: .start,
+                peerID: multiplayer.localPeer.displayName,
+                mode: multiplayer.mode,
+                position: localPlayerPosition,
+                yaw: localPlayerYaw,
+                timestamp: Date().timeIntervalSince1970,
+                health: playerHealth,
+                score: playerScore,
+                versusRound: versusRound,
+                versusLocalWins: versusLocalWins,
+                versusRemoteWins: versusRemoteWins
+            )
+            if multiplayer.isConnected {
+                remotePlayerName = multiplayer.peers.first?.displayName ?? "Jugador 2"
+                multiplayer.send(startPacket)
+            }
+            if gameCenter.isInMatch {
+                remotePlayerName = gameCenter.connectedPlayerNames.first ?? "Jugador Game Center"
+                gameCenter.sendPacket(startPacket)
+            }
+        }
+    }
+
+    func broadcastVersusRoundUpdate() {
+        guard isAnyMultiplayerConnected else { return }
+        let packet = LocalMatchPacket(
+            kind: .state,
+            peerID: multiplayer.localPeer.displayName,
+            mode: multiplayer.mode,
+            timestamp: Date().timeIntervalSince1970,
+            health: playerHealth,
+            score: playerScore,
+            versusRound: versusRound,
+            versusLocalWins: versusLocalWins,
+            versusRemoteWins: versusRemoteWins
+        )
+        if multiplayer.isConnected { multiplayer.send(packet) }
+        if gameCenter.isInMatch { gameCenter.sendPacket(packet) }
     }
 
     func handleMultiplayerPacket(_ packet: LocalMatchPacket) {
@@ -1428,7 +1567,18 @@ final class GameModel: ObservableObject {
             if let y = packet.yaw {
                 remotePlayerYaw = y
             }
-            startGame(fromNetwork: true)
+            if let vr = packet.versusRound {
+                self.versusRound = vr
+            }
+            if let vlw = packet.versusLocalWins, let vrw = packet.versusRemoteWins {
+                self.versusRemoteWins = vlw
+                self.versusLocalWins = vrw
+            }
+            if multiplayer.mode == .versus {
+                startNextVersusRound(fromNetwork: true)
+            } else {
+                startGame(fromNetwork: true)
+            }
             UINotificationFeedbackGenerator().notificationOccurred(.success)
 
         case .controllerInput:
@@ -1443,8 +1593,19 @@ final class GameModel: ObservableObject {
             }
 
         case .state:
+            if let vr = packet.versusRound {
+                self.versusRound = vr
+            }
+            if let vlw = packet.versusLocalWins, let vrw = packet.versusRemoteWins {
+                self.versusRemoteWins = vlw
+                self.versusLocalWins = vrw
+            }
             if let h = packet.health {
                 self.remotePlayerHealth = h
+                if multiplayer.mode == .versus && h <= 0 && !hasRecordedVersusRoundResult {
+                    hasRecordedVersusRoundResult = true
+                    self.versusLocalWins += 1
+                }
             }
             if let s = packet.score {
                 self.remotePlayerScore = s
@@ -1493,10 +1654,17 @@ final class GameModel: ObservableObject {
 
         case .hit, .laser:
             if multiplayer.mode == .versus {
-                let dmg = packet.hitDamage ?? 15.0
-                takeDamage(dmg, broadcast: true)
-                audio.playLaserPlayerHitSound()
-                UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                if heldTool == .mirror {
+                    // Escudo Espejo bloquea el ataque y lo refleja de vuelta al rival
+                    audio.playLaserReflectionSound()
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    sendHitToRemotePlayer(damage: 25.0)
+                } else {
+                    let dmg = packet.hitDamage ?? 15.0
+                    takeDamage(dmg, broadcast: true)
+                    audio.playLaserPlayerHitSound()
+                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                }
             } else {
                 // En modo Cooperativo: fuego amigo desactivado (sin daño, sin curación infinita ni puntos anómalos)
             }
@@ -1546,7 +1714,10 @@ final class GameModel: ObservableObject {
             score: playerScore,
             isSlowMotion: isSlowMotionActive,
             isRecovering: isRecoveringInChamber,
-            recoveryProgress: isRecoveringInChamber ? max(0, min(1.0, 1.0 - recoveryTimeRemaining / 12.0)) : 1.0
+            recoveryProgress: isRecoveringInChamber ? max(0, min(1.0, 1.0 - recoveryTimeRemaining / 12.0)) : 1.0,
+            versusRound: versusRound,
+            versusLocalWins: versusLocalWins,
+            versusRemoteWins: versusRemoteWins
         )
         if multiplayer.isConnected {
             multiplayer.send(pkt)
@@ -1602,7 +1773,13 @@ final class GameModel: ObservableObject {
                 isTeamDefeated = false
                 heldTool = .none
                 audio.playRobloxOofDefeatSound()
-                if !isAnyMultiplayerConnected {
+                if isAnyMultiplayerConnected && multiplayer.mode == .versus {
+                    if !hasRecordedVersusRoundResult {
+                        hasRecordedVersusRoundResult = true
+                        versusRemoteWins += 1
+                        broadcastVersusRoundUpdate()
+                    }
+                } else if !isAnyMultiplayerConnected {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
                         self?.respawnPlayer()
                     }
@@ -5368,6 +5545,11 @@ struct MainMenuView: View {
 
 struct DefeatOverlayView: View {
     var isTeamDefeat: Bool = false
+    var isVersus: Bool = false
+    var versusRound: Int = 1
+    var localWins: Int = 0
+    var remoteWins: Int = 0
+    var remotePlayerName: String = "Rival"
     var onRespawn: () -> Void
 
     @State private var animateIn = false
@@ -5375,7 +5557,7 @@ struct DefeatOverlayView: View {
     var body: some View {
         ZStack {
             // Ultra-subtle liquid glass tint (100% crystal clear background so 3D scene shines through!)
-            Color.black.opacity(0.22)
+            Color.black.opacity(0.28)
                 .ignoresSafeArea(.all)
 
             VStack {
@@ -5384,26 +5566,47 @@ struct DefeatOverlayView: View {
                 //  iOS 18 Focus Pill Liquid Glass Floating Banner Card
                 VStack(spacing: 8) {
                     HStack(spacing: 8) {
-                        Image(systemName: isTeamDefeat ? "cross.fill" : "moon.fill")
+                        Image(systemName: isVersus ? "skull.fill" : (isTeamDefeat ? "cross.fill" : "moon.fill"))
                             .font(.system(size: 20, weight: .bold))
                             .foregroundStyle(
-                                LinearGradient(colors: isTeamDefeat ? [.white, .red, .orange] : [.white, .cyan, .orange], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                LinearGradient(colors: isVersus ? [.white, .red] : (isTeamDefeat ? [.white, .red, .orange] : [.white, .cyan, .orange]), startPoint: .topLeading, endPoint: .bottomTrailing)
                             )
 
-                        Text(isTeamDefeat ? "MISIÓN FALLIDA" : "MORIDO :v")
-                            .font(.system(size: isTeamDefeat ? 30 : 38, weight: .black, design: .rounded))
-                            .tracking(3)
+                        Text(isVersus ? "CAÍSTE EN COMBATE" : (isTeamDefeat ? "MISIÓN FALLIDA" : "MORIDO :v"))
+                            .font(.system(size: isVersus ? 28 : (isTeamDefeat ? 30 : 38), weight: .black, design: .rounded))
+                            .tracking(2)
                             .foregroundStyle(
                                 LinearGradient(colors: [.white, Color(red: 1.0, green: 0.38, blue: 0.38), .orange], startPoint: .top, endPoint: .bottom)
                             )
                             .shadow(color: .red.opacity(0.8), radius: 12)
                     }
 
-                    Text(isTeamDefeat ? "AMBOS AGENTES HAN CAÍDO EN COMBATE" : "OLEADA RESTABLECIDA A OLEADA 1")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .tracking(2.0)
-                        .foregroundStyle(.white.opacity(0.92))
-                        .shadow(color: .black.opacity(0.7), radius: 3)
+                    if isVersus {
+                        Text("RONDA \(versusRound) • PUNTO PARA \(remotePlayerName.isEmpty ? "RIVAL" : remotePlayerName.uppercased())")
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .tracking(1.5)
+                            .foregroundStyle(.white.opacity(0.92))
+                            .shadow(color: .black.opacity(0.7), radius: 3)
+
+                        HStack(spacing: 16) {
+                            Text("TÚ: \(localWins)")
+                                .font(.system(size: 13, weight: .black, design: .monospaced))
+                                .foregroundStyle(.cyan)
+                            Text("—")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(.white.opacity(0.4))
+                            Text("\(remotePlayerName.isEmpty ? "RIVAL" : remotePlayerName.uppercased()): \(remoteWins)")
+                                .font(.system(size: 13, weight: .black, design: .monospaced))
+                                .foregroundStyle(.red)
+                        }
+                        .padding(.top, 2)
+                    } else {
+                        Text(isTeamDefeat ? "AMBOS AGENTES HAN CAÍDO EN COMBATE" : "OLEADA RESTABLECIDA A OLEADA 1")
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .tracking(2.0)
+                            .foregroundStyle(.white.opacity(0.92))
+                            .shadow(color: .black.opacity(0.7), radius: 3)
+                    }
                 }
                 .padding(.horizontal, 36)
                 .padding(.vertical, 18)
@@ -5440,11 +5643,11 @@ struct DefeatOverlayView: View {
                 //  iOS 18 Focus Pill Liquid Glass Action Button (Identical to Lock Screen Focus Pill in Image 3!)
                 Button(action: onRespawn) {
                     HStack(spacing: 8) {
-                        Image(systemName: "arrow.counterclockwise.circle.fill")
+                        Image(systemName: isVersus ? "arrow.right.circle.fill" : "arrow.counterclockwise.circle.fill")
                             .font(.system(size: 18, weight: .bold))
                             .foregroundStyle(.white)
 
-                        Text(isTeamDefeat ? "REINTENTAR JUNTOS" : "REINTENTAR (OLEADA 1)")
+                        Text(isVersus ? "SIGUIENTE RONDA" : (isTeamDefeat ? "REINTENTAR JUNTOS" : "REINTENTAR (OLEADA 1)"))
                             .font(.system(size: 13, weight: .black, design: .rounded))
                             .tracking(1.5)
                             .foregroundStyle(.white)

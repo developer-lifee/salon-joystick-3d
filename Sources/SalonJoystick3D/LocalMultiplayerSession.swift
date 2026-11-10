@@ -63,6 +63,11 @@ struct LocalMatchPacket: Codable {
     // Cámara de Recuperación Cooperativa
     var isRecovering: Bool?
     var recoveryProgress: Float?
+
+    // Marcador y rondas para Modo Versus
+    var versusRound: Int?
+    var versusLocalWins: Int?
+    var versusRemoteWins: Int?
 }
 
 enum LocalDeviceRole: String, Codable, CaseIterable, Identifiable {

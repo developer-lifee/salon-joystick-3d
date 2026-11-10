@@ -2063,12 +2063,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
         }
         if heldTool == .mirror {
-            if mirrorActiveRemaining > 0 {
-                mirrorActiveRemaining = max(0, mirrorActiveRemaining - dt)
-                if mirrorActiveRemaining == 0 { mirrorCooldownRemaining = 3.0 }
-            } else if mirrorCooldownRemaining <= 0 {
-                mirrorActiveRemaining = 5.5
-                audio.playLaserReflectionSound()
+            if mirrorCooldownRemaining > 0 {
+                mirrorCooldownRemaining = max(0, mirrorCooldownRemaining - dt)
+            } else {
+                mirrorActiveRemaining = 10.0
             }
         }
 
@@ -2207,7 +2205,14 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 npcHealths[index] = 0
                 npcRespawnTimers[index] = 99999.0
             }
+            for i in mirrorReflectHitCooldowns.indices {
+                if mirrorReflectHitCooldowns[i] > 0 {
+                    mirrorReflectHitCooldowns[i] = max(0, mirrorReflectHitCooldowns[i] - dt)
+                }
+            }
             let results = laserResultBuffer.contents().assumingMemoryBound(to: RTLaserResult.self)
+            isMirrorReflectingLaser = false
+
             if isRemotePlayerConnected && remotePlayerHeldTool == .laser && !remotePlayerIsRecovering {
                 let rPos = smoothedRemotePos
                 let rYaw = remotePlayerYaw
@@ -2215,13 +2220,72 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 let rRight = SIMD3<Float>(cos(rYaw), 0, -sin(rYaw))
                 let rOrigin = rPos + SIMD3<Float>(0, 1.15, 0) + rRight * 0.28 + rForward * 0.35
                 let rEnd = rOrigin + rForward * 32.0
-                results.pointee.bot0Start = SIMD4<Float>(rOrigin, 1.0)
-                results.pointee.bot0End = SIMD4<Float>(rEnd, 1.0)
+
+                // Detección de intercepción con el escudo espejo del jugador local
+                let effYaw = playerYaw + shieldYawOffset
+                let baseMirrorPitch: Float = (cameraMode == .firstPerson) ? firstPersonPitch : -(orbitPitch - 0.22) * 1.15
+                let effPitch = max(-0.95, min(0.95, baseMirrorPitch + shieldPitchOffset))
+
+                let shieldCenter = playerPosition + SIMD3<Float>(sin(effYaw) * 0.58, 1.12 + sin(effPitch) * 0.25, cos(effYaw) * 0.58)
+                let shieldNormal = simd_normalize(SIMD3<Float>(
+                    sin(effYaw) * cos(effPitch),
+                    sin(effPitch),
+                    cos(effYaw) * cos(effPitch)
+                ))
+
+                let toShield = shieldCenter - rOrigin
+                let alongRivalRay = simd_dot(toShield, rForward)
+                let facingDot = simd_dot(-rForward, shieldNormal)
+                let isMirrorReady = (heldTool == .mirror && mirrorActiveRemaining > 0)
+
+                var intercepted = false
+                if isMirrorReady && alongRivalRay > 0.3 && alongRivalRay < 32.0 && facingDot > -0.25 {
+                    let closestPtOnRay = rOrigin + rForward * alongRivalRay
+                    if simd_distance(closestPtOnRay, shieldCenter) < 1.35 {
+                        intercepted = true
+                    }
+                }
+
+                if intercepted {
+                    isMirrorReflectingLaser = true
+                    // El rayo rival choca y se corta en el escudo
+                    results.pointee.bot0Start = SIMD4<Float>(rOrigin, 1.0)
+                    results.pointee.bot0End = SIMD4<Float>(shieldCenter, 1.0)
+
+                    // Rayo reflejado sale desde el escudo hacia shieldNormal
+                    let refOrigin = shieldCenter
+                    let refDir = shieldNormal
+                    let refEnd = refOrigin + refDir * 32.0
+                    results.pointee.bot1Start = SIMD4<Float>(refOrigin, 1.0)
+                    results.pointee.bot1End = SIMD4<Float>(refEnd, 1.0)
+
+                    // Daño reflejado de vuelta al rival si la mira del escudo apunta a él
+                    let toRival = (smoothedRemotePos + SIMD3<Float>(0, 0.95, 0)) - refOrigin
+                    let alongReflect = simd_dot(toRival, refDir)
+                    if alongReflect > 0.4 && alongReflect < 32.0 {
+                        let closestToRival = refOrigin + refDir * alongReflect
+                        let clampedY = max(smoothedRemotePos.y + 0.15, min(smoothedRemotePos.y + 1.85, closestToRival.y))
+                        let rivalBodyPt = SIMD3<Float>(smoothedRemotePos.x, clampedY, smoothedRemotePos.z)
+                        if simd_distance(closestToRival, rivalBodyPt) < 1.15 {
+                            if mirrorReflectHitCooldowns[0] <= 0 {
+                                mirrorReflectHitCooldowns[0] = 0.25
+                                audio.playLaserReflectionSound()
+                                onRemotePlayerHit?(25.0)
+                            }
+                        }
+                    }
+                } else {
+                    results.pointee.bot0Start = SIMD4<Float>(rOrigin, 1.0)
+                    results.pointee.bot0End = SIMD4<Float>(rEnd, 1.0)
+                    results.pointee.bot1Start = .zero
+                    results.pointee.bot1End = .zero
+                }
             } else {
                 results.pointee.bot0Start = .zero
                 results.pointee.bot0End = .zero
+                results.pointee.bot1Start = .zero
+                results.pointee.bot1End = .zero
             }
-            results.pointee.bot1Start = .zero; results.pointee.bot1End = .zero
             results.pointee.bot2Start = .zero; results.pointee.bot2End = .zero
             results.pointee.bot3Start = .zero; results.pointee.bot3End = .zero
             results.pointee.bot4Start = .zero; results.pointee.bot4End = .zero
@@ -2720,9 +2784,20 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                         }
                     }
                     if !hitRock {
-                        remotePlayerHitCooldown = 0.35
-                        audio.playLaserPlayerHitSound()
-                        onRemotePlayerHit?(15.0)
+                        // Comprobar si el rival tiene su escudo espejo activo apuntando hacia este láser
+                        let rivalFacing = SIMD3<Float>(sin(remotePlayerYaw), 0, cos(remotePlayerYaw))
+                        let facingDot = simd_dot(-direction, rivalFacing)
+                        if remotePlayerHeldTool == .mirror && facingDot > -0.20 {
+                            // ¡El rival tiene el espejo activo y bloquea nuestro disparo reflejándolo!
+                            remotePlayerHitCooldown = 0.35
+                            audio.playLaserReflectionSound()
+                            // El disparo reflejado nos daña a nosotros
+                            accumulateDamage(25.0)
+                        } else {
+                            remotePlayerHitCooldown = 0.35
+                            audio.playLaserPlayerHitSound()
+                            onRemotePlayerHit?(15.0)
+                        }
                     }
                 }
             }
