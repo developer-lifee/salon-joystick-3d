@@ -25,6 +25,8 @@ struct LocalMatchPacket: Codable {
         case controllerInput
         case enemySync
         case enemyHit
+        case botDamage
+        case scoreAward
         case reviveTeammate
         case teamDefeat
         case teamRestart
@@ -55,6 +57,8 @@ struct LocalMatchPacket: Codable {
     var totalBots: Int?
     var isIntermission: Bool?
     var intermissionTime: Float?
+    var botLaserStarts: [SIMD3<Float>]?
+    var botLaserEnds: [SIMD3<Float>]?
 
     // Daño colaborativo a enemigos (Cliente -> Host)
     var hitEnemyIndex: Int?

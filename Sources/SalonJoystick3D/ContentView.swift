@@ -62,8 +62,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "1.0.0"
-    static let build = "81"
-    static let commitHash = "713c540"
+    static let build = "82"
+    static let commitHash = "b82fix"
     static let formatted = "v\(version) • Build \(build) (\(commitHash))"
 }
 
@@ -1295,7 +1295,7 @@ final class GameModel: ObservableObject {
         return true
     }
 
-    var onRemoteNPCSyncReceived: (([SIMD3<Float>], [Float], Int, Int, Int, Bool, Float) -> Void)?
+    var onRemoteNPCSyncReceived: (([SIMD3<Float>], [Float], Int, Int, Int, Bool, Float, [SIMD3<Float>]?, [SIMD3<Float>]?) -> Void)?
     var onRemoteNPCHitReceived: ((Int, Float) -> Void)?
 
     func broadcastEnemySync(
@@ -1305,7 +1305,9 @@ final class GameModel: ObservableObject {
         remaining: Int,
         total: Int,
         isIntermission: Bool,
-        intermissionTime: Float
+        intermissionTime: Float,
+        laserStarts: [SIMD3<Float>]? = nil,
+        laserEnds: [SIMD3<Float>]? = nil
     ) {
         guard isAnyMultiplayerConnected && isHost else { return }
         let packet = LocalMatchPacket(
@@ -1318,7 +1320,41 @@ final class GameModel: ObservableObject {
             botsRemaining: remaining,
             totalBots: total,
             isIntermission: isIntermission,
-            intermissionTime: intermissionTime
+            intermissionTime: intermissionTime,
+            botLaserStarts: laserStarts,
+            botLaserEnds: laserEnds
+        )
+        if multiplayer.isConnected {
+            multiplayer.send(packet)
+        }
+        if gameCenter.isInMatch {
+            gameCenter.sendPacket(packet)
+        }
+    }
+
+    func sendBotDamageToClient(_ damage: Float) {
+        guard isAnyMultiplayerConnected && isHost else { return }
+        let packet = LocalMatchPacket(
+            kind: .botDamage,
+            peerID: multiplayer.localPeer.displayName,
+            timestamp: Date().timeIntervalSince1970,
+            hitDamage: damage
+        )
+        if multiplayer.isConnected {
+            multiplayer.send(packet)
+        }
+        if gameCenter.isInMatch {
+            gameCenter.sendPacket(packet)
+        }
+    }
+
+    func sendScoreAwardToClient(_ points: Int) {
+        guard isAnyMultiplayerConnected && isHost else { return }
+        let packet = LocalMatchPacket(
+            kind: .scoreAward,
+            peerID: multiplayer.localPeer.displayName,
+            timestamp: Date().timeIntervalSince1970,
+            score: points
         )
         if multiplayer.isConnected {
             multiplayer.send(packet)
@@ -1718,8 +1754,24 @@ final class GameModel: ObservableObject {
                     self.totalBotsInWave = total
                     self.isWaveIntermission = intermission
                     self.waveIntermissionTime = intermissionTime
-                    onRemoteNPCSyncReceived?(positions, healths, wave, remaining, total, intermission, intermissionTime)
+                    onRemoteNPCSyncReceived?(positions, healths, wave, remaining, total, intermission, intermissionTime, packet.botLaserStarts, packet.botLaserEnds)
                 }
+            }
+
+        case .botDamage:
+            if !isHost {
+                let dmg = packet.hitDamage ?? 15.0
+                takeDamage(dmg, broadcast: true)
+                audio.playLaserPlayerHitSound()
+                UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+            }
+
+        case .scoreAward:
+            if !isHost {
+                let pts = packet.score ?? 250
+                addScore(pts)
+                audio.playLaserReflectionSound()
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
             }
 
         case .enemyHit:
@@ -3125,27 +3177,26 @@ struct GameSceneView: UIViewRepresentable {
             var candidates: [(GameLightFixture, Float)] = []
 
             let postDistance = simd_distance(point, SIMD2<Float>(-7.55, 6.65))
-            if postDistance < 2.15 {
+            if postDistance < 3.4 {
                 candidates.append((.post, postDistance))
             }
             let piscinaDistance = simd_distance(point, SIMD2<Float>(-5.25, -9.15))
-            if piscinaDistance < 2.25 {
+            if piscinaDistance < 3.4 {
                 candidates.append((.piscinaNeon, piscinaDistance))
             }
             let sheeritDistance = simd_distance(point, SIMD2<Float>(5.45, 9.15))
-            if sheeritDistance < 2.25 {
+            if sheeritDistance < 3.4 {
                 candidates.append((.sheeritNeon, sheeritDistance))
             }
 
+            let poolStripsCenterDistance = simd_distance(point, SIMD2<Float>(-1.5, -1.5))
             let clampedPoolPoint = SIMD2<Float>(
                 min(2.55, max(-5.55, point.x)),
                 min(1.40, max(-4.40, point.y))
             )
             let poolEdgeDistance = simd_distance(point, clampedPoolPoint)
-            let outsidePoolOpening = point.x < -5.28 || point.x > 2.28 ||
-                point.y < -4.08 || point.y > 1.08
-            if outsidePoolOpening && poolEdgeDistance < 1.15 {
-                candidates.append((.poolStrips, poolEdgeDistance + 0.2))
+            if poolEdgeDistance < 2.8 || poolStripsCenterDistance < 3.4 {
+                candidates.append((.poolStrips, min(poolEdgeDistance, poolStripsCenterDistance)))
             }
 
             let nearby = candidates.min(by: { $0.1 < $1.1 })?.0
@@ -5370,6 +5421,8 @@ struct GameOptionsSheet: View {
 struct MirrorShieldJoystickButton: View {
     @ObservedObject var model: GameModel
     @State private var dragOffset: CGSize = .zero
+    @State private var initialToolWasMirror: Bool = false
+    @State private var didMoveSignificantly: Bool = false
 
     var body: some View {
         ZStack {
@@ -5390,11 +5443,18 @@ struct MirrorShieldJoystickButton: View {
         .gesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { value in
+                    let distance = hypot(value.translation.width, value.translation.height)
+                    if dragOffset == .zero && !didMoveSignificantly {
+                        initialToolWasMirror = (model.heldTool == .mirror)
+                    }
+                    if distance > 6 {
+                        didMoveSignificantly = true
+                    }
                     if model.heldTool != .mirror {
                         model.heldTool = .mirror
                     } else if model.toolStatus.activeRemaining <= 0.01 && model.toolStatus.cooldownRemaining <= 0.01 {
                         // Re-activar inmediatamente el espejo si ya terminó la recarga sin obligar a cambiar de herramienta
-                        model.heldTool = .flashlight
+                        model.heldTool = .none
                         model.heldTool = .mirror
                     }
                     let maxRadius: CGFloat = 28.0
@@ -5403,12 +5463,19 @@ struct MirrorShieldJoystickButton: View {
                     dragOffset = CGSize(width: dx, height: dy)
                     model.shieldAngleOffset = CGVector(dx: -(dx / maxRadius) * 1.25, dy: -(dy / maxRadius) * 1.25)
                 }
-                .onEnded { _ in
+                .onEnded { value in
+                    let distance = hypot(value.translation.width, value.translation.height)
+                    if !didMoveSignificantly && distance < 8 && initialToolWasMirror {
+                        // Tapped while mirror was already equipped -> toggle off!
+                        model.heldTool = .none
+                    }
                     dragOffset = .zero
                     model.shieldAngleOffset = .zero
+                    didMoveSignificantly = false
+                    initialToolWasMirror = false
                 }
         )
-        .accessibilityLabel("Espejo Defensivo Joystick de Ángulo")
+        .accessibilityLabel("Espejo Defensivo")
     }
 }
 

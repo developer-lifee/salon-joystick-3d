@@ -118,7 +118,7 @@ struct MetalGameView: UIViewRepresentable {
                 }
             }
             renderer.isAuthorityForNPCs = model.isHost
-            renderer.onNPCSyncUpdate = { [weak model] positions, healths, wave, remaining, total, isIntermission, intermissionTime in
+            renderer.onNPCSyncUpdate = { [weak model] positions, healths, wave, remaining, total, isIntermission, intermissionTime, laserStarts, laserEnds in
                 Task { @MainActor in
                     model?.broadcastEnemySync(
                         positions: positions,
@@ -127,8 +127,20 @@ struct MetalGameView: UIViewRepresentable {
                         remaining: remaining,
                         total: total,
                         isIntermission: isIntermission,
-                        intermissionTime: intermissionTime
+                        intermissionTime: intermissionTime,
+                        laserStarts: laserStarts,
+                        laserEnds: laserEnds
                     )
+                }
+            }
+            renderer.onBotDamageToRemotePlayer = { [weak model] damage in
+                Task { @MainActor in
+                    model?.sendBotDamageToClient(damage)
+                }
+            }
+            renderer.onRemoteNPCEliminated = { [weak model] points in
+                Task { @MainActor in
+                    model?.sendScoreAwardToClient(points)
                 }
             }
             renderer.onClientNPCHit = { [weak model] botIndex, damage in
@@ -151,7 +163,7 @@ struct MetalGameView: UIViewRepresentable {
                     model?.completeRecovery(wasRevivedByTeammate: false)
                 }
             }
-            model.onRemoteNPCSyncReceived = { [weak renderer] pos, healths, wave, rem, tot, inter, interTime in
+            model.onRemoteNPCSyncReceived = { [weak renderer] pos, healths, wave, rem, tot, inter, interTime, laserStarts, laserEnds in
                 renderer?.applyRemoteNPCSync(
                     positions: pos,
                     healths: healths,
@@ -159,7 +171,9 @@ struct MetalGameView: UIViewRepresentable {
                     remaining: rem,
                     total: tot,
                     isIntermission: inter,
-                    intermissionTime: interTime
+                    intermissionTime: interTime,
+                    laserStarts: laserStarts,
+                    laserEnds: laserEnds
                 )
             }
             model.onRemoteNPCHitReceived = { [weak renderer] botIndex, damage in

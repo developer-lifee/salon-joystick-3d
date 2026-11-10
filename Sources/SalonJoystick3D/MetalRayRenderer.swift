@@ -890,13 +890,18 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     var isVersusMode: Bool = false
     var initialSpawnPosition: SIMD3<Float> = SIMD3<Float>(3.8, 0, 3.8)
     var initialSpawnYaw: Float = .pi
-    var onNPCSyncUpdate: (([SIMD3<Float>], [Float], Int, Int, Int, Bool, Float) -> Void)?
+    var onNPCSyncUpdate: (([SIMD3<Float>], [Float], Int, Int, Int, Bool, Float, [SIMD3<Float>], [SIMD3<Float>]) -> Void)?
     var onClientNPCHit: ((Int, Float) -> Void)?
     var onRemotePlayerHit: ((Float) -> Void)?
+    var onBotDamageToRemotePlayer: ((Float) -> Void)?
+    var onRemoteNPCEliminated: ((Int) -> Void)?
     private var remotePlayerHitCooldown: Float = 0
     private var playerLaserHitCooldowns = [Float](repeating: 0, count: 5)
     private var npcNetworkSyncCountdown: Float = 0
     private var syncedNPCNetworkPositions: [SIMD3<Float>]?
+    private var remoteDamageAccumulator: Float = 0
+    private(set) var currentBotLaserStarts = [SIMD3<Float>](repeating: .zero, count: 5)
+    private(set) var currentBotLaserEnds = [SIMD3<Float>](repeating: .zero, count: 5)
 
     private var currentWave: Int = 1
     private var botsKilledInCurrentWave: Int = 0
@@ -1479,11 +1484,18 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
     private func flushDamageReport(rawDt: Float) {
         damageReportTimer += rawDt
-        if damageReportTimer >= 0.28 && pendingDamageAccumulator > 0 {
-            let dmg = pendingDamageAccumulator
-            pendingDamageAccumulator = 0
+        if damageReportTimer >= 0.28 {
             damageReportTimer = 0
-            onDamageTaken?(dmg)
+            if pendingDamageAccumulator > 0 {
+                let dmg = pendingDamageAccumulator
+                pendingDamageAccumulator = 0
+                onDamageTaken?(dmg)
+            }
+            if remoteDamageAccumulator > 0 {
+                let rDmg = remoteDamageAccumulator
+                remoteDamageAccumulator = 0
+                onBotDamageToRemotePlayer?(rDmg)
+            }
         }
     }
 
@@ -2113,6 +2125,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 onRecoveryCompleted?()
             }
             audio.playLaserReflectionSound()
+            onScoreUpdate?(500)
+            onRemoteNPCEliminated?(500)
             onDamageTaken?(-25.0) // Health regen rest reward (+25 HP)
             onWaveUpdate?(currentWave, 0, totalBotsInWave, true, 10.0)
         } else {
@@ -2122,7 +2136,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         if isAuthorityForNPCs {
             let displayedRemaining = (remainingQuota <= 0 && activeAliveBots == 0) ? 0 : max(activeAliveBots, remainingQuota)
-            onNPCSyncUpdate?(npcPositions, npcHealths, currentWave, displayedRemaining, totalBotsInWave, isWaveIntermission, max(0, intermissionTimeRemaining))
+            onNPCSyncUpdate?(npcPositions, npcHealths, currentWave, displayedRemaining, totalBotsInWave, isWaveIntermission, max(0, intermissionTimeRemaining), currentBotLaserStarts, currentBotLaserEnds)
         }
     }
 
@@ -2146,7 +2160,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             let activeAliveBots = npcPositions.indices.filter({ npcHealths[$0] > 0 && npcRespawnTimers[$0] <= 0 }).count
             let remainingQuota = max(0, totalBotsInWave - botsKilledInCurrentWave)
             let remaining = max(activeAliveBots, remainingQuota)
-            onNPCSyncUpdate?(npcPositions, npcHealths, currentWave, remaining, totalBotsInWave, isWaveIntermission, max(0, intermissionTimeRemaining))
+            onNPCSyncUpdate?(npcPositions, npcHealths, currentWave, remaining, totalBotsInWave, isWaveIntermission, max(0, intermissionTimeRemaining), currentBotLaserStarts, currentBotLaserEnds)
         }
     }
 
@@ -2157,7 +2171,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         remaining: Int,
         total: Int,
         isIntermission: Bool,
-        intermissionTime: Float
+        intermissionTime: Float,
+        laserStarts: [SIMD3<Float>]? = nil,
+        laserEnds: [SIMD3<Float>]? = nil
     ) {
         guard !isAuthorityForNPCs else { return }
         self.syncedNPCNetworkPositions = positions
@@ -2180,6 +2196,21 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         self.intermissionTimeRemaining = intermissionTime
         onNPCHealthsUpdate?(npcHealths)
         onWaveUpdate?(wave, remaining, total, isIntermission, intermissionTime)
+
+        let results = laserResultBuffer.contents().assumingMemoryBound(to: RTLaserResult.self)
+        if let starts = laserStarts, let ends = laserEnds {
+            if starts.count > 0 && ends.count > 0 { results.pointee.bot0Start = SIMD4<Float>(starts[0], 1); results.pointee.bot0End = SIMD4<Float>(ends[0], 1) }
+            if starts.count > 1 && ends.count > 1 { results.pointee.bot1Start = SIMD4<Float>(starts[1], 1); results.pointee.bot1End = SIMD4<Float>(ends[1], 1) }
+            if starts.count > 2 && ends.count > 2 { results.pointee.bot2Start = SIMD4<Float>(starts[2], 1); results.pointee.bot2End = SIMD4<Float>(ends[2], 1) }
+            if starts.count > 3 && ends.count > 3 { results.pointee.bot3Start = SIMD4<Float>(starts[3], 1); results.pointee.bot3End = SIMD4<Float>(ends[3], 1) }
+            if starts.count > 4 && ends.count > 4 { results.pointee.bot4Start = SIMD4<Float>(starts[4], 1); results.pointee.bot4End = SIMD4<Float>(ends[4], 1) }
+        } else {
+            results.pointee.bot0Start = .zero; results.pointee.bot0End = .zero
+            results.pointee.bot1Start = .zero; results.pointee.bot1End = .zero
+            results.pointee.bot2Start = .zero; results.pointee.bot2End = .zero
+            results.pointee.bot3Start = .zero; results.pointee.bot3End = .zero
+            results.pointee.bot4Start = .zero; results.pointee.bot4End = .zero
+        }
     }
 
     func applyRemoteNPCDamage(index: Int, damage: Float) {
@@ -2190,8 +2221,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         onNPCHealthsUpdate?(npcHealths)
         if npcHealths[index] <= 0 {
             audio.playLaserPlayerHitSound()
-            onScoreUpdate?(250)
             handleNPCElimination(index: index)
+            onRemoteNPCEliminated?(250)
         } else {
             audio.playLaserPlayerHitSound()
         }
@@ -2302,7 +2333,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 let activeAliveBots = npcPositions.indices.filter({ npcHealths[$0] > 0 && npcRespawnTimers[$0] <= 0 }).count
                 let remainingQuota = max(0, totalBotsInWave - botsKilledInCurrentWave)
                 let remaining = max(activeAliveBots, remainingQuota)
-                onNPCSyncUpdate?(npcPositions, npcHealths, currentWave, remaining, totalBotsInWave, isWaveIntermission, max(0, intermissionTimeRemaining))
+                onNPCSyncUpdate?(npcPositions, npcHealths, currentWave, remaining, totalBotsInWave, isWaveIntermission, max(0, intermissionTimeRemaining), currentBotLaserStarts, currentBotLaserEnds)
             }
         } else {
             // Cliente: interpolar suavemente posiciones recibidas del Host y reflejar estados
@@ -2428,18 +2459,28 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
             // En multijugador, el bot persigue al jugador vivo más cercano
             let targetPos: SIMD3<Float>
+            let isTargetingRemote: Bool
             if isRemotePlayerConnected && !isVersusMode {
                 if isRecoveringInChamber && !remotePlayerIsRecovering {
                     targetPos = smoothedRemotePos
+                    isTargetingRemote = true
                 } else if remotePlayerIsRecovering {
                     targetPos = playerPosition
+                    isTargetingRemote = false
                 } else {
                     let dLocal = simd_distance_squared(npcPositions[index], playerPosition)
                     let dRemote = simd_distance_squared(npcPositions[index], smoothedRemotePos)
-                    targetPos = (dLocal < dRemote) ? playerPosition : smoothedRemotePos
+                    if dRemote < dLocal {
+                        targetPos = smoothedRemotePos
+                        isTargetingRemote = true
+                    } else {
+                        targetPos = playerPosition
+                        isTargetingRemote = false
+                    }
                 }
             } else {
                 targetPos = playerPosition
+                isTargetingRemote = false
             }
 
             let offset = SIMD2<Float>(
@@ -2562,8 +2603,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             npcYaws[index] = atan2(rawDirection.x, rawDirection.y)
 
             // Smooth human-like aim tracking & dispersion
-            let effectiveTargetPos = (isRecoveringInChamber && isRemotePlayerConnected && !remotePlayerIsRecovering) ? smoothedRemotePos : playerPosition
-            let actualPlayerCenter = effectiveTargetPos + SIMD3<Float>(0, 1.10, 0)
+            let actualPlayerCenter = targetPos + SIMD3<Float>(0, 1.10, 0)
             let pHorizSpeed = simd_length(horizontalVelocity)
             let wobbleTime = CACurrentMediaTime() * 3.2 + Double(index) * 2.1
             let dispersionScale = 0.08 + min(0.35, distance * 0.02 + pHorizSpeed * 0.04)
@@ -2577,29 +2617,29 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             // Aim tracking interpolation speed (human reaction curve)
             let aimSpeed = min(1.0, dt * (aimSpeedScale + Float(index) * 0.8))
             botAimTargets[index] += (targetWithNoise - botAimTargets[index]) * aimSpeed
-            let playerTarget = botAimTargets[index]
+            let currentAimTarget = botAimTargets[index]
 
-            let playerIsUsingMirror = (heldTool == .mirror && mirrorActiveRemaining > 0)
+            let targetIsUsingMirror = isTargetingRemote ? (remotePlayerHeldTool == .mirror) : (heldTool == .mirror && mirrorActiveRemaining > 0)
 
             // Bot Laser Combat AI with symmetric active/cooldown windows & 3D visual beams
             if botLaserCooldownTimers[index] > 0 {
-                let cooldownRate: Float = (playerIsUsingMirror && distance < 18.0) ? 4.8 : 1.0
+                let cooldownRate: Float = (targetIsUsingMirror && distance < 18.0) ? 4.8 : 1.0
                 botLaserCooldownTimers[index] = max(0, botLaserCooldownTimers[index] - dt * cooldownRate)
-                let maxEngageDist: Float = playerIsUsingMirror ? 18.0 : 12.0
+                let maxEngageDist: Float = targetIsUsingMirror ? 18.0 : 12.0
                 if botLaserCooldownTimers[index] == 0 && distance < maxEngageDist && botTeleportReactionTimers[index] <= 0 {
-                    botLaserActiveTimers[index] = playerIsUsingMirror ? 3.2 : 2.2
+                    botLaserActiveTimers[index] = targetIsUsingMirror ? 3.2 : 2.2
                     // Reset propagation when bot fires a new burst
                     botLaserPropagationDistances[index] = 0
                     botLaserOrigins[index] = npcPositions[index] + SIMD3<Float>(0.42, 0.88, 0.20)
-                    botLaserDistancesToPlayer[index] = simd_distance(botLaserOrigins[index], playerTarget)
+                    botLaserDistancesToPlayer[index] = simd_distance(botLaserOrigins[index], currentAimTarget)
                 }
             } else if botLaserActiveTimers[index] > 0 && botTeleportReactionTimers[index] <= 0 {
                 botLaserActiveTimers[index] = max(0, botLaserActiveTimers[index] - dt)
 
                 let botHandOrigin = npcPositions[index] + SIMD3<Float>(0.42, 0.88, 0.20)
-                let playerTarget = playerPosition + SIMD3<Float>(0, 1.10, 0)
-                let bTotalDist = max(0.001, simd_distance(botHandOrigin, playerTarget))
-                let bDir = simd_normalize(playerTarget - botHandOrigin)
+                let targetCenter = targetPos + SIMD3<Float>(0, 1.10, 0)
+                let bTotalDist = max(0.001, simd_distance(botHandOrigin, targetCenter))
+                let bDir = simd_normalize(targetCenter - botHandOrigin)
 
                 // 🪨 Check Rock Cover Oclusion (El láser de bot NO atraviesa las piedras)
                 var closestHitDist: Float = bTotalDist
@@ -2624,11 +2664,12 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 let startVec = SIMD4<Float>(botHandOrigin, 1.0)
                 var endVec: SIMD4<Float> = .zero
 
-                let effYaw = playerYaw + shieldYawOffset
+                let effYaw = isTargetingRemote ? remotePlayerYaw : (playerYaw + shieldYawOffset)
                 let baseMirrorPitch: Float = (cameraMode == .firstPerson) ? firstPersonPitch : -(orbitPitch - 0.22) * 1.15
-                let effPitch = max(-0.95, min(0.95, baseMirrorPitch + shieldPitchOffset))
+                let effPitch = isTargetingRemote ? 0.0 : max(-0.95, min(0.95, baseMirrorPitch + shieldPitchOffset))
 
-                let shieldCenter = playerPosition + SIMD3<Float>(sin(effYaw) * 0.58, 1.12 + sin(effPitch) * 0.25, cos(effYaw) * 0.58)
+                let targetPlayerPos = isTargetingRemote ? smoothedRemotePos : playerPosition
+                let shieldCenter = targetPlayerPos + SIMD3<Float>(sin(effYaw) * 0.58, 1.12 + sin(effPitch) * 0.25, cos(effYaw) * 0.58)
                 let shieldNormal = simd_normalize(SIMD3<Float>(
                     sin(effYaw) * cos(effPitch),
                     sin(effPitch),
@@ -2637,53 +2678,67 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 let laserRayDir = bDir
                 let facingDot = simd_dot(-laserRayDir, shieldNormal)
 
-                if playerIsUsingMirror && !hitRock && facingDot > -0.20 {
-                    isMirrorReflectingLaser = true
-                    // El rayo enemigo choca contra el escudo espejo del jugador
+                let isUsingMirror = isTargetingRemote ? (remotePlayerHeldTool == .mirror) : (heldTool == .mirror && mirrorActiveRemaining > 0)
+
+                if isUsingMirror && !hitRock && facingDot > -0.20 {
+                    if !isTargetingRemote {
+                        isMirrorReflectingLaser = true
+                    }
+                    // El rayo enemigo choca contra el escudo espejo
                     endVec = SIMD4<Float>(shieldCenter, 1.0)
 
                     // El rayo reflejado sale exactamente hacia la mira del espejo (shieldNormal) controlada por el jugador
-                    let reflectedDir = shieldNormal
-                    for targetIdx in npcPositions.indices where npcRespawnTimers[targetIdx] <= 0 && npcHealths[targetIdx] > 0 {
-                        let botCenter = npcPositions[targetIdx] + SIMD3<Float>(0, 0.90, 0)
-                        let toBot = botCenter - shieldCenter
-                        let alongR = simd_dot(toBot, reflectedDir)
-                        if alongR > 0.2 && alongR < 30.0 {
-                            let closestPoint = shieldCenter + reflectedDir * alongR
-                            if simd_distance(botCenter, closestPoint) < 0.92 {
-                                if mirrorReflectHitCooldowns[targetIdx] <= 0 {
-                                    mirrorReflectHitCooldowns[targetIdx] = 0.18
-                                    let damage: Float = 50.0
-                                    npcHealths[targetIdx] = max(0, npcHealths[targetIdx] - damage)
-                                    audio.playLaserReflectionSound()
-                                    onNPCHealthsUpdate?(npcHealths)
+                    if !isTargetingRemote {
+                        let reflectedDir = shieldNormal
+                        for targetIdx in npcPositions.indices where npcRespawnTimers[targetIdx] <= 0 && npcHealths[targetIdx] > 0 {
+                            let botCenter = npcPositions[targetIdx] + SIMD3<Float>(0, 0.90, 0)
+                            let toBot = botCenter - shieldCenter
+                            let alongR = simd_dot(toBot, reflectedDir)
+                            if alongR > 0.2 && alongR < 30.0 {
+                                let closestPoint = shieldCenter + reflectedDir * alongR
+                                if simd_distance(botCenter, closestPoint) < 0.92 {
+                                    if mirrorReflectHitCooldowns[targetIdx] <= 0 {
+                                        mirrorReflectHitCooldowns[targetIdx] = 0.18
+                                        let damage: Float = 50.0
+                                        npcHealths[targetIdx] = max(0, npcHealths[targetIdx] - damage)
+                                        audio.playLaserReflectionSound()
+                                        onNPCHealthsUpdate?(npcHealths)
 
-                                    if npcHealths[targetIdx] <= 0 {
-                                        botLaserActiveTimers[index] = 0
-                                        botLaserCooldownTimers[index] = botCooldown
-                                        audio.playLaserPlayerHitSound()
-                                        onScoreUpdate?(500)
-                                        handleNPCElimination(index: targetIdx)
+                                        if npcHealths[targetIdx] <= 0 {
+                                            botLaserActiveTimers[index] = 0
+                                            botLaserCooldownTimers[index] = botCooldown
+                                            audio.playLaserPlayerHitSound()
+                                            onScoreUpdate?(500)
+                                            handleNPCElimination(index: targetIdx)
+                                        }
                                     }
+                                    break
                                 }
-                                break
                             }
                         }
                     }
                 } else {
                     endVec = SIMD4<Float>(bEndActual, 1.0)
-                    // Damage only applies when photon front reaches player AND bot is actually aligned AND NO ROCK OBSTRUCTS
+                    // Damage only applies when photon front reaches target AND bot is actually aligned AND NO ROCK OBSTRUCTS
                     if bProgress >= 1.0 && !hitRock {
                         let aimRay = simd_normalize(botAimTargets[index] - botHandOrigin)
-                        let playerRay = simd_normalize(playerTarget - botHandOrigin)
-                        let aimAlignment = simd_dot(aimRay, playerRay)
-                        if aimAlignment > 0.94 && distance < 16.0 && !isRecoveringInChamber {
-                            botImpactAudioCooldowns[index] -= rawDt
-                            if botImpactAudioCooldowns[index] <= 0 {
-                                botImpactAudioCooldowns[index] = 0.45
-                                audio.playLaserPlayerHitSound()
+                        let targetRay = simd_normalize(targetCenter - botHandOrigin)
+                        let aimAlignment = simd_dot(aimRay, targetRay)
+                        if aimAlignment > 0.94 && distance < 16.0 {
+                            if isTargetingRemote {
+                                if !remotePlayerIsRecovering {
+                                    remoteDamageAccumulator += 28.0 * rawDt
+                                }
+                            } else {
+                                if !isRecoveringInChamber {
+                                    botImpactAudioCooldowns[index] -= rawDt
+                                    if botImpactAudioCooldowns[index] <= 0 {
+                                        botImpactAudioCooldowns[index] = 0.45
+                                        audio.playLaserPlayerHitSound()
+                                    }
+                                    accumulateDamage(28.0 * rawDt)
+                                }
                             }
-                            accumulateDamage(28.0 * rawDt)
                         }
                     }
                 }
@@ -2696,11 +2751,18 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 case 4: results.pointee.bot4Start = startVec; results.pointee.bot4End = endVec
                 default: break
                 }
+                currentBotLaserStarts[index] = SIMD3<Float>(startVec.x, startVec.y, startVec.z)
+                currentBotLaserEnds[index] = SIMD3<Float>(endVec.x, endVec.y, endVec.z)
 
                 if botLaserActiveTimers[index] == 0 {
                     botLaserCooldownTimers[index] = 3.5 + Float(index) * 0.8
                     botLaserPropagationDistances[index] = 0
+                    currentBotLaserStarts[index] = .zero
+                    currentBotLaserEnds[index] = .zero
                 }
+            } else {
+                currentBotLaserStarts[index] = .zero
+                currentBotLaserEnds[index] = .zero
             }
         }
     }
@@ -2749,15 +2811,17 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     handleNPCElimination(index: closestIndex)
                 } else {
                     audio.playLaserPlayerHitSound()
+                    onScoreUpdate?(25)
                 }
             } else {
                 audio.playLaserPlayerHitSound()
+                onScoreUpdate?(25)
                 onClientNPCHit?(closestIndex, damage)
             }
         }
 
-        // Detección de impacto de láser sobre el otro jugador (1v1 Versus o cooperativo)
-        if isRemotePlayerConnected {
+        // Detección de impacto de láser sobre el otro jugador (1v1 Versus únicamente - sin fuego amigo en cooperativo)
+        if isRemotePlayerConnected && isVersusMode {
             remotePlayerHitCooldown = max(0, remotePlayerHitCooldown - dt)
             let alongRay = simd_dot((remotePlayerPosition + SIMD3<Float>(0, 0.95, 0)) - origin, direction)
             if alongRay > 0.4 && alongRay < 35.0 {
@@ -2847,15 +2911,18 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     audio.playLaserPlayerHitSound()
                     onScoreUpdate?(350)
                     handleNPCElimination(index: reflectedTarget)
+                } else {
+                    onScoreUpdate?(35)
                 }
             } else {
                 audio.playLanding(intensity: 0.85)
+                onScoreUpdate?(35)
                 onClientNPCHit?(reflectedTarget, damage)
             }
         }
 
-        // Reflejo en espejo impactando al jugador rival
-        if isRemotePlayerConnected && remotePlayerHitCooldown <= 0 {
+        // Reflejo en espejo impactando al jugador rival (1v1 Versus únicamente)
+        if isRemotePlayerConnected && isVersusMode && remotePlayerHitCooldown <= 0 {
             let toRemote = (remotePlayerPosition + SIMD3<Float>(0, 0.95, 0)) - mirrorPoint
             let reflectedDist = simd_dot(toRemote, reflected)
             if reflectedDist > 0 && reflectedDist < 25.0 {
@@ -2967,28 +3034,28 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let point = SIMD2<Float>(playerPosition.x, playerPosition.z)
         var candidates: [(GameLightFixture, Float)] = []
 
+        // Detección cercana y confiable (~3.4m) para interactuar con luminarias
         let postDistance = simd_distance(point, SIMD2<Float>(-7.55, 6.65))
-        if postDistance < 2.15 {
+        if postDistance < 3.4 {
             candidates.append((.post, postDistance))
         }
         let piscinaDistance = simd_distance(point, SIMD2<Float>(-5.25, -9.15))
-        if piscinaDistance < 2.25 {
+        if piscinaDistance < 3.4 {
             candidates.append((.piscinaNeon, piscinaDistance))
         }
         let sheeritDistance = simd_distance(point, SIMD2<Float>(5.45, 9.15))
-        if sheeritDistance < 2.25 {
+        if sheeritDistance < 3.4 {
             candidates.append((.sheeritNeon, sheeritDistance))
         }
 
+        let poolStripsCenterDistance = simd_distance(point, SIMD2<Float>(-1.5, -1.5))
         let clampedPoolPoint = SIMD2<Float>(
             min(2.55, max(-5.55, point.x)),
             min(1.40, max(-4.40, point.y))
         )
         let poolEdgeDistance = simd_distance(point, clampedPoolPoint)
-        let outsidePoolOpening = point.x < -5.28 || point.x > 2.28 ||
-            point.y < -4.08 || point.y > 1.08
-        if outsidePoolOpening && poolEdgeDistance < 1.15 {
-            candidates.append((.poolStrips, poolEdgeDistance + 0.2))
+        if poolEdgeDistance < 2.8 || poolStripsCenterDistance < 3.4 {
+            candidates.append((.poolStrips, min(poolEdgeDistance, poolStripsCenterDistance)))
         }
 
         let nearby = candidates.min(by: { $0.1 < $1.1 })?.0
