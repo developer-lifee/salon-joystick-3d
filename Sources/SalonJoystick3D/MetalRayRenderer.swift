@@ -1736,24 +1736,29 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             remotePlayerMeltProgress = max(0.0, remotePlayerMeltProgress - rawDt * 3.2)
         }
 
-        // 💨 Slime Deflation & Pneumatic Air Pump Revive System (Build 100)
-        if isRecoveringInChamber {
-            // Cero teletransportación: el jugador permanece exactamente donde cayó en el suelo
+        // 💨 Slime Deflation & Pneumatic Air Pump Revive System
+        if isRecoveringInChamber || isPlayerDead {
             horizontalVelocity = .zero
-            verticalVelocity = 0
+            let inPool = isInsidePoolXZ(playerPosition) && playerPosition.y <= 0.35
+            let floorY = groundHeight(at: playerPosition, insidePool: inPool)
+            if playerPosition.y > floorY {
+                verticalVelocity -= dt * 25.0
+                playerPosition.y = max(floorY, playerPosition.y + verticalVelocity * dt)
+                if playerPosition.y <= floorY {
+                    playerPosition.y = floorY
+                    verticalVelocity = 0
+                }
+            } else {
+                playerPosition.y = floorY
+                verticalVelocity = 0
+            }
 
-            // Si el compañero vivo se acerca a menos de 2.5m, acelera el inflado a presión
-            let distToTeammate = simd_distance(playerPosition, smoothedRemotePos)
-            let teammateBoosting = isRemotePlayerConnected && !remotePlayerIsRecovering && distToTeammate < 2.5
-            let recoveryRate: Float = teammateBoosting ? 4.0 : 0.0
-            if teammateBoosting {
-                recoveryTimeRemaining = max(0, recoveryTimeRemaining - dt * recoveryRate)
+            if isRecoveringInChamber {
+                let distToTeammate = simd_distance(playerPosition, smoothedRemotePos)
+                let teammateBoosting = isRemotePlayerConnected && !remotePlayerIsRecovering && distToTeammate < 2.5
+                onRecoveryProgressUpdate?(recoveryTimeRemaining, teammateBoosting)
+                return
             }
-            onRecoveryProgressUpdate?(recoveryTimeRemaining, teammateBoosting)
-            if recoveryTimeRemaining <= 0 && teammateBoosting {
-                onRecoveryCompleted?()
-            }
-            return
         } else {
             // Proximidad a compañero caído en cualquier lugar del mapa para sacar la Bomba de Aire
             let distToFallenTeammate = simd_distance(playerPosition, smoothedRemotePos)
@@ -4100,7 +4105,12 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             let col1 = SIMD3<Float>(0, cp, sp)
             let col2 = SIMD3<Float>(sy, -cy * sp, cy * cp)
 
-            let pPos: SIMD3<Float> = isSlidingOnToboggan ? playerPosition + SIMD3<Float>(0, -0.15, 0) : playerPosition
+            var pPos: SIMD3<Float> = isSlidingOnToboggan ? playerPosition + SIMD3<Float>(0, -0.15, 0) : playerPosition
+        if isDeflatedOrDead {
+            let inPool = isInsidePoolXZ(playerPosition) && playerPosition.y <= 0.35
+            let floorY = groundHeight(at: playerPosition, insidePool: inPool)
+            pPos.y = min(pPos.y, floorY) // Slime siempre pegado a la superficie del suelo
+        }
             toolOrigin = pPos + col0 * toolLocalOffset.x + col1 * toolLocalOffset.y + col2 * toolLocalOffset.z
 
             let aimPoint = cameraPosition + cameraForward * 32.0
@@ -4213,7 +4223,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         let melt = playerMeltProgress
         let isRecovering = isRecoveringInChamber
-        let recoveryFrac = isRecovering ? max(0.0, min(1.0, 1.0 - recoveryTimeRemaining / 12.0)) : 0.0
+        let recoveryFrac = isRecovering ? max(0.0, min(1.0, 1.0 - recoveryTimeRemaining / 5.0)) : 0.0
         let effectiveMelt = isRecovering ? (1.0 - recoveryFrac) * melt : melt
         let pumpPuff = (isRecovering && recoveryFrac > 0) ? abs(sin(elapsedTime * 14.0)) * (1.0 - recoveryFrac * 0.4) * 0.20 : 0.0
 
@@ -4253,7 +4263,12 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             ? SIMD3<Float>(1.0 + rMelt * 1.30 + rWobble, max(0.06, (1.0 - rMelt * 0.94) + rWobble * 0.3), 1.0 + rMelt * 1.30 + rWobble)
             : SIMD3<Float>(1, 1, 1)
 
-        let pPos: SIMD3<Float> = isSlidingOnToboggan ? playerPosition + SIMD3<Float>(0, -0.15, 0) : playerPosition
+        var pPos: SIMD3<Float> = isSlidingOnToboggan ? playerPosition + SIMD3<Float>(0, -0.15, 0) : playerPosition
+        if isDeflatedOrDead {
+            let inPool = isInsidePoolXZ(playerPosition) && playerPosition.y <= 0.35
+            let floorY = groundHeight(at: playerPosition, insidePool: inPool)
+            pPos.y = min(pPos.y, floorY) // Slime siempre pegado a la superficie del suelo
+        }
         let effYaw = playerYaw + shieldYawOffset
         let baseMirrorPitch: Float = (cameraMode == .firstPerson) ? firstPersonPitch : -(orbitPitch - 0.22) * 1.15
         let effPitch = max(-0.95, min(0.95, baseMirrorPitch + shieldPitchOffset))
@@ -4325,8 +4340,14 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             if slot < activeAgents.count {
                 let agent = activeAgents[slot]
                 let smoothPos = smoothedRemoteAgents[agent.peerID] ?? (slot == 0 ? smoothedRemotePos : agent.position)
-                let renderPos = smoothPos
-                let isMovingAgent = simd_distance_squared(smoothPos, agent.position) > 0.002 && !agent.isRecovering
+                var renderPos = smoothPos
+                let isAgentDeflated = agent.isRecovering || (slot == 0 && (remotePlayerIsRecovering || rMelt > 0.01))
+                if isAgentDeflated {
+                    let remoteInPool = isInsidePoolXZ(smoothPos) && smoothPos.y <= 0.35
+                    let remoteGround = groundHeight(at: smoothPos, insidePool: remoteInPool)
+                    renderPos.y = remoteGround // ¡La plasta siempre se apoya estrictamente sobre el piso o plataforma!
+                }
+                let isMovingAgent = simd_distance_squared(smoothPos, agent.position) > 0.002 && !isAgentDeflated
                 let agentAS: UInt32 = isMovingAgent ? 9 : 1
                 let agentScale: SIMD3<Float> = slot == 0 ? rScale : SIMD3<Float>(1, 1, 1)
                 let agentTool = GameHeldTool(rawValue: agent.heldToolRaw) ?? .none
@@ -4379,11 +4400,15 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         if isRecoveringInChamber {
             // Colocada justo al lado del charco de slime en el suelo
-            pumpPos = playerPosition + SIMD3<Float>(cos(playerYaw + 1.2) * 0.68, -0.02, sin(playerYaw + 1.2) * 0.68)
+            let inPool = isInsidePoolXZ(playerPosition) && playerPosition.y <= 0.35
+            let floorY = groundHeight(at: playerPosition, insidePool: inPool)
+            pumpPos = SIMD3<Float>(playerPosition.x + cos(playerYaw + 1.2) * 0.68, floorY - 0.02, playerPosition.z + sin(playerYaw + 1.2) * 0.68)
             pumpYaw = playerYaw + 1.57
             pumpMask = 0x01
         } else if isRemotePlayerConnected && remotePlayerIsRecovering && simd_distance(playerPosition, smoothedRemotePos) < 2.5 {
-            pumpPos = smoothedRemotePos + SIMD3<Float>(0.65, -0.02, 0.0)
+            let inPool = isInsidePoolXZ(smoothedRemotePos) && smoothedRemotePos.y <= 0.35
+            let floorY = groundHeight(at: smoothedRemotePos, insidePool: inPool)
+            pumpPos = SIMD3<Float>(smoothedRemotePos.x + 0.65, floorY - 0.02, smoothedRemotePos.z)
             pumpYaw = 0.0
             pumpMask = 0x01
         } else {

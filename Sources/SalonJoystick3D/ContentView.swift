@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "102"
-    static let commitHash = "b102lights"
+    static let build = "103"
+    static let commitHash = "b103pumps"
     static let formatted = "v\(version) • Build \(build)"
 }
 
@@ -610,12 +610,12 @@ struct ContentView: View {
 
                         if model.isAnyMultiplayerConnected && model.multiplayer.mode == .cooperative && model.remotePlayerIsRecovering {
                             Button {
-                                model.reviveTeammate(fromIntermission: true)
+                                model.pumpTeammateAir(fromIntermission: true)
                             } label: {
                                 HStack(spacing: 6) {
                                     Image(systemName: "wind")
                                         .font(.system(size: 14, weight: .black))
-                                    Text("💨 INFLAR A \(model.remotePlayerName.isEmpty ? "COMPAÑERO" : model.remotePlayerName.uppercased())")
+                                    Text("💨 BOMBEAR A \(model.remotePlayerName.isEmpty ? "COMPAÑERO" : model.remotePlayerName.uppercased()) (\(model.teammateRevivePumps)/5)")
                                         .font(.system(size: 12, weight: .black, design: .rounded))
                                 }
                                 .foregroundStyle(.black)
@@ -628,6 +628,7 @@ struct ContentView: View {
                                 .shadow(color: .green.opacity(0.8), radius: 8)
                             }
                             .buttonStyle(.plain)
+                            .disabled(model.isPumpingTeammateStroke)
                             .padding(.top, 2)
                         } else {
                             Text("+25 HP REGENERADOS")
@@ -993,26 +994,31 @@ struct ContentView: View {
 
                     if model.isNearRecoveryConsole && model.remotePlayerIsRecovering {
                         Button {
-                            model.reviveTeammate()
+                            model.pumpTeammateAir()
                         } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "wind")
-                                    .font(.system(size: 14, weight: .black))
-                                Text("💨 INFLAR COMPAÑERO")
-                                    .font(.system(size: 12, weight: .black, design: .rounded))
+                            HStack(spacing: 8) {
+                                Image(systemName: "gauge.with.needle.fill")
+                                    .font(.system(size: 18, weight: .black))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("💨 BOMBEAR A \(model.remotePlayerName.isEmpty ? "COMPAÑERO" : model.remotePlayerName.uppercased())")
+                                        .font(.system(size: 13, weight: .black, design: .rounded))
+                                    Text("BOMBEO: \(model.teammateRevivePumps)/5 (Mínimo 5s)")
+                                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                }
                             }
                             .foregroundStyle(.black)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
                             .background(
-                                LinearGradient(colors: [.yellow, .green], startPoint: .leading, endPoint: .trailing),
+                                LinearGradient(colors: [.yellow, .orange], startPoint: .top, endPoint: .bottom),
                                 in: Capsule()
                             )
                             .overlay(Capsule().stroke(Color.white, lineWidth: 1.5))
-                            .shadow(color: .green.opacity(0.8), radius: 8)
+                            .shadow(color: .orange.opacity(0.8), radius: 8)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Inflar Compañero con Bomba de Aire")
+                        .disabled(model.isPumpingTeammateStroke)
+                        .accessibilityLabel("Bombear Aire a Compañero con Bomba Neumática")
                     }
 
                     if model.isNearCoverRock || model.isCoverActive {
@@ -1574,6 +1580,9 @@ final class GameModel: ObservableObject {
     @Published var isDefeated = false
     @Published var isRecoveringInChamber = false
     @Published var inflationPumpsCount: Int = 0
+    @Published var teammateRevivePumps: Int = 0
+    @Published var isPumpingTeammateStroke: Bool = false
+    private var lastPumpStrokeTime: TimeInterval = 0
     @Published var recoveryTimeRemaining: Float = 0
     @Published var isTeammateBoostingRecovery = false
     @Published var remotePlayerIsRecovering = false
@@ -2503,11 +2512,21 @@ final class GameModel: ObservableObject {
             if let isRec = packet.isRecovering {
                 self.remotePlayerIsRecovering = isRec
                 if let prog = packet.recoveryProgress {
-                    self.remotePlayerRecoveryTime = max(0, 12.0 * (1.0 - prog))
+                    self.remotePlayerRecoveryTime = max(0, 5.0 * (1.0 - prog))
                 }
                 if isRec && self.isRecoveringInChamber {
                     self.triggerTeamDefeat()
                 }
+            }
+
+        case .reviveProgress:
+            if self.isRecoveringInChamber {
+                let progress = packet.recoveryProgress ?? 0.0
+                self.recoveryTimeRemaining = max(0.0, 5.0 * (1.0 - progress))
+                self.isTeammateBoostingRecovery = true
+                self.inflationPumpsCount = Int((progress * 5.0).rounded())
+                self.audio.playAirPumpStrokeSound()
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             }
 
         case .reviveTeammate:
@@ -2624,7 +2643,7 @@ final class GameModel: ObservableObject {
             isSlowMotion: isSlowMotionActive,
             isFiringLaser: (heldTool == .laser && toolStatus.activeRemaining > 0),
             isRecovering: isRecoveringInChamber,
-            recoveryProgress: isRecoveringInChamber ? max(0, min(1.0, 1.0 - recoveryTimeRemaining / 12.0)) : 1.0,
+            recoveryProgress: isRecoveringInChamber ? max(0, min(1.0, 1.0 - recoveryTimeRemaining / 5.0)) : 1.0,
             versusRound: versusRound,
             versusLocalWins: versusLocalWins,
             versusRemoteWins: versusRemoteWins,
@@ -2717,8 +2736,12 @@ final class GameModel: ObservableObject {
                     broadcastVersusRoundUpdate()
                 }
             } else {
-                // Modo Solitario: ¡Te desinflas en el suelo y sacas la Bomba de Aire Neumática!
-                enterRecoveryChamber()
+                // Modo Solitario: ¡Derrota Directa / Game Over! Sin auto-revivir para mantener el reto
+                isDefeated = true
+                isTeamDefeated = false
+                heldTool = .none
+                audio.playSlimeDeflateSound()
+                audio.playRobloxOofDefeatSound()
             }
         }
     }
@@ -2727,7 +2750,8 @@ final class GameModel: ObservableObject {
         guard !isRecoveringInChamber else { return }
         isRecoveringInChamber = true
         inflationPumpsCount = 0
-        recoveryTimeRemaining = 12.0
+        teammateRevivePumps = 0
+        recoveryTimeRemaining = 5.0
         playerHealth = 0
         playerShield = 0
         heldTool = .none
@@ -2739,19 +2763,7 @@ final class GameModel: ObservableObject {
     }
 
     func performAirPumpStroke() {
-        guard isRecoveringInChamber else { return }
-        inflationPumpsCount += 1
-        audio.playAirPumpStrokeSound()
-        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-
-        // Cada bombeo avanza 1/3 (33%) de la recuperación total
-        let targetRemaining = max(0.0, 12.0 * (1.0 - Float(inflationPumpsCount) / 3.0))
-        recoveryTimeRemaining = targetRemaining
-        broadcastLocalState()
-
-        if inflationPumpsCount >= 3 || recoveryTimeRemaining <= 0 {
-            completeRecovery(wasRevivedByTeammate: true)
-        }
+        // En cooperativo, únicamente el compañero vivo bombea aire para revivirte
     }
 
     func updateRecoveryProgress(remaining: Float, isBoosting: Bool) {
@@ -2763,6 +2775,7 @@ final class GameModel: ObservableObject {
         guard isRecoveringInChamber else { return }
         isRecoveringInChamber = false
         inflationPumpsCount = 0
+        teammateRevivePumps = 0
         playerHealth = 100.0
         playerShield = 100.0
         recoveryTimeRemaining = 0
@@ -2775,29 +2788,57 @@ final class GameModel: ObservableObject {
         broadcastLocalState()
     }
 
-    func reviveTeammate(fromIntermission: Bool = false) {
+    func pumpTeammateAir(fromIntermission: Bool = false) {
         guard isAnyMultiplayerConnected, remotePlayerIsRecovering else { return }
         if !fromIntermission {
             guard isNearRecoveryConsole else { return }
         }
+        let now = Date().timeIntervalSince1970
+        guard now - lastPumpStrokeTime >= 0.95 else { return } // Mínimo 1s por bombeo -> 5 segundos total
+        lastPumpStrokeTime = now
+
+        isPumpingTeammateStroke = true
+        teammateRevivePumps += 1
         audio.playAirPumpStrokeSound()
-        playerScore += 100
-        let packet = LocalMatchPacket(
-            kind: .reviveTeammate,
+        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+
+        let progress = Float(teammateRevivePumps) / 5.0
+        let pkt = LocalMatchPacket(
+            kind: .reviveProgress,
             peerID: multiplayer.localPeer.displayName,
             mode: multiplayer.mode,
-            timestamp: Date().timeIntervalSince1970
+            timestamp: now,
+            recoveryProgress: progress
         )
-        if multiplayer.isConnected {
-            multiplayer.send(packet)
+        if multiplayer.isConnected { multiplayer.send(pkt) }
+        if gameCenter.isInMatch { gameCenter.sendPacket(pkt) }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+            self?.isPumpingTeammateStroke = false
         }
-        if gameCenter.isInMatch {
-            gameCenter.sendPacket(packet)
+
+        if teammateRevivePumps >= 5 {
+            teammateRevivePumps = 0
+            playerScore += 200
+            let finishPkt = LocalMatchPacket(
+                kind: .reviveTeammate,
+                peerID: multiplayer.localPeer.displayName,
+                mode: multiplayer.mode,
+                timestamp: now
+            )
+            if multiplayer.isConnected { multiplayer.send(finishPkt) }
+            if gameCenter.isInMatch { gameCenter.sendPacket(finishPkt) }
+            remotePlayerIsRecovering = false
+            remotePlayerRecoveryTime = 0
+            remotePlayerHealth = 100.0
+            remotePlayerShield = 100.0
+            audio.playBalloonBouncePopSound()
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
         }
-        remotePlayerIsRecovering = false
-        remotePlayerRecoveryTime = 0
-        remotePlayerHealth = 100.0
-        remotePlayerShield = 100.0
+    }
+
+    func reviveTeammate(fromIntermission: Bool = false) {
+        pumpTeammateAir(fromIntermission: fromIntermission)
     }
 
     func triggerTeamDefeat(fromNetwork: Bool = false) {
@@ -7334,31 +7375,21 @@ struct RecoveryChamberOverlayView: View {
                         )
                 }
 
-                // Interactive Air Pump Action Button!
-                Button {
-                    model.performAirPumpStroke()
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "gauge.with.needle.fill")
-                            .font(.system(size: 22, weight: .black))
-                        Text(model.inflationPumpsCount >= 3 ? "¡REBOTANDO DE PIE!" : "💨 ¡BOMBEAR AIRE! (\(model.inflationPumpsCount)/3)")
-                            .font(.system(size: 16, weight: .black, design: .rounded))
+                if model.isTeammateBoostingRecovery {
+                    HStack(spacing: 6) {
+                        Image(systemName: "wind")
+                            .foregroundStyle(.yellow)
+                        Text("💨 ¡COMPAÑERO BOMBEÁNDOTE AIRE! (\(model.inflationPumpsCount)/5)")
+                            .font(.system(size: 13, weight: .black, design: .rounded))
+                            .foregroundStyle(.yellow)
                     }
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 28)
-                    .padding(.vertical, 14)
-                    .background(
-                        LinearGradient(colors: [.yellow, .orange], startPoint: .top, endPoint: .bottom),
-                        in: Capsule()
-                    )
-                    .overlay(Capsule().stroke(Color.white, lineWidth: 2))
-                    .shadow(color: .orange.opacity(0.85), radius: 10)
+                } else {
+                    Text("ESPERA A QUE TU COMPAÑERO SE ACERQUE A BOMBEARTE AIRE...")
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.85))
                 }
-                .disabled(model.inflationPumpsCount >= 3)
-                .scaleEffect(model.inflationPumpsCount >= 3 ? 0.95 : 1.0)
-                .animation(.spring(response: 0.35, dampingFraction: 0.65), value: model.inflationPumpsCount)
 
-                let progress = max(0, min(1.0, 1.0 - model.recoveryTimeRemaining / 12.0))
+                let progress = min(1.0, max(0.0, Float(model.inflationPumpsCount) / 5.0))
                 VStack(spacing: 6) {
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
@@ -7381,30 +7412,12 @@ struct RecoveryChamberOverlayView: View {
 
                         Spacer()
 
-                        Text("\(Int(ceil(model.recoveryTimeRemaining)))s")
+                        Text("\(max(0, 5 - model.inflationPumpsCount))s")
                             .font(.system(size: 12, weight: .black, design: .monospaced))
                             .foregroundStyle(.yellow)
                     }
                 }
                 .frame(width: 290)
-
-                if model.isTeammateBoostingRecovery {
-                    HStack(spacing: 6) {
-                        Image(systemName: "wind")
-                            .foregroundStyle(.yellow)
-                        Text("¡COMPAÑERO INFLÁNDOTE A PRESIÓN! (+400% AIRE)")
-                            .font(.system(size: 11, weight: .black, design: .rounded))
-                            .foregroundStyle(.yellow)
-                    }
-                } else if model.isAnyMultiplayerConnected && model.multiplayer.mode == .cooperative {
-                    Text("Toca BOMBEAR AIRE para inflarte o espera a que tu compañero bombee")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(.cyan.opacity(0.90))
-                } else {
-                    Text("¡Bombea aire 3 veces para inflar tu slime y rebotar al combate!")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(.yellow.opacity(0.90))
-                }
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 16)

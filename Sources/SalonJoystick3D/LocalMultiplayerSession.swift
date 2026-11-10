@@ -96,6 +96,7 @@ struct LocalMatchPacket: Codable {
         case scoreAward
         case lightSync
         case reviveTeammate
+        case reviveProgress
         case teamDefeat
         case teamRestart
         case slowMotion
