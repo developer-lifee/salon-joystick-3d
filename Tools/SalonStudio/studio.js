@@ -1186,7 +1186,7 @@ async function exportCharacterPreset() {
   };
 
   try {
-    const res = await fetch('/api/presets/save-character', {
+    const res = await fetch('api/presets/save-character', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -1213,7 +1213,7 @@ async function saveCoverPose() {
   };
 
   try {
-    const res = await fetch('/api/save-cover', {
+    const res = await fetch('api/save-cover', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -1238,7 +1238,7 @@ async function saveWaterSettings() {
   };
 
   try {
-    const res = await fetch('/api/save-water', {
+    const res = await fetch('api/save-water', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -1662,7 +1662,7 @@ function saveCustomMap() {
     }))
   };
 
-  fetch('/api/save-map', {
+  fetch('api/save-map', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(mapData)
@@ -1835,7 +1835,7 @@ async function saveEnemyMaterials() {
   };
 
   try {
-    const res = await fetch('/api/save-materials', {
+    const res = await fetch('api/save-materials', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)

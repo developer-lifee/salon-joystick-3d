@@ -15,28 +15,32 @@ class StudioHandler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, directory=BASE_DIR, **kwargs)
 
     def do_GET(self):
-        if self.path == "/api/presets/water":
+        req_path = self.path.split("?")[0]
+        if req_path.startswith("/studio"):
+            req_path = req_path[len("/studio"):]
+
+        if req_path == "/api/presets/water":
             p_file = os.path.join(BASE_DIR, "presets", "water_shaders.json")
             if os.path.exists(p_file):
                 with open(p_file, "r", encoding="utf-8") as f:
                     self._send_json(json.load(f))
             else:
                 self._send_json({"error": "No water presets found"})
-        elif self.path == "/api/presets/cover":
+        elif req_path == "/api/presets/cover":
             p_file = os.path.join(BASE_DIR, "presets", "cover_poses.json")
             if os.path.exists(p_file):
                 with open(p_file, "r", encoding="utf-8") as f:
                     self._send_json(json.load(f))
             else:
                 self._send_json({"error": "No cover poses found"})
-        elif self.path == "/api/load-map":
+        elif req_path == "/api/load-map":
             map_file = os.path.join(BASE_DIR, "presets", "custom_map.json")
             if os.path.exists(map_file):
                 with open(map_file, "r", encoding="utf-8") as f:
                     self._send_json(json.load(f))
             else:
                 self._send_json({"props": [], "name": "Vacio"})
-        elif self.path == "/api/presets/materials":
+        elif req_path == "/api/presets/materials":
             m_file = os.path.join(BASE_DIR, "presets", "enemy_materials.json")
             if os.path.exists(m_file):
                 with open(m_file, "r", encoding="utf-8") as f:
@@ -47,7 +51,7 @@ class StudioHandler(http.server.SimpleHTTPRequestHandler):
                     "fotofago": {"reflectivity": 0.04, "roughness": 0.85, "emission": 0.3},
                     "player": {"reflectivity": 0.05, "roughness": 0.65, "emission": 0.2}
                 })
-        elif self.path == "/api/export-all":
+        elif req_path == "/api/export-all":
             water_p = os.path.join(BASE_DIR, "presets", "water_shaders.json")
             cover_p = os.path.join(BASE_DIR, "presets", "cover_poses.json")
             export_data = {"version": "1.0.0", "engine": "SalonStudio-Universal"}
@@ -62,24 +66,28 @@ class StudioHandler(http.server.SimpleHTTPRequestHandler):
             super().do_GET()
 
     def do_POST(self):
-        if self.path == "/api/save-cover":
+        req_path = self.path.split("?")[0]
+        if req_path.startswith("/studio"):
+            req_path = req_path[len("/studio"):]
+
+        if req_path == "/api/save-cover":
             length = int(self.headers.get('content-length', 0))
             data = json.loads(self.rfile.read(length).decode('utf-8'))
             success, msg = self.update_cover_pose(data)
             self._send_json({"success": success, "message": msg})
-        elif self.path == "/api/save-water":
+        elif req_path == "/api/save-water":
             length = int(self.headers.get('content-length', 0))
             data = json.loads(self.rfile.read(length).decode('utf-8'))
             success, msg = self.update_water_settings(data)
             self._send_json({"success": success, "message": msg})
-        elif self.path == "/api/presets/save-character":
+        elif req_path == "/api/presets/save-character":
             length = int(self.headers.get('content-length', 0))
             data = json.loads(self.rfile.read(length).decode('utf-8'))
             char_file = os.path.join(BASE_DIR, "presets", "character_customization.json")
             with open(char_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
             self._send_json({"success": True, "message": "¡Configuración de Slime Imp guardada en presets/!"})
-        elif self.path == "/api/save-map":
+        elif req_path == "/api/save-map":
             length = int(self.headers.get('content-length', 0))
             data = json.loads(self.rfile.read(length).decode('utf-8'))
             map_file = os.path.join(BASE_DIR, "presets", "custom_map.json")
@@ -87,7 +95,7 @@ class StudioHandler(http.server.SimpleHTTPRequestHandler):
             with open(map_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
             self._send_json({"success": True, "message": "¡Mapa de escenario guardado exitosamente en presets/custom_map.json!"})
-        elif self.path == "/api/save-materials":
+        elif req_path == "/api/save-materials":
             length = int(self.headers.get('content-length', 0))
             data = json.loads(self.rfile.read(length).decode('utf-8'))
             mat_file = os.path.join(BASE_DIR, "presets", "enemy_materials.json")
