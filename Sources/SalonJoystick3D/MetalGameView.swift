@@ -240,6 +240,7 @@ struct MetalGameView: UIViewRepresentable {
         context.coordinator.renderer?.remotePlayerPosition = model.remotePlayerPosition
         context.coordinator.renderer?.remotePlayerYaw = model.remotePlayerYaw
         context.coordinator.renderer?.remotePlayerHeldTool = model.remotePlayerHeldTool
+        context.coordinator.renderer?.remotePlayerIsFiringLaser = model.remotePlayerIsFiringLaser
         context.coordinator.renderer?.remoteAgents = model.sortedRemoteAgents
         let isPaused = model.gameState != .playing
         context.coordinator.renderer?.setInput(

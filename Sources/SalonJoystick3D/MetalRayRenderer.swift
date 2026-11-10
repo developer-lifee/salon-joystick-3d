@@ -991,6 +991,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     var remotePlayerPosition: SIMD3<Float> = SIMD3<Float>(-3.8, 0, 3.8)
     var remotePlayerYaw: Float = .pi
     var remotePlayerHeldTool: GameHeldTool = .laser
+    var remotePlayerIsFiringLaser: Bool = false
     var remoteAgents: [RemoteAgentState] = []
     var secondaryCameraPos: SIMD3<Float> = SIMD3<Float>(-3.8, 1.45, 3.8)
     var secondaryCameraFwd: SIMD3<Float> = SIMD3<Float>(0, 0, -1)
@@ -2353,11 +2354,21 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         let results = laserResultBuffer.contents().assumingMemoryBound(to: RTLaserResult.self)
         if let starts = laserStarts, let ends = laserEnds {
-            if starts.count > 0 && ends.count > 0 { results.pointee.bot0Start = SIMD4<Float>(starts[0], 1); results.pointee.bot0End = SIMD4<Float>(ends[0], 1) }
-            if starts.count > 1 && ends.count > 1 { results.pointee.bot1Start = SIMD4<Float>(starts[1], 1); results.pointee.bot1End = SIMD4<Float>(ends[1], 1) }
-            if starts.count > 2 && ends.count > 2 { results.pointee.bot2Start = SIMD4<Float>(starts[2], 1); results.pointee.bot2End = SIMD4<Float>(ends[2], 1) }
-            if starts.count > 3 && ends.count > 3 { results.pointee.bot3Start = SIMD4<Float>(starts[3], 1); results.pointee.bot3End = SIMD4<Float>(ends[3], 1) }
-            if starts.count > 4 && ends.count > 4 { results.pointee.bot4Start = SIMD4<Float>(starts[4], 1); results.pointee.bot4End = SIMD4<Float>(ends[4], 1) }
+            let makeLaserVec: (Int) -> (SIMD4<Float>, SIMD4<Float>) = { idx in
+                guard idx < starts.count, idx < ends.count else { return (.zero, .zero) }
+                let s = starts[idx]
+                let e = ends[idx]
+                // Validar que el rayo tenga origen real no en el origen nulo (0,0,0) y longitud visible (> 0.2m)
+                if simd_length_squared(s) > 0.04 && simd_length_squared(s - e) > 0.04 {
+                    return (SIMD4<Float>(s, 1.0), SIMD4<Float>(e, 1.0))
+                }
+                return (.zero, .zero)
+            }
+            let (b0s, b0e) = makeLaserVec(0); results.pointee.bot0Start = b0s; results.pointee.bot0End = b0e
+            let (b1s, b1e) = makeLaserVec(1); results.pointee.bot1Start = b1s; results.pointee.bot1End = b1e
+            let (b2s, b2e) = makeLaserVec(2); results.pointee.bot2Start = b2s; results.pointee.bot2End = b2e
+            let (b3s, b3e) = makeLaserVec(3); results.pointee.bot3Start = b3s; results.pointee.bot3End = b3e
+            let (b4s, b4e) = makeLaserVec(4); results.pointee.bot4Start = b4s; results.pointee.bot4End = b4e
         } else {
             results.pointee.bot0Start = .zero; results.pointee.bot0End = .zero
             results.pointee.bot1Start = .zero; results.pointee.bot1End = .zero
@@ -2398,7 +2409,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             let results = laserResultBuffer.contents().assumingMemoryBound(to: RTLaserResult.self)
             isMirrorReflectingLaser = false
 
-            if isRemotePlayerConnected && remotePlayerHeldTool == .laser && !remotePlayerIsRecovering {
+            let isRivalFiring = isRemotePlayerConnected && remotePlayerHeldTool == .laser && !remotePlayerIsRecovering && remotePlayerIsFiringLaser
+            if isRivalFiring {
                 let rPos = smoothedRemotePos
                 let rYaw = remotePlayerYaw
                 let rForward = SIMD3<Float>(sin(rYaw), 0, cos(rYaw))

@@ -63,16 +63,16 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "90"
-    static let commitHash = "28a665a"
-    static let formatted = "v\(version) • Build \(build) (\(commitHash))"
+    static let build = "91"
+    static let commitHash = "b91fix"
+    static let formatted = "v\(version) • Build \(build)"
 }
 
 struct GameLightStates: Codable, Equatable {
-    var post = false
-    var piscinaNeon = false
-    var sheeritNeon = false
-    var poolStrips = false
+    var post = true
+    var piscinaNeon = true
+    var sheeritNeon = true
+    var poolStrips = true
     var postIntensity: Float = 1
     var piscinaNeonIntensity: Float = 1
     var sheeritNeonIntensity: Float = 1
@@ -1771,6 +1771,7 @@ final class GameModel: ObservableObject {
     @Published var remotePlayerPosition = SIMD3<Float>(-3.8, 0, 3.8)
     @Published var remotePlayerYaw: Float = .pi
     @Published var remotePlayerHeldTool: GameHeldTool = .laser
+    @Published var remotePlayerIsFiringLaser: Bool = false
     @Published var showConnectedToast: Bool = false
     @Published private(set) var localPlayerPosition = SIMD3<Float>(3.8, 0, 3.8)
     private var localPlayerYaw: Float = .pi
@@ -1941,6 +1942,20 @@ final class GameModel: ObservableObject {
 
         multiplayer.onPacketReceived = { [weak self] packet in
             self?.handleMultiplayerPacket(packet)
+        }
+
+        multiplayer.onPeerDisconnected = { [weak self] peerID in
+            guard let self else { return }
+            self.remoteAgentsDict.removeValue(forKey: peerID.displayName)
+            if self.remotePlayerName == peerID.displayName {
+                self.remotePlayerIsFiringLaser = false
+                self.remotePlayerHeldTool = .flashlight
+                if let nextPeer = self.multiplayer.peers.first?.displayName {
+                    self.remotePlayerName = nextPeer
+                } else {
+                    self.remotePlayerName = ""
+                }
+            }
         }
 
         gameCenter.onPacketReceived = { [weak self] packet in
@@ -2315,6 +2330,13 @@ final class GameModel: ObservableObject {
             if let isRec = packet.isRecovering { entry.isRecovering = isRec }
             if let prog = packet.recoveryProgress { entry.recoveryProgress = prog }
             if let hasC = packet.hasCore { entry.hasCore = hasC }
+            if let isFiring = packet.isFiringLaser {
+                entry.isFiringLaser = isFiring
+                self.remotePlayerIsFiringLaser = isFiring
+            } else {
+                entry.isFiringLaser = false
+                self.remotePlayerIsFiringLaser = false
+            }
             entry.isSameTeam = isPeerOnSameTeam(packet.peerID)
             remoteAgentsDict[packet.peerID] = entry
         }
@@ -2538,6 +2560,7 @@ final class GameModel: ObservableObject {
             health: playerHealth,
             score: playerScore,
             isSlowMotion: isSlowMotionActive,
+            isFiringLaser: (heldTool == .laser && toolStatus.activeRemaining > 0),
             isRecovering: isRecoveringInChamber,
             recoveryProgress: isRecoveringInChamber ? max(0, min(1.0, 1.0 - recoveryTimeRemaining / 12.0)) : 1.0,
             versusRound: versusRound,
@@ -5368,25 +5391,24 @@ final class ChiptuneAudioEngine {
         for frame in 0..<Int(frameCount) {
             let time = Double(frame) / format.sampleRate
             let section = min(3, Int(time / 2.0))
-            let stepDur = 0.25
+            let stepDur = 0.50
             let noteIndex = min(arpNotes.count - 1, Int(time / stepDur))
             let noteTime = time.truncatingRemainder(dividingBy: stepDur)
-            let attack = min(1.0, noteTime / 0.008)
-            let decay = exp(-noteTime * 6.8)
+            let attack = min(1.0, noteTime / 0.045)
+            let decay = exp(-noteTime * 2.6)
             let env = attack * decay
 
             let freq = arpNotes[noteIndex]
-            let leadL = (sin(2 * .pi * freq * time) + sin(2 * .pi * (freq * 2.003) * time) * 0.28) * 0.044 * env
-            let leadR = (sin(2 * .pi * (freq * 1.002) * time) + sin(2 * .pi * (freq * 1.5) * time) * 0.22) * 0.044 * env
+            let leadL = (sin(2 * .pi * freq * time) + sin(2 * .pi * (freq * 2.0) * time) * 0.12) * 0.032 * env
+            let leadR = (sin(2 * .pi * (freq * 1.002) * time) + sin(2 * .pi * (freq * 1.5) * time) * 0.10) * 0.032 * env
 
-            // Bajo synth pulsante a 8vos de nota
-            let bassGate = 0.55 + 0.45 * max(0.0, sin(2 * .pi * 4.0 * time))
+            // Bajo synth melódico cálido puro sin distorsión tanh ni golpe percusivo
             let bassFreq = bassRoots[section]
-            let subBass = (sin(2 * .pi * bassFreq * time) + tanh(sin(2 * .pi * bassFreq * 2.0 * time) * 1.6) * 0.35) * 0.024 * bassGate
+            let subBass = (sin(2 * .pi * bassFreq * time) * 0.018 + sin(2 * .pi * bassFreq * 0.5 * time) * 0.008)
 
-            // Pad aéreo brillante arcoíris con paneo estéreo lento
-            let shimmerL = sin(2 * .pi * (freq * 0.5) * time + sin(time * 1.5)) * 0.010
-            let shimmerR = cos(2 * .pi * (freq * 0.5) * time + cos(time * 1.5)) * 0.010
+            // Pad aéreo brillante arcoíris con paneo estéreo envolvente
+            let shimmerL = sin(2 * .pi * (freq * 0.5) * time + sin(time * 0.8)) * 0.008
+            let shimmerR = cos(2 * .pi * (freq * 0.5) * time + cos(time * 0.8)) * 0.008
 
             channels[0][frame] = Float(leadL + subBass + shimmerL)
             if format.channelCount > 1 {

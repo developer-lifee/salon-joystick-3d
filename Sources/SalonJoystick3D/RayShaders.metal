@@ -1191,15 +1191,15 @@ kernel void raytracePatio(
         if (kind > 3.5f && kind < 4.5f) {
             emitterIntensity = uniforms.lightStates.x;
         } else if (kind > 4.5f && kind < 5.5f) {
-            emitterIntensity = uniforms.lightStates.w;
+            // Si está en la piscina (-6 < x < 3, -5 < z < 2), responde al interruptor de borde de piscina
+            bool isPoolStrip = (position.x > -6.0f && position.x < 3.0f && position.z > -5.0f && position.z < 2.0f && position.y > -0.2f && position.y < 0.4f);
+            emitterIntensity = isPoolStrip ? uniforms.lightStates.w : 1.0f;
         } else if (kind > 5.5f && kind < 6.5f) {
             emitterIntensity = uniforms.lightStates.y;
         } else if (kind > 6.5f && kind < 7.5f) {
             emitterIntensity = uniforms.lightStates.z;
-        } else if (totalLights <= 0.001f) {
-            emitterIntensity = 0.0f;
         } else {
-            emitterIntensity = lightScale;
+            emitterIntensity = 1.0f;
         }
         emission *= emitterIntensity;
 
@@ -1216,7 +1216,8 @@ kernel void raytracePatio(
             }
         }
 
-        float ambientBase = 0.032f * lightScale * fotofagoDrain;
+        // Iluminación ambiental nocturna de contraste garantizado para visibilidad total de noche o sin luces
+        float ambientBase = (0.042f + 0.048f * lightScale) * fotofagoDrain;
         float skyAmbient = ambientBase + ambientBase * saturate(normal.y);
         float3 direct = albedo * skyAmbient;
 
@@ -1232,7 +1233,7 @@ kernel void raytracePatio(
             float cone = centerBeam + wideSpill;
             
             float battery = clamp(uniforms.toolParameters.y, 0.0f, 1.0f);
-            float flicker = (battery < 0.22f && battery > 0.01f) ? (0.75f + 0.25f * sin(uniforms.viewport.z * 24.0f)) : 1.0f;
+            float flicker = (battery < 0.06f && battery > 0.001f) ? (0.88f + 0.12f * sin(uniforms.viewport.z * 10.0f)) : 1.0f;
             if (cone > 0.001f && toolDistance < 38.0f && battery > 0.001f) {
                 float incidence = saturate(dot(normal, -toolToSurface));
                 float flashlightPower = (52.0f / (1.0f + toolDistance * toolDistance * 0.032f)) * battery * flicker;

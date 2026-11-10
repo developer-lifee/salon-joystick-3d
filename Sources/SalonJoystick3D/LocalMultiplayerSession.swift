@@ -72,6 +72,7 @@ struct RemoteAgentState: Identifiable, Equatable {
     var yaw: Float
     var pitch: Float = 0
     var heldToolRaw: Int = 1
+    var isFiringLaser: Bool = false
     var health: Float = 100.0
     var shield: Float = 100.0
     var score: Int = 0
@@ -115,6 +116,7 @@ struct LocalMatchPacket: Codable {
     var health: Float?
     var score: Int?
     var isSlowMotion: Bool?
+    var isFiringLaser: Bool?
 
     // Sincronización autoritativa de enemigos (Host -> Cliente)
     var enemyPositions: [SIMD3<Float>]?
@@ -185,6 +187,7 @@ final class LocalMultiplayerSession: NSObject, ObservableObject {
 
     var onPacketReceived: ((LocalMatchPacket) -> Void)?
     var onConnected: (() -> Void)?
+    var onPeerDisconnected: ((MCPeerID) -> Void)?
 
     private let serviceType = "salon-laser"
     let localPeer: MCPeerID
@@ -346,6 +349,7 @@ extension LocalMultiplayerSession: MCSessionDelegate {
             case .connecting:
                 self.statusMessage = "Enlazando con \(peerID.displayName)..."
             case .notConnected:
+                self.onPeerDisconnected?(peerID)
                 if session.connectedPeers.isEmpty {
                     self.statusMessage = "Jugador desconectado"
                 }
