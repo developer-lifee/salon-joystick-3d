@@ -958,8 +958,10 @@ kernel void raytracePatio(
                 roughness = material.normalRoughness.w;
             } else {
             bool isHardwareRT = uniforms.waterSimulation.w > 0.5f;
+            float totalLights = uniforms.lightStates.x + uniforms.lightStates.y + uniforms.lightStates.z + uniforms.lightStates.w;
+            float lightScale = clamp(totalLights / 0.8f, 0.0f, 1.0f);
             if (isHardwareRT) {
-                accumulated += throughput * nightSky(currentRay.direction);
+                accumulated += throughput * nightSky(currentRay.direction) * lightScale;
                 break;
             }
 
@@ -1027,7 +1029,9 @@ kernel void raytracePatio(
             }
 
             if (!analytical.hit) {
-                accumulated += throughput * nightSky(currentRay.direction);
+                float totalLights = uniforms.lightStates.x + uniforms.lightStates.y + uniforms.lightStates.z + uniforms.lightStates.w;
+                float lightScale = clamp(totalLights / 0.8f, 0.0f, 1.0f);
+                accumulated += throughput * nightSky(currentRay.direction) * lightScale;
                 break;
             }
             if (bounce == 0) {
@@ -1092,7 +1096,9 @@ kernel void raytracePatio(
         if (kind > 5.5f && kind < 6.5f) emitterIntensity = uniforms.lightStates.y;
         if (kind > 6.5f && kind < 7.5f) emitterIntensity = uniforms.lightStates.z;
         emission *= emitterIntensity;
-        float ambientBase = 0.032f;
+        float totalLights = uniforms.lightStates.x + uniforms.lightStates.y + uniforms.lightStates.z + uniforms.lightStates.w;
+        float lightScale = clamp(totalLights / 0.8f, 0.0f, 1.0f);
+        float ambientBase = 0.032f * lightScale;
         float skyAmbient = ambientBase + ambientBase * saturate(normal.y);
         float3 direct = albedo * skyAmbient;
 

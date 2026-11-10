@@ -3424,10 +3424,20 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
         }
 
-        let isSubterraneanIlluminated = cameraPosition.y <= -4.75 || playerPosition.y <= -4.75
-        let isPoolSubmerged = currentlyInPool && cameraPosition.y < 0.20
+        let isBlackout = lightStates.areAllLightsOff
+        let isSubterraneanIlluminated = !isBlackout && (cameraPosition.y <= -4.75 || playerPosition.y <= -4.75)
+        let isPoolSubmerged = !isBlackout && (currentlyInPool && cameraPosition.y < 0.20)
         let activeLightPos = isSubterraneanIlluminated ? SIMD4<Float>(0.0, -5.2, 0.0, 1) : (isPoolSubmerged ? SIMD4<Float>(-1.5, -3.5, -1.5, 1) : SIMD4<Float>(-7.55, 2.72, 6.65, 1))
-        let activeLightColor = isSubterraneanIlluminated ? SIMD4<Float>(0.10, 0.95, 0.98, 48.0) : (isPoolSubmerged ? SIMD4<Float>(0.08, 0.85, 0.95, 38.0) : SIMD4<Float>(1.0, 0.66, 0.24, lightStates.effectiveIntensity(.post) * 46))
+        let activeLightColor: SIMD4<Float>
+        if isBlackout {
+            activeLightColor = SIMD4<Float>(0, 0, 0, 0)
+        } else if isSubterraneanIlluminated {
+            activeLightColor = SIMD4<Float>(0.10, 0.95, 0.98, 48.0)
+        } else if isPoolSubmerged {
+            activeLightColor = SIMD4<Float>(0.08, 0.85, 0.95, 38.0)
+        } else {
+            activeLightColor = SIMD4<Float>(1.0, 0.66, 0.24, lightStates.effectiveIntensity(.post) * 46)
+        }
 
         let moveMagnitude = Float(hypot(joystick.dx, joystick.dy))
         let swimMotionValue: Float = (cameraMode == .firstPerson) ? (1.0 + min(1.0, moveMagnitude * 1.5)) : 0.0

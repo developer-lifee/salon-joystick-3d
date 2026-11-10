@@ -12,11 +12,14 @@
 [![iOS 17+](https://img.shields.io/badge/iOS-17.0%2B-ff69b4?style=for-the-badge&logo=apple&logoColor=white)](https://apple.com)
 [![Metal 3.0](https://img.shields.io/badge/Metal-3.0_Ray_Tracing-00ffff?style=for-the-badge&logo=apple&logoColor=white)](https://developer.apple.com/metal/)
 [![Swift 5.10](https://img.shields.io/badge/Swift-5.10-orange?style=for-the-badge&logo=swift&logoColor=white)](https://swift.org)
+[![Build](https://img.shields.io/badge/Version-v1.0.0_(Build_79)-blue?style=for-the-badge&logo=git)](https://github.com)
 [![Aesthetic](https://img.shields.io/badge/Aesthetic-Cyberpunk_Kawaii_UwU-purple?style=for-the-badge)](https://github.com)
 [![FPS](https://img.shields.io/badge/FPS-60_Locked_⚡️-brightgreen?style=for-the-badge)](https://apple.com)
 
 > ₍⸍⸏────────────────────────────────────────────────────────────⸏⸌₎
 > **LASER TRACER 3D** es un motor de combate táctico 3D y demostración técnica avanzada desarrollado **100% en código nativo Swift y Metal Shaders (MSL)**. Diseñado desde cero para exprimir los hardware **Ray Tracing Cores** de los chips **Apple A17 Pro (iPhone 15 Pro / Max)** y **Apple Silicon M-series** a 60 FPS estables sin sobrecalentar la batería (uwu) ♡.
+> 
+> 🏷️ **Versión Actual:** `v1.0.0` • **Build:** `79` (`12a71f4`)
 > └──────────────────────────────────────────────────────────────┘
 
 ---
@@ -67,6 +70,13 @@
 - Canaleta helicoidal de fibra de vidrio cian situada **fuera de la piscina** para dejar 100% de espacio libre para nadar.
 - **Escalera de Peldaños 3D:** Accede a la plataforma superior subiendo por la escalera trasera.
 - **Deslizamiento Fluido:** Al entrar al canalón en espiral, la física te desliza suavemente en curva hasta la piscina.
+
+---
+
+### 🌑 5. Modo Apagón Total (Blackout & Linterna Táctica) (暗闇の戦い)
+- **Oscuridad Absoluta (Pitch Black):** Al apagar todas las luces desde el botón `Apagón` o el centro del Menú Radial de Beacons, la iluminación ambiental cae a cero y el cielo nocturno se oscurece por completo.
+- **Combate a Ciegas:** El patio y los enemigos quedan sumergidos en tinieblas totales. Es difícil saber de dónde vienen los ataques hasta que un bot dispara y su rayo láser carmesí rasga la oscuridad iluminando el entorno.
+- **Linterna PBR Táctica (`🔦 LINTERNA`):** En este modo, equipar la linterna proyecta un cono de luz volumétrico direccional indispensable para explorar y buscar enemigos sin ser emboscado.
 
 ---
 

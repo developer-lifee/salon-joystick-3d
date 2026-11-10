@@ -60,6 +60,13 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
     }
 }
 
+struct GameAppVersion {
+    static let version = "1.0.0"
+    static let build = "79"
+    static let commitHash = "12a71f4"
+    static let formatted = "v\(version) • Build \(build) (\(commitHash))"
+}
+
 struct GameLightStates: Equatable {
     var post = true
     var piscinaNeon = true
@@ -69,6 +76,32 @@ struct GameLightStates: Equatable {
     var piscinaNeonIntensity: Float = 1
     var sheeritNeonIntensity: Float = 1
     var poolStripsIntensity: Float = 1
+
+    var areAllLightsOff: Bool {
+        !post && !piscinaNeon && !sheeritNeon && !poolStrips
+    }
+
+    mutating func turnOffAllLights() {
+        post = false
+        piscinaNeon = false
+        sheeritNeon = false
+        poolStrips = false
+    }
+
+    mutating func turnOnAllLights() {
+        post = true
+        piscinaNeon = true
+        sheeritNeon = true
+        poolStrips = true
+    }
+
+    mutating func toggleAllLights() {
+        if areAllLightsOff {
+            turnOnAllLights()
+        } else {
+            turnOffAllLights()
+        }
+    }
 
     func isEnabled(_ fixture: GameLightFixture) -> Bool {
         switch fixture {
@@ -630,6 +663,29 @@ struct ContentView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("Menú Radial de Teletransporte")
 
+                    Button {
+                        model.toggleAllLights()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: model.lightStates.areAllLightsOff ? "lightbulb.slash.fill" : "lightbulb.fill")
+                                .font(.system(size: 13, weight: .bold))
+                            Text(model.lightStates.areAllLightsOff ? "Apagón" : "Luces")
+                                .font(.system(size: 11, weight: .bold))
+                        }
+                        .foregroundStyle(model.lightStates.areAllLightsOff ? .yellow : .white.opacity(0.85))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            model.lightStates.areAllLightsOff
+                                ? AnyShapeStyle(Color.red.opacity(0.80))
+                                : AnyShapeStyle(Color.black.opacity(0.65)),
+                            in: Capsule()
+                        )
+                        .overlay(Capsule().stroke(model.lightStates.areAllLightsOff ? Color.red : Color.yellow.opacity(0.70), lineWidth: 1.5))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(model.lightStates.areAllLightsOff ? "Encender luces" : "Apagar todas las luces (Modo Apagón Total)")
+
                     if model.isNearRecoveryConsole && model.remotePlayerIsRecovering {
                         Button {
                             model.reviveTeammate()
@@ -929,6 +985,26 @@ struct ContentView: View {
                             Circle()
                                 .stroke(Color.yellow.opacity(0.4), lineWidth: 2)
                                 .frame(width: 230, height: 230)
+
+                            // 🌑 Botón Central: Apagar Todas las Luces / Apagón Total
+                            Button {
+                                model.toggleAllLights()
+                            } label: {
+                                VStack(spacing: 3) {
+                                    Image(systemName: model.lightStates.areAllLightsOff ? "lightbulb.fill" : "lightbulb.slash.fill")
+                                        .font(.system(size: 20, weight: .bold))
+                                    Text(model.lightStates.areAllLightsOff ? "ENCENDER" : "APAGÓN")
+                                        .font(.system(size: 8, weight: .black))
+                                }
+                                .foregroundStyle(model.lightStates.areAllLightsOff ? .black : .white)
+                                .frame(width: 68, height: 68)
+                                .background(
+                                    model.lightStates.areAllLightsOff ? AnyShapeStyle(Color.yellow) : AnyShapeStyle(Color.red.opacity(0.85)),
+                                    in: Circle()
+                                )
+                                .overlay(Circle().stroke(Color.white.opacity(0.85), lineWidth: 1.5))
+                                .shadow(color: (model.lightStates.areAllLightsOff ? Color.yellow : Color.red).opacity(0.85), radius: 10)
+                            }
 
                             ForEach(Array(GameLightFixture.allCases.enumerated()), id: \.element) { index, fixture in
                                 let angle: Double = Double(index) * (.pi / 2.0) - (.pi / 2.0)
@@ -1677,6 +1753,12 @@ final class GameModel: ObservableObject {
     func toggleNearbyLight() {
         guard let nearbyLight else { return }
         lightStates.toggle(nearbyLight)
+        broadcastLocalState()
+    }
+
+    func toggleAllLights() {
+        lightStates.toggleAllLights()
+        broadcastLocalState()
     }
 
     func setLightIntensity(_ value: Float, for fixture: GameLightFixture) {
@@ -5006,6 +5088,13 @@ struct GameOptionsSheet: View {
                     Toggle("Mostrar contador de FPS", isOn: $model.showsFPS)
                 }
 
+                Section("Iluminación Táctica") {
+                    Toggle("Modo Apagón Total (Oscuridad Absoluta)", isOn: Binding(
+                        get: { model.lightStates.areAllLightsOff },
+                        set: { _ in model.toggleAllLights() }
+                    ))
+                }
+
                 Section("Personalización Visual de la Interfaz") {
                     Toggle("Tema Vidrio Líquido (Apple Liquid Glass)", isOn: $model.isLiquidGlassUIEnabled)
                 }
@@ -5246,6 +5335,25 @@ struct MainMenuView: View {
                                 )
                             }
                             .buttonStyle(.plain)
+
+                            // 🏷️ Version and Commit Tracking Badge
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(Color.green)
+                                    .frame(width: 6, height: 6)
+                                    .shadow(color: .green.opacity(0.8), radius: 4)
+                                Text(GameAppVersion.formatted)
+                                    .font(.system(size: isCompactLandscape ? 9 : 11, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(.white.opacity(0.70))
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(Color.black.opacity(0.40))
+                                    .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: 1))
+                            )
+                            .padding(.top, isCompactLandscape ? 4 : 8)
                         }
 
                         Spacer(minLength: isCompactLandscape ? 12 : 32)
