@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "101"
-    static let commitHash = "b101dark"
+    static let build = "102"
+    static let commitHash = "b102lights"
     static let formatted = "v\(version) • Build \(build)"
 }
 
@@ -1528,8 +1528,11 @@ final class GameModel: ObservableObject {
             broadcastLocalState()
         }
     }
+    private var isApplyingRemoteLightUpdate = false
+
     @Published var lightStates = GameLightStates() {
         didSet {
+            guard !isApplyingRemoteLightUpdate else { return }
             broadcastLightStates()
         }
     }
@@ -2211,8 +2214,8 @@ final class GameModel: ObservableObject {
         remotePlayerShield = 100.0
         remotePlayerScore = 0
         currentWave = 1
-        botsRemainingInWave = 5
-        totalBotsInWave = 5
+        botsRemainingInWave = 2
+        totalBotsInWave = 2
         isWaveIntermission = false
         heldTool = .flashlight
         remotePlayerHeldTool = .flashlight
@@ -2239,13 +2242,17 @@ final class GameModel: ObservableObject {
         }
         if isAnyMultiplayerConnected && multiplayer.mode == .lightBattle {
             // Iniciar Duelo de Luces con 2 luces encendidas y 2 apagadas (50/50 justo para ambos equipos)
+            isApplyingRemoteLightUpdate = fromNetwork
             lightStates.post = true
             lightStates.piscinaNeon = false
             lightStates.sheeritNeon = true
             lightStates.poolStrips = false
+            isApplyingRemoteLightUpdate = false
         } else {
             // Empezar con todas las luces apagadas para ir encendiendo progresivamente el Salón de la Piscina y el Mundo Arcoíris
+            isApplyingRemoteLightUpdate = fromNetwork
             lightStates.turnOffAllLights()
+            isApplyingRemoteLightUpdate = false
         }
         hasRecordedVersusRoundResult = false
 
@@ -2355,7 +2362,7 @@ final class GameModel: ObservableObject {
             versusRemoteWins: versusRemoteWins,
             shield: playerShield,
             coopDeaths: coopDeaths,
-            lightStates: lightStates,
+            lightStates: nil,
             lightScore: lightTeamScore,
             shadowScore: shadowTeamScore,
             hasCore: hasEnergyCore
@@ -2451,7 +2458,9 @@ final class GameModel: ObservableObject {
                 self.coopDeaths = max(self.coopDeaths, cd)
             }
             if let ls = packet.lightStates, ls != self.lightStates {
+                isApplyingRemoteLightUpdate = true
                 self.lightStates = ls
+                isApplyingRemoteLightUpdate = false
             }
             if let lScore = packet.lightScore {
                 self.lightTeamScore = max(self.lightTeamScore, lScore)
@@ -2547,8 +2556,9 @@ final class GameModel: ObservableObject {
 
         case .lightSync:
             if let ls = packet.lightStates, ls != self.lightStates {
+                isApplyingRemoteLightUpdate = true
                 self.lightStates = ls
-                audio.playLaserReflectionSound()
+                isApplyingRemoteLightUpdate = false
             }
 
         case .enemySync:
@@ -2595,6 +2605,7 @@ final class GameModel: ObservableObject {
 
         case .hello:
             broadcastLocalState()
+            broadcastLightStates()
         }
     }
 
@@ -2619,7 +2630,7 @@ final class GameModel: ObservableObject {
             versusRemoteWins: versusRemoteWins,
             shield: playerShield,
             coopDeaths: coopDeaths,
-            lightStates: lightStates,
+            lightStates: nil,
             lightScore: lightTeamScore,
             shadowScore: shadowTeamScore,
             hasCore: hasEnergyCore
@@ -2636,8 +2647,8 @@ final class GameModel: ObservableObject {
         playerHealth = 100.0
         playerScore = 0
         currentWave = 1
-        botsRemainingInWave = 5
-        totalBotsInWave = 5
+        botsRemainingInWave = 2
+        totalBotsInWave = 2
         isWaveIntermission = false
         heldTool = .none
         resetRequestID += 1
@@ -2823,8 +2834,8 @@ final class GameModel: ObservableObject {
         remotePlayerIsRecovering = false
         recoveryTimeRemaining = 0
         currentWave = 1
-        botsRemainingInWave = 5
-        totalBotsInWave = 5
+        botsRemainingInWave = 2
+        totalBotsInWave = 2
         isWaveIntermission = false
         heldTool = .none
         remotePlayerHeldTool = .none
@@ -2855,8 +2866,8 @@ final class GameModel: ObservableObject {
         recoveryTimeRemaining = 0
         heldTool = .none
         currentWave = 1
-        botsRemainingInWave = 5
-        totalBotsInWave = 5
+        botsRemainingInWave = 2
+        totalBotsInWave = 2
         isWaveIntermission = false
         resetRequestID &+= 1
         respawnRequestID &+= 1
