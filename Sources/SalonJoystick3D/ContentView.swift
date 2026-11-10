@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "95"
-    static let commitHash = "b95fx"
+    static let build = "96"
+    static let commitHash = "b96m64"
     static let formatted = "v\(version) • Build \(build)"
 }
 
@@ -734,10 +734,10 @@ struct ContentView: View {
 
                 if model.showsRainbowGateNotice {
                     HStack(spacing: 6) {
-                        Image(systemName: "lock.open.fill")
+                        Image(systemName: "sparkles")
                             .font(.system(size: 13, weight: .black))
-                            .foregroundStyle(.green)
-                        Text("✨ ¡PUERTA ARCOÍRIS DESBLOQUEADA! PASO LIBRE AL SALÓN")
+                            .foregroundStyle(.yellow)
+                        Text("✨ ¡ESPEJO PORTAL ACTIVADO! CRÚZALO AL ESTILO SUPER MARIO 64")
                             .font(.system(size: 11, weight: .heavy, design: .rounded))
                             .foregroundStyle(.white)
                     }
@@ -746,17 +746,17 @@ struct ContentView: View {
                     .background(.ultraThinMaterial, in: Capsule())
                     .overlay(
                         Capsule().stroke(
-                            LinearGradient(colors: [.red, .orange, .yellow, .green, .cyan, .purple], startPoint: .leading, endPoint: .trailing),
+                            LinearGradient(colors: [.yellow, .orange, .pink, .purple, .cyan], startPoint: .leading, endPoint: .trailing),
                             lineWidth: 1.5
                         )
                     )
-                    .shadow(color: .green.opacity(0.8), radius: 8)
+                    .shadow(color: .yellow.opacity(0.8), radius: 8)
                 } else if model.isNearRainbowGate && !model.isRainbowGateUnlocked {
                     HStack(spacing: 6) {
                         Image(systemName: "lock.fill")
                             .font(.system(size: 12, weight: .bold))
                             .foregroundStyle(.yellow)
-                        Text("🔒 PUERTA ARCOÍRIS BLOQUEADA (\(model.playerScore) / \(model.rainbowGateScoreNeeded) PTS)")
+                        Text("🔒 ESPEJO PORTAL BLOQUEADO (\(model.playerScore) / \(model.rainbowGateScoreNeeded) PTS • MARIO 64)")
                             .font(.system(size: 11, weight: .heavy, design: .monospaced))
                             .foregroundStyle(.yellow)
                     }

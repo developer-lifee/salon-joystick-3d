@@ -583,6 +583,14 @@ kernel void traceToolLaser(
         normal = simulatedWaterNormal(hitPosition, waterState);
     } else if (puddleSurface) {
         normal = shallowPuddleNormal(hitPosition, uniforms.waterSimulation.y);
+    } else if (mirrorSurface && abs(hitPosition.z - 17.8f) < 0.35f) {
+        // 🌟 Espejo Mágico Portal Super Mario 64: Ondulación líquida de mercurio
+        float rippleTime = uniforms.waterSimulation.y * 2.8f;
+        float2 mUV = hitPosition.xy;
+        float ripple1 = sin(mUV.x * 2.4f + rippleTime) * cos(mUV.y * 3.0f - rippleTime * 0.85f);
+        float ripple2 = sin((mUV.x + mUV.y) * 4.2f - rippleTime * 1.3f) * 0.5f;
+        float3 liquidRipple = float3(ripple1 * 0.040f, ripple2 * 0.040f, 0.0f);
+        normal = normalize(normal + liquidRipple);
     }
     if (dot(normal, direction) > 0.0f) {
         normal = -normal;
@@ -1098,6 +1106,16 @@ kernel void raytracePatio(
             normal = simulatedWaterNormal(position, waterState);
         } else if (puddleSurface) {
             normal = shallowPuddleNormal(position, uniforms.waterSimulation.y);
+        } else if (kind > 0.5f && kind < 1.5f && abs(position.z - 17.8f) < 0.35f) {
+            // 🌟 Espejo Mágico Portal Super Mario 64: Ondulación líquida de mercurio / cuadro mágico
+            float rippleTime = uniforms.waterSimulation.y * 2.8f;
+            float2 mUV = position.xy;
+            float ripple1 = sin(mUV.x * 2.4f + rippleTime) * cos(mUV.y * 3.0f - rippleTime * 0.85f);
+            float ripple2 = sin((mUV.x + mUV.y) * 4.2f - rippleTime * 1.3f) * 0.5f;
+            float3 liquidRipple = float3(ripple1 * 0.040f, ripple2 * 0.040f, 0.0f);
+            normal = normalize(normal + liquidRipple);
+            roughness = 0.005f;
+            baseReflectivity = 0.98f;
         } else if (kind > 2.5f && kind < 3.5f) {
             if (position.y > -0.15f && position.y < 0.06f) {
                 // 💧 Zonas orgánicas de piso húmedo vs. losa seca (charcos realistas por zonas, no en todo el piso)

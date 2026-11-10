@@ -3342,9 +3342,14 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             position.x = max(-27.0 + margin, min(27.0 - margin, position.x))
         } else {
             // En el umbral del Muro Divisor Sur (Z = 17.8):
-            // Solo permite el paso si el jugador ha conseguido 3,000 puntos (Puerta Arcoíris Desbloqueada)
+            // 🌟 Modo Super Mario 64: Atraviesa el cuadro / espejo mágico si tiene 3,000 pts
             if abs(position.x) <= portalHalfWidth && isGateUnlocked {
                 position.x = max(-portalHalfWidth, min(portalHalfWidth, position.x))
+                let crossedToRainbow = (previousPosition.z < 17.8 && position.z >= 17.8)
+                let crossedToPool = (previousPosition.z > 17.8 && position.z <= 17.8)
+                if crossedToRainbow || crossedToPool {
+                    audio.playLaserIgnition()
+                }
             } else if previousPosition.z <= 17.8 {
                 position.z = min(position.z, 17.8 - margin)
                 position.x = max(-17.8 + margin, min(17.8 - margin, position.x))
@@ -4232,7 +4237,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
         }
 
-        // Puerta Holográfica de Seguridad Arcoíris (Requiere 3,000 pts)
+        // 🌟 Gran Espejo Mágico / Cuadro Portal estilo Super Mario 64 (Z = 17.8)
         let isGateUnlocked = isRainbowGateUnlocked
         if isGateUnlocked && !previousGateUnlocked {
             previousGateUnlocked = true
@@ -4240,9 +4245,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         } else if !isGateUnlocked {
             previousGateUnlocked = false
         }
-        let gateTranslation = isGateUnlocked ? SIMD3<Float>(0, -500, 0) : SIMD3<Float>(0, 0, 17.8)
-        let gateMask: UInt32 = isGateUnlocked ? 0x00 : 0x01
-        descriptors.append(Self.makeInstanceDescriptor(translation: gateTranslation, yaw: 0, pitch: 0, mask: gateMask, accelerationStructureIndex: 12))
+        // El cuadro/espejo se mantiene SIEMPRE visible en Z = 17.8; al desbloquearlo el jugador lo atraviesa como en Mario 64
+        descriptors.append(Self.makeInstanceDescriptor(translation: SIMD3<Float>(0, 0, 17.8), yaw: 0, pitch: 0, mask: 0x01, accelerationStructureIndex: 12))
 
         descriptors.withUnsafeBytes { bytes in
             guard let baseAddress = bytes.baseAddress else { return }
@@ -4474,29 +4478,35 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
     private static func makeRainbowGateMesh() -> RTMeshBuilder {
         var builder = RTMeshBuilder()
-        let metalFrame = RTMaterial(color: SIMD3<Float>(0.15, 0.18, 0.24), roughness: 0.35, reflectivity: 0.40, kind: 1.0)
-        let laserBar = RTMaterial(color: SIMD3<Float>(1.0, 0.18, 0.38), roughness: 0.05, emission: SIMD3<Float>(9.5, 1.2, 3.2), reflectivity: 0.85, kind: 5.0)
-        let lockCore = RTMaterial(color: SIMD3<Float>(1.0, 0.88, 0.12), roughness: 0.08, emission: SIMD3<Float>(9.2, 7.8, 0.8), reflectivity: 0.65, kind: 5.0)
-        let energyMesh = RTMaterial(color: SIMD3<Float>(0.12, 0.85, 1.00), roughness: 0.10, emission: SIMD3<Float>(2.4, 6.5, 8.2), reflectivity: 0.50, kind: 5.0)
+        // 🌟 Marco de Cuadro / Espejo Portal estilo Castillo de Peach (Super Mario 64)
+        let frameGold = RTMaterial(color: SIMD3<Float>(0.90, 0.76, 0.28), roughness: 0.22, reflectivity: 0.52, kind: 0.0)
+        let frameEbony = RTMaterial(color: SIMD3<Float>(0.12, 0.11, 0.14), roughness: 0.45, reflectivity: 0.18, kind: 0.0)
+        let frameGildedMedallion = RTMaterial(color: SIMD3<Float>(1.00, 0.85, 0.32), roughness: 0.15, emission: SIMD3<Float>(1.2, 0.9, 0.25), reflectivity: 0.65, kind: 0.0)
 
-        // Columnas laterales de titanio del pórtico (X: -5.15 y +5.15)
-        builder.addBox(center: SIMD3<Float>(-5.15, 2.40, 0), size: SIMD3<Float>(0.32, 4.80, 0.42), material: metalFrame)
-        builder.addBox(center: SIMD3<Float>( 5.15, 2.40, 0), size: SIMD3<Float>(0.32, 4.80, 0.42), material: metalFrame)
-        // Viga dintel superior
-        builder.addBox(center: SIMD3<Float>( 0.00, 4.75, 0), size: SIMD3<Float>(10.35, 0.25, 0.42), material: metalFrame)
+        // Espejo Mágico Portal Ray-Traced (Kind 1.0, 98% reflectividad pura, cero emisión cegadora)
+        let mirrorGlass = RTMaterial(color: SIMD3<Float>(0.94, 0.96, 0.98), roughness: 0.005, emission: .zero, reflectivity: 0.98, kind: 1.0)
 
-        // 8 Barras Láser de Contención de Seguridad
-        for i in 1...8 {
-            let yBar = Float(i) * 0.52
-            builder.addBox(center: SIMD3<Float>(0, yBar, 0), size: SIMD3<Float>(10.00, 0.06, 0.06), material: laserBar)
-        }
+        // 1. Superficie del Espejo / Pintura Mágica Portal (10.0m de ancho x 4.60m de alto x 0.04m de grosor)
+        // Refleja en tiempo real con Ray Tracing la sala de piscina por un lado y la pista arcoíris por el otro
+        builder.addBox(center: SIMD3<Float>(0, 2.34, 0), size: SIMD3<Float>(10.00, 4.60, 0.04), material: mirrorGlass)
 
-        // Cortina de fuerza holográfica semi-translúcida
-        builder.addBox(center: SIMD3<Float>(0, 2.40, 0), size: SIMD3<Float>(9.95, 4.60, 0.02), material: energyMesh)
+        // 2. Molduras Interiores Doradas estilo Marco de Cuadro Mario 64
+        // Columnas doradas biseladas a los lados (X = ±5.04)
+        builder.addBox(center: SIMD3<Float>(-5.04, 2.34, 0), size: SIMD3<Float>(0.18, 4.68, 0.12), material: frameGold)
+        builder.addBox(center: SIMD3<Float>( 5.04, 2.34, 0), size: SIMD3<Float>(0.18, 4.68, 0.12), material: frameGold)
+        // Dintel superior dorado
+        builder.addBox(center: SIMD3<Float>( 0.00, 4.68, 0), size: SIMD3<Float>(10.26, 0.16, 0.12), material: frameGold)
+        // Zócalo inferior dorado a ras de suelo
+        builder.addBox(center: SIMD3<Float>( 0.00, 0.06, 0), size: SIMD3<Float>(10.26, 0.12, 0.12), material: frameGold)
 
-        // Núcleo Central de Bloqueo (Hexágono / Emblema Holográfico de Seguridad 3,000 Pts)
-        builder.addBox(center: SIMD3<Float>(0, 2.40, 0.04), size: SIMD3<Float>(1.05, 1.05, 0.14), material: lockCore)
-        builder.addBox(center: SIMD3<Float>(0, 2.40, 0.09), size: SIMD3<Float>(0.50, 0.50, 0.08), material: metalFrame)
+        // 3. Moldura Exterior de Ébano Tallado
+        builder.addBox(center: SIMD3<Float>(-5.16, 2.34, 0), size: SIMD3<Float>(0.12, 4.76, 0.16), material: frameEbony)
+        builder.addBox(center: SIMD3<Float>( 5.16, 2.34, 0), size: SIMD3<Float>(0.12, 4.76, 0.16), material: frameEbony)
+        builder.addBox(center: SIMD3<Float>( 0.00, 4.78, 0), size: SIMD3<Float>(10.44, 0.14, 0.16), material: frameEbony)
+
+        // 4. Medallón Estelar Central Mario 64 en la cima del cuadro (emblema dorado sutil)
+        builder.addBox(center: SIMD3<Float>(0, 4.88, 0.03), size: SIMD3<Float>(0.55, 0.55, 0.14), material: frameGildedMedallion)
+        builder.addBox(center: SIMD3<Float>(0, 4.88, -0.03), size: SIMD3<Float>(0.55, 0.55, 0.14), material: frameGildedMedallion)
 
         return builder
     }
@@ -4935,13 +4945,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             RTMaterial(color: col, roughness: 0.20, emission: em * 0.85, reflectivity: 0.20, kind: 5)
         }
 
-        // 3. Gran Pórtico Arcoíris de Entrada (Z = 17.8, X = -5.2 a +5.2) con 7 arcos concéntricos
-        for (i, mat) in rainbowNeonMats.enumerated() {
-            let zOff = 17.85 + Float(i) * 0.22
-            builder.addBox(center: SIMD3<Float>(-5.12, 2.40, zOff), size: SIMD3<Float>(0.14, 4.80, 0.14), material: mat)
-            builder.addBox(center: SIMD3<Float>( 5.12, 2.40, zOff), size: SIMD3<Float>(0.14, 4.80, 0.14), material: mat)
-            builder.addBox(center: SIMD3<Float>( 0.00, 4.75, zOff), size: SIMD3<Float>(10.38, 0.14, 0.14), material: mat)
-        }
+        // 3. Columnas y Dintel Estructural del Pórtico del Cuadro/Espejo Portal en el Muro Sur (Z = 17.8)
+        let archStone = RTMaterial(color: SIMD3<Float>(0.12, 0.14, 0.18), roughness: 0.60, reflectivity: 0.08, kind: 0.0)
+        builder.addBox(center: SIMD3<Float>(-5.25, 2.40, 17.80), size: SIMD3<Float>(0.35, 4.80, 0.50), material: archStone)
+        builder.addBox(center: SIMD3<Float>( 5.25, 2.40, 17.80), size: SIMD3<Float>(0.35, 4.80, 0.50), material: archStone)
+        builder.addBox(center: SIMD3<Float>( 0.00, 4.82, 17.80), size: SIMD3<Float>(10.85, 0.28, 0.50), material: archStone)
 
         // 4. Bandas Horizontales Arcoíris en Muros Perimetrales (Guarda-raíles estilo Mario Kart Rainbow Road)
         for i in 0..<7 {
