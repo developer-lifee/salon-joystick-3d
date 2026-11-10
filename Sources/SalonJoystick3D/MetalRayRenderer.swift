@@ -976,6 +976,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     var onFlashlightBatteryUpdate: ((Float) -> Void)?
     var flashlightBattery: Float = 1.0
     var onScoreUpdate: ((Int) -> Void)?
+    var playerScore: Int = 0
+    var isRainbowGateUnlocked: Bool { playerScore >= 3000 }
+    var onRainbowGateStatusUpdate: ((Bool, Int, Int) -> Void)?
+    private var previousGateUnlocked: Bool = false
     var onDamageTaken: ((Float) -> Void)?
     var onWaveUpdate: ((Int, Int, Int, Bool, Float) -> Void)?
     var onLocalPlayerTransformUpdate: ((SIMD3<Float>, Float) -> Void)?
@@ -1047,6 +1051,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private let waterMesh: RTMeshResources
     private let floatMesh: RTMeshResources
     private let mirrorShieldMesh: RTMeshResources
+    private let rainbowGateMesh: RTMeshResources
     private let instanceBuffer: MTLBuffer
     private var instanceDescriptor: MTLInstanceAccelerationStructureDescriptor?
     private var instanceAccelerationStructure: MTLAccelerationStructure?
@@ -1236,6 +1241,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let waterBuilder = Self.makeWaterMesh()
         let floatBuilder = Self.makeFloatMesh()
         let mirrorShieldBuilder = Self.makeMirrorShieldMesh()
+        let rainbowGateBuilder = Self.makeRainbowGateMesh()
         self.staticMesh = try Self.makeMesh(builder: staticBuilder, device: device, queue: commandQueue)
         self.playerMesh = try Self.makeMesh(builder: playerBuilder, device: device, queue: commandQueue)
         self.playerWalkMesh = try Self.makeMesh(builder: playerWalkBuilder, device: device, queue: commandQueue)
@@ -1253,8 +1259,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         )
         self.floatMesh = try Self.makeMesh(builder: floatBuilder, device: device, queue: commandQueue)
         self.mirrorShieldMesh = try Self.makeMesh(builder: mirrorShieldBuilder, device: device, queue: commandQueue)
+        self.rainbowGateMesh = try Self.makeMesh(builder: rainbowGateBuilder, device: device, queue: commandQueue)
 
-        let instanceLength = MemoryLayout<MTLAccelerationStructureInstanceDescriptor>.stride * 24
+        let instanceLength = MemoryLayout<MTLAccelerationStructureInstanceDescriptor>.stride * 26
         guard let instanceBuffer = device.makeBuffer(length: instanceLength, options: .storageModeShared) else {
             throw MetalRayRendererError.resourceCreationFailed
         }
@@ -1272,7 +1279,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
            let floatAS = floatMesh.accelerationStructure,
            let npcAS = npcMesh.accelerationStructure,
            let fotofagoAS = fotofagoMesh.accelerationStructure,
-           let shieldAS = mirrorShieldMesh.accelerationStructure {
+           let shieldAS = mirrorShieldMesh.accelerationStructure,
+           let rainbowGateAS = rainbowGateMesh.accelerationStructure {
             let descriptor = MTLInstanceAccelerationStructureDescriptor()
             descriptor.instancedAccelerationStructures = [
                 staticAS,        // 0
@@ -1286,9 +1294,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 playerSitAS,     // 8 (sit tobogán)
                 playerWalkAS,    // 9 (walk articulado)
                 playerClimbAS,   // 10 (climb escalera)
-                fotofagoAS       // 11 (El Fotófago - Golem Devorador de Luz)
+                fotofagoAS,      // 11 (El Fotófago - Golem Devorador de Luz)
+                rainbowGateAS    // 12 (Puerta Holográfica Arcoíris 3,000 Pts)
             ]
-            descriptor.instanceCount = 24
+            descriptor.instanceCount = 25
             descriptor.instanceDescriptorBuffer = instanceBuffer
             self.instanceDescriptor = descriptor
 
@@ -3277,13 +3286,22 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
         position.z = max(-17.8 + margin, min(72.0 - margin, position.z))
         let portalHalfWidth: Float = 5.2 - margin * 0.45
+        let isGateUnlocked = isRainbowGateUnlocked
+        let distToGate = simd_distance(position, SIMD3<Float>(0, position.y, 17.8))
+        if distToGate < 6.0 {
+            onRainbowGateStatusUpdate?(isGateUnlocked, playerScore, 3000)
+        } else {
+            onRainbowGateStatusUpdate?(isGateUnlocked, -1, 3000)
+        }
+
         if position.z < 17.8 - margin {
             position.x = max(-17.8 + margin, min(17.8 - margin, position.x))
         } else if position.z > 17.8 + margin {
             position.x = max(-27.0 + margin, min(27.0 - margin, position.x))
         } else {
-            // En el umbral del Muro Divisor Sur (Z = 17.8): paso libre por el Gran Pórtico Arcoíris (X: -5.2 .. +5.2)
-            if abs(position.x) <= portalHalfWidth {
+            // En el umbral del Muro Divisor Sur (Z = 17.8):
+            // Solo permite el paso si el jugador ha conseguido 3,000 puntos (Puerta Arcoíris Desbloqueada)
+            if abs(position.x) <= portalHalfWidth && isGateUnlocked {
                 position.x = max(-portalHalfWidth, min(portalHalfWidth, position.x))
             } else if previousPosition.z <= 17.8 {
                 position.z = min(position.z, 17.8 - margin)
@@ -4160,6 +4178,19 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 descriptors.append(Self.makeInstanceDescriptor(translation: SIMD3<Float>(0, -500, 0), yaw: 0, pitch: 0, mask: 0x00, accelerationStructureIndex: 5))
             }
         }
+
+        // Puerta Holográfica de Seguridad Arcoíris (Requiere 3,000 pts)
+        let isGateUnlocked = isRainbowGateUnlocked
+        if isGateUnlocked && !previousGateUnlocked {
+            previousGateUnlocked = true
+            audio.playRecoveryCompleteSound()
+        } else if !isGateUnlocked {
+            previousGateUnlocked = false
+        }
+        let gateTranslation = isGateUnlocked ? SIMD3<Float>(0, -500, 0) : SIMD3<Float>(0, 0, 17.8)
+        let gateMask: UInt32 = isGateUnlocked ? 0x00 : 0x01
+        descriptors.append(Self.makeInstanceDescriptor(translation: gateTranslation, yaw: 0, pitch: 0, mask: gateMask, accelerationStructureIndex: 12))
+
         descriptors.withUnsafeBytes { bytes in
             guard let baseAddress = bytes.baseAddress else { return }
             instanceBuffer.contents().copyMemory(from: baseAddress, byteCount: bytes.count)
@@ -4385,6 +4416,35 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         builder.addBox(center: SIMD3<Float>( 0.00, 0.90, 0.17), size: SIMD3<Float>(0.38, 0.32, 0.10), material: vantablackArmor)
         builder.addBox(center: SIMD3<Float>( 0.00, 0.96, -0.17), size: SIMD3<Float>(0.32, 0.36, 0.10), material: vantablackArmor)
         builder.addSphere(center: SIMD3<Float>(0.00, 0.92, 0.23), radii: SIMD3<Float>(repeating: 0.075), material: darkCore, segments: 10, rings: 6)
+        return builder
+    }
+
+    private static func makeRainbowGateMesh() -> RTMeshBuilder {
+        var builder = RTMeshBuilder()
+        let metalFrame = RTMaterial(color: SIMD3<Float>(0.15, 0.18, 0.24), roughness: 0.35, reflectivity: 0.40, kind: 1.0)
+        let laserBar = RTMaterial(color: SIMD3<Float>(1.0, 0.18, 0.38), roughness: 0.05, emission: SIMD3<Float>(9.5, 1.2, 3.2), reflectivity: 0.85, kind: 5.0)
+        let lockCore = RTMaterial(color: SIMD3<Float>(1.0, 0.88, 0.12), roughness: 0.08, emission: SIMD3<Float>(9.2, 7.8, 0.8), reflectivity: 0.65, kind: 5.0)
+        let energyMesh = RTMaterial(color: SIMD3<Float>(0.12, 0.85, 1.00), roughness: 0.10, emission: SIMD3<Float>(2.4, 6.5, 8.2), reflectivity: 0.50, kind: 5.0)
+
+        // Columnas laterales de titanio del pórtico (X: -5.15 y +5.15)
+        builder.addBox(center: SIMD3<Float>(-5.15, 2.40, 0), size: SIMD3<Float>(0.32, 4.80, 0.42), material: metalFrame)
+        builder.addBox(center: SIMD3<Float>( 5.15, 2.40, 0), size: SIMD3<Float>(0.32, 4.80, 0.42), material: metalFrame)
+        // Viga dintel superior
+        builder.addBox(center: SIMD3<Float>( 0.00, 4.75, 0), size: SIMD3<Float>(10.35, 0.25, 0.42), material: metalFrame)
+
+        // 8 Barras Láser de Contención de Seguridad
+        for i in 1...8 {
+            let yBar = Float(i) * 0.52
+            builder.addBox(center: SIMD3<Float>(0, yBar, 0), size: SIMD3<Float>(10.00, 0.06, 0.06), material: laserBar)
+        }
+
+        // Cortina de fuerza holográfica semi-translúcida
+        builder.addBox(center: SIMD3<Float>(0, 2.40, 0), size: SIMD3<Float>(9.95, 4.60, 0.02), material: energyMesh)
+
+        // Núcleo Central de Bloqueo (Hexágono / Emblema Holográfico de Seguridad 3,000 Pts)
+        builder.addBox(center: SIMD3<Float>(0, 2.40, 0.04), size: SIMD3<Float>(1.05, 1.05, 0.14), material: lockCore)
+        builder.addBox(center: SIMD3<Float>(0, 2.40, 0.09), size: SIMD3<Float>(0.50, 0.50, 0.08), material: metalFrame)
+
         return builder
     }
 
@@ -4763,36 +4823,66 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         builder.addBox(center: SIMD3<Float>(0, 2.80, 6.2), size: SIMD3<Float>(0.45, 0.12, 0.04), material: podNeonEmerald)
 
         // =========================================================================
-        // 🌈 🏰 GRAN SALÓN ARCOÍRIS DE PARKOUR Y CABAÑAS (54m x 54m, Z: 18m a 72m)
+        // 🌈 🏎️ GRAN SALÓN ARCOÍRIS ESTILO MARIO KART (SENDA ARCOÍRIS / RAINBOW ROAD)
+        // (54m x 54m, Z: 18m a 72m, X: -27m a +27m)
         // =========================================================================
-        // 1. Piso Colosal de Pizarra Húmeda con Charcos Especulares Ray-Traced (2,916 m²)
-        builder.addBox(center: SIMD3<Float>(0, -0.12, 45.0), size: SIMD3<Float>(54.0, 0.24, 54.0), material: deck)
-
-        // 2. Muros Perimetrales Monumentales de 9m de altura del Gran Salón Arcoíris
+        // 1. Muros Perimetrales Monumentales de 9m de altura en Titanio Mate Cyber
+        let wallDarkMatte = RTMaterial(color: SIMD3<Float>(0.08, 0.09, 0.12), roughness: 0.65, reflectivity: 0.06)
         // Muro Sur Final (Z = 72.0)
-        builder.addBox(center: SIMD3<Float>(0, 4.5, 72.0), size: SIMD3<Float>(54.4, 9.0, 0.4), material: wall)
+        builder.addBox(center: SIMD3<Float>(0, 4.5, 72.0), size: SIMD3<Float>(54.4, 9.0, 0.4), material: wallDarkMatte)
         // Muro Oeste (X = -27.0) y Muro Este (X = +27.0)
-        builder.addBox(center: SIMD3<Float>(-27.0, 4.5, 45.0), size: SIMD3<Float>(0.4, 9.0, 54.4), material: wall)
-        builder.addBox(center: SIMD3<Float>( 27.0, 4.5, 45.0), size: SIMD3<Float>(0.4, 9.0, 54.4), material: wall)
+        builder.addBox(center: SIMD3<Float>(-27.0, 4.5, 45.0), size: SIMD3<Float>(0.4, 9.0, 54.4), material: wallDarkMatte)
+        builder.addBox(center: SIMD3<Float>( 27.0, 4.5, 45.0), size: SIMD3<Float>(0.4, 9.0, 54.4), material: wallDarkMatte)
         // Alas Norte que conectan el Salón de la Piscina (±17.8) con el ancho del Salón Arcoíris (±27.0) en Z = 17.8
-        builder.addBox(center: SIMD3<Float>(-22.4, 4.5, 17.8), size: SIMD3<Float>(9.6, 9.0, 0.4), material: wall)
-        builder.addBox(center: SIMD3<Float>( 22.4, 4.5, 17.8), size: SIMD3<Float>(9.6, 9.0, 0.4), material: wall)
+        builder.addBox(center: SIMD3<Float>(-22.4, 4.5, 17.8), size: SIMD3<Float>(9.6, 9.0, 0.4), material: wallDarkMatte)
+        builder.addBox(center: SIMD3<Float>( 22.4, 4.5, 17.8), size: SIMD3<Float>(9.6, 9.0, 0.4), material: wallDarkMatte)
 
-        // 3. Paleta de 7 Materiales Neón Arcoíris Ray-Traced (se encienden progresivamente con las luces del mapa)
+        // 2. 7 Colores del Espectro Arcoíris Mario Kart:
         let rainbowColors: [(SIMD3<Float>, SIMD3<Float>)] = [
-            (SIMD3<Float>(1.00, 0.14, 0.36), SIMD3<Float>(5.2, 0.6, 1.8)), // Rojo Magenta
-            (SIMD3<Float>(1.00, 0.52, 0.08), SIMD3<Float>(5.0, 2.4, 0.3)), // Naranja Solar
-            (SIMD3<Float>(1.00, 0.92, 0.12), SIMD3<Float>(4.8, 4.2, 0.4)), // Amarillo Dorado
-            (SIMD3<Float>(0.12, 0.98, 0.45), SIMD3<Float>(0.5, 5.2, 2.1)), // Verde Esmeralda
-            (SIMD3<Float>(0.05, 0.88, 1.00), SIMD3<Float>(0.3, 4.4, 5.6)), // Cian Eléctrico
-            (SIMD3<Float>(0.28, 0.38, 1.00), SIMD3<Float>(1.4, 1.9, 5.8)), // Azul Índigo
-            (SIMD3<Float>(0.82, 0.18, 1.00), SIMD3<Float>(4.2, 0.8, 5.5))  // Violeta Prisma
+            (SIMD3<Float>(0.98, 0.12, 0.28), SIMD3<Float>(2.8, 0.3, 0.8)), // Carril 0: Rubí Neón
+            (SIMD3<Float>(1.00, 0.48, 0.05), SIMD3<Float>(2.6, 1.2, 0.2)), // Carril 1: Naranja Solar
+            (SIMD3<Float>(0.98, 0.86, 0.10), SIMD3<Float>(2.4, 2.1, 0.3)), // Carril 2: Oro Estelar
+            (SIMD3<Float>(0.10, 0.88, 0.38), SIMD3<Float>(0.3, 2.5, 1.0)), // Carril 3: Verde Esmeralda
+            (SIMD3<Float>(0.05, 0.82, 0.98), SIMD3<Float>(0.2, 2.2, 2.8)), // Carril 4: Cian Eléctrico
+            (SIMD3<Float>(0.22, 0.35, 0.95), SIMD3<Float>(0.8, 1.1, 2.9)), // Carril 5: Azul Índigo Cósmico
+            (SIMD3<Float>(0.76, 0.16, 0.95), SIMD3<Float>(2.2, 0.5, 2.8))  // Carril 6: Violeta Galáctico
         ]
-        let rainbowNeonMats: [RTMaterial] = rainbowColors.map { col, em in
-            RTMaterial(color: col, roughness: 0.06, emission: em, reflectivity: 0.82, kind: 5)
+
+        // Materiales para la Pista de Suelo: Acabado Satinado / Mate sedoso con emisión balanceada
+        // Evita reflejos tipo espejo molestos (roughness: 0.45, reflectivity: 0.08)
+        let rainbowFloorMats: [RTMaterial] = rainbowColors.map { col, em in
+            RTMaterial(color: col, roughness: 0.45, emission: em * 0.48, reflectivity: 0.08, kind: 0)
         }
 
-        // 4. Gran Pórtico Arcoíris de Entrada (Z = 17.8, X = -5.2 a +5.2) con 7 arcos concéntricos
+        // Tiras de división blancas brillantes entre carriles estilo Mario Kart
+        let laneDividerMat = RTMaterial(color: SIMD3<Float>(0.95, 0.98, 1.0), roughness: 0.25, emission: SIMD3<Float>(3.2, 3.2, 3.8), reflectivity: 0.15, kind: 0)
+
+        // Pista de 7 Carriles Mario Kart Rainbow Road en el Suelo (Z: 18 a 72m, total 54m de largo)
+        let laneCount = 7
+        let laneWidth: Float = 54.0 / Float(laneCount) // 7.714m por carril
+        for i in 0..<laneCount {
+            let xCenter = -27.0 + laneWidth * 0.5 + Float(i) * laneWidth
+            builder.addBox(
+                center: SIMD3<Float>(xCenter, -0.12, 45.0),
+                size: SIMD3<Float>(laneWidth - 0.14, 0.24, 54.0),
+                material: rainbowFloorMats[i]
+            )
+            if i > 0 {
+                let xDiv = -27.0 + Float(i) * laneWidth
+                builder.addBox(
+                    center: SIMD3<Float>(xDiv, -0.11, 45.0),
+                    size: SIMD3<Float>(0.14, 0.24, 54.0),
+                    material: laneDividerMat
+                )
+            }
+        }
+
+        // Materiales Neón para Bordes y Muros
+        let rainbowNeonMats: [RTMaterial] = rainbowColors.map { col, em in
+            RTMaterial(color: col, roughness: 0.20, emission: em * 0.85, reflectivity: 0.20, kind: 5)
+        }
+
+        // 3. Gran Pórtico Arcoíris de Entrada (Z = 17.8, X = -5.2 a +5.2) con 7 arcos concéntricos
         for (i, mat) in rainbowNeonMats.enumerated() {
             let zOff = 17.85 + Float(i) * 0.22
             builder.addBox(center: SIMD3<Float>(-5.12, 2.40, zOff), size: SIMD3<Float>(0.14, 4.80, 0.14), material: mat)
@@ -4800,19 +4890,15 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             builder.addBox(center: SIMD3<Float>( 0.00, 4.75, zOff), size: SIMD3<Float>(10.38, 0.14, 0.14), material: mat)
         }
 
-        // 5. Franjas Longitudinales y Perimetrales Arcoíris en Piso y Muros del Gran Salón
+        // 4. Bandas Horizontales Arcoíris en Muros Perimetrales (Guarda-raíles estilo Mario Kart Rainbow Road)
         for i in 0..<7 {
             let mat = rainbowNeonMats[i]
-            let zStrip = 23.0 + Float(i) * 7.2
-            // Tiras neón en muros Oeste y Este a dos alturas (Y = 2.6m y Y = 5.8m)
-            builder.addBox(center: SIMD3<Float>(-26.76, 2.60, zStrip), size: SIMD3<Float>(0.08, 0.18, 5.8), material: mat)
-            builder.addBox(center: SIMD3<Float>( 26.76, 2.60, zStrip), size: SIMD3<Float>(0.08, 0.18, 5.8), material: mat)
-            builder.addBox(center: SIMD3<Float>(-26.76, 5.80, zStrip), size: SIMD3<Float>(0.08, 0.18, 5.8), material: mat)
-            builder.addBox(center: SIMD3<Float>( 26.76, 5.80, zStrip), size: SIMD3<Float>(0.08, 0.18, 5.8), material: mat)
-            // Tira en el Muro Sur Final (Z = 71.76)
-            let xStrip = -21.0 + Float(i) * 7.0
-            builder.addBox(center: SIMD3<Float>(xStrip, 3.80, 71.76), size: SIMD3<Float>(5.6, 0.22, 0.08), material: mat)
-            builder.addBox(center: SIMD3<Float>(xStrip, 6.60, 71.76), size: SIMD3<Float>(5.6, 0.22, 0.08), material: mat)
+            let yStrip: Float = 1.20 + Float(i) * 1.05 // Alturas de 1.2m a 7.5m
+            // Muro Oeste (X = -26.78) y Muro Este (X = 26.78) a todo lo largo (54m de Z: 18 a 72)
+            builder.addBox(center: SIMD3<Float>(-26.78, yStrip, 45.0), size: SIMD3<Float>(0.06, 0.20, 54.0), material: mat)
+            builder.addBox(center: SIMD3<Float>( 26.78, yStrip, 45.0), size: SIMD3<Float>(0.06, 0.20, 54.0), material: mat)
+            // Muro Sur Final (Z = 71.78) a todo lo ancho (54m de X: -27 a +27)
+            builder.addBox(center: SIMD3<Float>(0, yStrip, 71.78), size: SIMD3<Float>(54.0, 0.20, 0.06), material: mat)
         }
 
         // 6. Los 4 Pilones / Faroles de Luz Arcoíris Interactivos junto a las 4 Cabañas (conectados a los 4 interruptores de luz)

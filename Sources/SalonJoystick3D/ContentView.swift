@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "91"
-    static let commitHash = "b91fix"
+    static let build = "92"
+    static let commitHash = "b92mk"
     static let formatted = "v\(version) • Build \(build)"
 }
 
@@ -730,6 +730,41 @@ struct ContentView: View {
                         }
                     }
                     .padding(.top, 2)
+                }
+
+                if model.showsRainbowGateNotice {
+                    HStack(spacing: 6) {
+                        Image(systemName: "lock.open.fill")
+                            .font(.system(size: 13, weight: .black))
+                            .foregroundStyle(.green)
+                        Text("✨ ¡PUERTA ARCOÍRIS DESBLOQUEADA! PASO LIBRE AL SALÓN")
+                            .font(.system(size: 11, weight: .heavy, design: .rounded))
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .overlay(
+                        Capsule().stroke(
+                            LinearGradient(colors: [.red, .orange, .yellow, .green, .cyan, .purple], startPoint: .leading, endPoint: .trailing),
+                            lineWidth: 1.5
+                        )
+                    )
+                    .shadow(color: .green.opacity(0.8), radius: 8)
+                } else if model.isNearRainbowGate && !model.isRainbowGateUnlocked {
+                    HStack(spacing: 6) {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.yellow)
+                        Text("🔒 PUERTA ARCOÍRIS BLOQUEADA (\(model.playerScore) / \(model.rainbowGateScoreNeeded) PTS)")
+                            .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                            .foregroundStyle(.yellow)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.black.opacity(0.75), in: Capsule())
+                    .overlay(Capsule().stroke(Color.yellow.opacity(0.85), lineWidth: 1.5))
+                    .shadow(color: .yellow.opacity(0.4), radius: 6)
                 }
 
                 if model.heldTool == .mirror && model.toolStatus.activeRemaining > 0 {
@@ -1533,6 +1568,11 @@ final class GameModel: ObservableObject {
     @Published var isSlowMotionActive = false
     @Published var isCoverActive = false
     @Published private(set) var isNearCoverRock = false
+    // Puerta Holográfica de Seguridad Arcoíris (Requiere 3,000 pts)
+    @Published var isRainbowGateUnlocked: Bool = false
+    @Published var isNearRainbowGate: Bool = false
+    @Published var rainbowGateScoreNeeded: Int = 3000
+    @Published var showsRainbowGateNotice: Bool = false
     @Published var isDefeated = false
     @Published var isRecoveringInChamber = false
     @Published var recoveryTimeRemaining: Float = 0
@@ -1748,6 +1788,21 @@ final class GameModel: ObservableObject {
         self.isNearCoverRock = isNear
         if !isNear && isCoverActive {
             isCoverActive = false
+        }
+    }
+
+    func updateRainbowGateStatus(unlocked: Bool, current: Int, target: Int) {
+        let wasUnlocked = isRainbowGateUnlocked
+        isRainbowGateUnlocked = unlocked
+        rainbowGateScoreNeeded = target
+        let isNear = (current >= 0)
+        isNearRainbowGate = isNear
+        if !wasUnlocked && unlocked {
+            showsRainbowGateNotice = true
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
+                self?.showsRainbowGateNotice = false
+            }
         }
     }
 

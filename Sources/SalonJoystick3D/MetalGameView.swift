@@ -69,6 +69,12 @@ struct MetalGameView: UIViewRepresentable {
         do {
             let renderer = try MetalRayRenderer(view: view, audio: model.audio)
             context.coordinator.renderer = renderer
+            renderer.playerScore = model.playerScore
+            renderer.onRainbowGateStatusUpdate = { [weak model] unlocked, current, target in
+                Task { @MainActor in
+                    model?.updateRainbowGateStatus(unlocked: unlocked, current: current, target: target)
+                }
+            }
             renderer.onFPSUpdate = model.showsFPS ? context.coordinator.onFPSUpdate : nil
             renderer.onToolStatusUpdate = { [weak model] status in
                 model?.reportToolStatus(status)
@@ -217,6 +223,7 @@ struct MetalGameView: UIViewRepresentable {
         }
         context.coordinator.invertsCameraY = model.invertsCameraY
         context.coordinator.cameraSensitivity = Float(model.cameraSensitivity)
+        context.coordinator.renderer?.playerScore = model.playerScore
         context.coordinator.renderer?.isPlayerDead = (model.playerHealth <= 0 || model.isDefeated) && !model.isRecoveringInChamber
         context.coordinator.renderer?.isHost = model.isHost
         context.coordinator.renderer?.isRecoveringInChamber = model.isRecoveringInChamber
