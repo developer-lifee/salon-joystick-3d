@@ -1271,7 +1271,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         diveRequestID: Int = 0
     ) {
         self.joystick = joystick
-        self.cameraMode = .firstPerson
+        if self.cameraMode != cameraMode {
+            self.cameraMode = cameraMode
+            if cameraMode == .thirdPerson {
+                let backDir = SIMD3<Float>(sin(cameraYaw), 0.35, cos(cameraYaw))
+                self.lakituPosition = playerPosition + SIMD3<Float>(0, 1.28, 0) + backDir * 3.8
+            }
+        }
         self.rayBouncesEnabled = rayBouncesEnabled
         self.heldTool = heldTool
         self.lightStates = lightStates

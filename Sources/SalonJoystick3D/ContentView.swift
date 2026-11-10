@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "87"
-    static let commitHash = "842b436"
+    static let build = "88"
+    static let commitHash = "19e4385"
     static let formatted = "v\(version) • Build \(build) (\(commitHash))"
 }
 
@@ -155,6 +155,7 @@ struct GameLightStates: Codable, Equatable {
 }
 
 enum GameRenderResolution: String, CaseIterable, Identifiable {
+    case ultraLight
     case light
     case balanced
     case high
@@ -163,6 +164,7 @@ enum GameRenderResolution: String, CaseIterable, Identifiable {
 
     var scale: CGFloat {
         switch self {
+        case .ultraLight: 0.55
         case .light: 0.75
         case .balanced: 1.0
         case .high: 1.5
@@ -171,9 +173,10 @@ enum GameRenderResolution: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
+        case .ultraLight: "Ultra Ahorro (0,55x)"
         case .light: "Ligera (0,75x)"
         case .balanced: "Equilibrada (1x)"
-        case .high: "Alta (1,5x)"
+        case .high: "Ultra Retina (1,5x)"
         }
     }
 }
@@ -719,6 +722,15 @@ struct ContentView: View {
                 }, isLiquidGlass: model.isLiquidGlassUIEnabled)
                 .frame(width: 156, height: 156)
                 .opacity(model.touchControlsOpacity)
+                .modifier(HUDDraggableModifier(
+                    isEditing: model.isEditingHUDLayout,
+                    isSelected: model.selectedHUDGroup == 0,
+                    label: "🕹️ JOYSTICK",
+                    offsetX: $model.hudJoystickX,
+                    offsetY: $model.hudJoystickY,
+                    scale: model.hudJoystickScale,
+                    onSelect: { model.selectedHUDGroup = 0 }
+                ))
             }
             .padding(.leading, 18)
             .padding(.bottom, 22)
@@ -944,6 +956,16 @@ struct ContentView: View {
                         .accessibilityLabel("Sumergirse hacia el fondo del agua")
                     }
                 }
+                .opacity(model.touchControlsOpacity)
+                .modifier(HUDDraggableModifier(
+                    isEditing: model.isEditingHUDLayout,
+                    isSelected: model.selectedHUDGroup == 3,
+                    label: "⏳ HABILIDADES",
+                    offsetX: $model.hudSkillsX,
+                    offsetY: $model.hudSkillsY,
+                    scale: model.hudSkillsScale,
+                    onSelect: { model.selectedHUDGroup = 3 }
+                ))
 
                 // Bar 2: Equipment Dock + Jump Action Button
                 HStack(alignment: .center, spacing: 12) {
@@ -1007,6 +1029,15 @@ struct ContentView: View {
                     .padding(6)
                     .background(.black.opacity(0.55), in: Capsule())
                     .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: 1))
+                    .modifier(HUDDraggableModifier(
+                        isEditing: model.isEditingHUDLayout,
+                        isSelected: model.selectedHUDGroup == 1,
+                        label: "🔦⚡🛡️ ARMAS",
+                        offsetX: $model.hudWeaponsX,
+                        offsetY: $model.hudWeaponsY,
+                        scale: model.hudWeaponsScale,
+                        onSelect: { model.selectedHUDGroup = 1 }
+                    ))
 
                     Button {
                         model.requestJump()
@@ -1023,6 +1054,15 @@ struct ContentView: View {
                     .contentShape(Circle())
                     .accessibilityLabel("Saltar")
                     .accessibilityIdentifier("jumpButton")
+                    .modifier(HUDDraggableModifier(
+                        isEditing: model.isEditingHUDLayout,
+                        isSelected: model.selectedHUDGroup == 2,
+                        label: "⬆️ SALTAR",
+                        offsetX: $model.hudJumpX,
+                        offsetY: $model.hudJumpY,
+                        scale: model.hudJumpScale,
+                        onSelect: { model.selectedHUDGroup = 2 }
+                    ))
                 }
                 .opacity(model.touchControlsOpacity)
             }
@@ -1234,6 +1274,102 @@ struct ContentView: View {
                     }
                 }
             }
+
+            if model.isEditingHUDLayout {
+                VStack {
+                    VStack(spacing: 10) {
+                        HStack {
+                            Image(systemName: "slider.horizontal.below.square.and.square.filled")
+                                .foregroundStyle(.cyan)
+                            Text("EDITOR DE BOTONES Y CONTROLES HUD")
+                                .font(.system(size: 13, weight: .black, design: .rounded))
+                                .foregroundStyle(.white)
+                            Spacer()
+                            Button {
+                                model.resetHUDLayout()
+                            } label: {
+                                Label("Restaurar", systemImage: "arrow.counterclockwise")
+                                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.orange)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Color.orange.opacity(0.18), in: Capsule())
+                            }
+                            Button {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    model.isEditingHUDLayout = false
+                                }
+                            } label: {
+                                Label("Guardar", systemImage: "checkmark.circle.fill")
+                                    .font(.system(size: 12, weight: .black, design: .rounded))
+                                    .foregroundStyle(.black)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(Color.cyan, in: Capsule())
+                            }
+                        }
+
+                        Text("Arrastra cualquier grupo de botones con el dedo para moverlo, o tócalo para ajustar su tamaño abajo.")
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.8))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        HStack(spacing: 12) {
+                            let groupNames = ["🕹️ Joystick", "🔦⚡🛡️ Armas", "⬆️ Saltar", "⏳ Habilidades"]
+                            Text("Seleccionado: \(groupNames[min(max(model.selectedHUDGroup, 0), 3)])")
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                                .foregroundStyle(.cyan)
+
+                            Spacer()
+
+                            let currentScaleBinding = Binding<Double>(
+                                get: {
+                                    switch model.selectedHUDGroup {
+                                    case 0: return model.hudJoystickScale
+                                    case 1: return model.hudWeaponsScale
+                                    case 2: return model.hudJumpScale
+                                    default: return model.hudSkillsScale
+                                    }
+                                },
+                                set: { newVal in
+                                    switch model.selectedHUDGroup {
+                                    case 0: model.hudJoystickScale = newVal
+                                    case 1: model.hudWeaponsScale = newVal
+                                    case 2: model.hudJumpScale = newVal
+                                    default: model.hudSkillsScale = newVal
+                                    }
+                                }
+                            )
+
+                            Text("Tamaño: \(Int(currentScaleBinding.wrappedValue * 100))%")
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundStyle(.white)
+                            Slider(value: currentScaleBinding, in: 0.60...1.50, step: 0.05)
+                                .tint(.cyan)
+                                .frame(width: 150)
+
+                            Text("Opacidad: \(Int(model.touchControlsOpacity * 100))%")
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundStyle(.white)
+                            Slider(value: $model.touchControlsOpacity, in: 0.25...1.0, step: 0.05)
+                                .tint(.yellow)
+                                .frame(width: 110)
+                        }
+                    }
+                    .padding(14)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(Color.cyan.opacity(0.75), lineWidth: 1.5)
+                    )
+                    .shadow(color: .black.opacity(0.55), radius: 14, y: 6)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 10)
+
+                    Spacer()
+                }
+                .zIndex(999)
+            }
             }
             }
             .background(Color.black)
@@ -1337,12 +1473,37 @@ final class GameModel: ObservableObject {
     @Published var hasRecordedVersusRoundResult: Bool = false
     @Published var coopDeaths: Int = 0
 
-    // Batería de linterna y personalización de HUD
+    // Batería de linterna, gráficos y editor interactivo de HUD
     @Published var flashlightBattery: Float = 1.0
     @Published var isMinimalHUDEnabled: Bool = false
-    @Published var touchControlsOpacity: Double = 0.85
+    @AppStorage("touchControlsOpacity") var touchControlsOpacity: Double = 0.85
+    @AppStorage("advancedReflectionsEnabled") var advancedReflectionsEnabled: Bool = true
+    @AppStorage("targetFPS") var targetFPS: Int = 60
+    @AppStorage("cameraSensitivity") var cameraSensitivity: Double = 1.0
+    @Published var isEditingHUDLayout: Bool = false
+    @Published var selectedHUDGroup: Int = 0
+    @AppStorage("hudJoystickX") var hudJoystickX: Double = 0
+    @AppStorage("hudJoystickY") var hudJoystickY: Double = 0
+    @AppStorage("hudJoystickScale") var hudJoystickScale: Double = 1.0
+    @AppStorage("hudWeaponsX") var hudWeaponsX: Double = 0
+    @AppStorage("hudWeaponsY") var hudWeaponsY: Double = 0
+    @AppStorage("hudWeaponsScale") var hudWeaponsScale: Double = 1.0
+    @AppStorage("hudJumpX") var hudJumpX: Double = 0
+    @AppStorage("hudJumpY") var hudJumpY: Double = 0
+    @AppStorage("hudJumpScale") var hudJumpScale: Double = 1.0
+    @AppStorage("hudSkillsX") var hudSkillsX: Double = 0
+    @AppStorage("hudSkillsY") var hudSkillsY: Double = 0
+    @AppStorage("hudSkillsScale") var hudSkillsScale: Double = 1.0
     @Published var isGameControllerConnected: Bool = false
     @Published var gameControllerName: String = ""
+
+    func resetHUDLayout() {
+        hudJoystickX = 0; hudJoystickY = 0; hudJoystickScale = 1.0
+        hudWeaponsX = 0; hudWeaponsY = 0; hudWeaponsScale = 1.0
+        hudJumpX = 0; hudJumpY = 0; hudJumpScale = 1.0
+        hudSkillsX = 0; hudSkillsY = 0; hudSkillsScale = 1.0
+        touchControlsOpacity = 0.85
+    }
 
     // Duelo de Luces (Luz vs Sombra / Captura del Núcleo)
     @Published var lightTeamScore: Int = 0
@@ -5780,14 +5941,54 @@ struct GameOptionsSheet: View {
                     }
                 }
 
-                Section("📱 Interfaz y Controles Táctiles") {
+                Section("📱 Cámara y Personalización del HUD") {
                     Picker("Perspectiva de Cámara", selection: $model.cameraMode) {
                         Text("1ª Persona").tag(GameCameraMode.firstPerson)
                         Text("3ª Persona").tag(GameCameraMode.thirdPerson)
                     }
                     .pickerStyle(.segmented)
 
-                    Toggle("Modo Cinemático (HUD Minimalista)", isOn: $model.isMinimalHUDEnabled)
+                    Button {
+                        dismiss()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                            if model.gameState != .playing {
+                                model.gameState = .playing
+                            }
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                model.isEditingHUDLayout = true
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "slider.horizontal.below.square.and.square.filled")
+                                .font(.title3)
+                                .foregroundStyle(.cyan)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Personalizar Posición y Tamaño de Botones HUD")
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.primary)
+                                Text("Mueve el joystick, armas, salto y habilidades a tu gusto")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.bold())
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Sensibilidad de Cámara")
+                            Spacer()
+                            Text(String(format: "%.1fx", model.cameraSensitivity))
+                                .font(.caption.bold())
+                                .foregroundStyle(.secondary)
+                        }
+                        Slider(value: $model.cameraSensitivity, in: 0.4...2.0, step: 0.1)
+                    }
 
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
@@ -5804,50 +6005,71 @@ struct GameOptionsSheet: View {
                     Toggle("Mostrar contador de FPS", isOn: $model.showsFPS)
                 }
 
-                Section("💡 Luces de la Arena (Sincronizadas)") {
-                    Toggle("Farol del Patio (Poste)", isOn: $model.lightStates.post)
-                    Toggle("Neón Piscina (Rojo/Cian)", isOn: $model.lightStates.piscinaNeon)
-                    Toggle("Letrero Neón SHEERIT", isOn: $model.lightStates.sheeritNeon)
-                    Toggle("Tiras LED de la Piscina", isOn: $model.lightStates.poolStrips)
-
-                    HStack(spacing: 12) {
-                        Button {
-                            model.lightStates.post = false
-                            model.lightStates.piscinaNeon = false
-                            model.lightStates.sheeritNeon = false
-                            model.lightStates.poolStrips = false
-                        } label: {
-                            HStack {
-                                Image(systemName: "lightbulb.slash.fill")
-                                Text("Apagón Total")
+                Section("⚙️ Batería, FPS y Calidad Ray Tracing") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Perfiles Rápidos de Energía y Gráficos")
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+                        HStack(spacing: 8) {
+                            Button {
+                                model.targetFPS = 30
+                                model.renderResolution = .ultraLight
+                                model.advancedReflectionsEnabled = false
+                            } label: {
+                                VStack(spacing: 3) {
+                                    Image(systemName: "battery.100percent.bolt")
+                                    Text("Ahorro Batería")
+                                        .font(.caption2.bold())
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
                             }
-                            .font(.subheadline.bold())
-                            .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.red.opacity(0.8))
+                            .buttonStyle(.borderedProminent)
+                            .tint(.green.opacity(0.8))
 
-                        Button {
-                            model.lightStates.post = true
-                            model.lightStates.piscinaNeon = true
-                            model.lightStates.sheeritNeon = true
-                            model.lightStates.poolStrips = true
-                        } label: {
-                            HStack {
-                                Image(systemName: "lightbulb.fill")
-                                Text("Encender Todo")
+                            Button {
+                                model.targetFPS = 60
+                                model.renderResolution = .balanced
+                                model.advancedReflectionsEnabled = true
+                            } label: {
+                                VStack(spacing: 3) {
+                                    Image(systemName: "dial.medium.fill")
+                                    Text("Equilibrado")
+                                        .font(.caption2.bold())
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
                             }
-                            .font(.subheadline.bold())
-                            .frame(maxWidth: .infinity)
+                            .buttonStyle(.borderedProminent)
+                            .tint(.blue.opacity(0.8))
+
+                            Button {
+                                model.targetFPS = 60
+                                model.renderResolution = .high
+                                model.advancedReflectionsEnabled = true
+                            } label: {
+                                VStack(spacing: 3) {
+                                    Image(systemName: "sparkles")
+                                    Text("Ultra Cool")
+                                        .font(.caption2.bold())
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.purple.opacity(0.85))
                         }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.yellow.opacity(0.8))
                     }
-                    .padding(.top, 4)
-                }
+                    .padding(.vertical, 4)
 
-                Section("⚙️ Rendimiento Gráfico & Ray Tracing") {
-                    Picker("Resolución interna", selection: $model.renderResolution) {
+                    Picker("Límite de Fotogramas (FPS)", selection: $model.targetFPS) {
+                        Text("30 FPS (Ahorra Batería y Calor)").tag(30)
+                        Text("60 FPS (Fluidez Máxima)").tag(60)
+                    }
+
+                    Toggle("Reflejos Ray Tracing (Agua, Piso y Espejos)", isOn: $model.advancedReflectionsEnabled)
+
+                    Picker("Resolución interna 3D", selection: $model.renderResolution) {
                         ForEach(GameRenderResolution.allCases) { resolution in
                             Text(resolution.label).tag(resolution)
                         }
@@ -5872,6 +6094,67 @@ struct GameOptionsSheet: View {
                 }
             }
         }
+    }
+}
+
+struct HUDDraggableModifier: ViewModifier {
+    let isEditing: Bool
+    let isSelected: Bool
+    let label: String
+    @Binding var offsetX: Double
+    @Binding var offsetY: Double
+    let scale: Double
+    let onSelect: () -> Void
+
+    @State private var dragStartOffset: CGSize? = nil
+
+    func body(content: Content) -> some View {
+        content
+            .allowsHitTesting(!isEditing)
+            .scaleEffect(CGFloat(scale))
+            .overlay {
+                if isEditing {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(isSelected ? Color.cyan.opacity(0.22) : Color.black.opacity(0.28))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .strokeBorder(
+                                    isSelected ? Color.cyan : Color.white.opacity(0.75),
+                                    style: StrokeStyle(lineWidth: isSelected ? 2.5 : 1.5, dash: [6, 4])
+                                )
+                        )
+                        .overlay(alignment: .top) {
+                            Text("\(label) • \(Int(scale * 100))%")
+                                .font(.system(size: 10, weight: .black, design: .rounded))
+                                .foregroundStyle(isSelected ? .black : .white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(isSelected ? Color.cyan : Color.black.opacity(0.8), in: Capsule())
+                                .offset(y: -12)
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            onSelect()
+                        }
+                        .gesture(
+                            DragGesture(minimumDistance: 1)
+                                .onChanged { value in
+                                    onSelect()
+                                    if dragStartOffset == nil {
+                                        dragStartOffset = CGSize(width: offsetX, height: offsetY)
+                                    }
+                                    if let start = dragStartOffset {
+                                        offsetX = min(max(start.width + value.translation.width, -360), 360)
+                                        offsetY = min(max(start.height + value.translation.height, -260), 260)
+                                    }
+                                }
+                                .onEnded { _ in
+                                    dragStartOffset = nil
+                                }
+                        )
+                }
+            }
+            .offset(x: CGFloat(offsetX), y: CGFloat(offsetY))
     }
 }
 

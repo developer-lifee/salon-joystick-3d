@@ -206,7 +206,11 @@ struct MetalGameView: UIViewRepresentable {
 
     func updateUIView(_ view: MTKView, context: Context) {
         (view as? PointResolutionMTKView)?.renderScale = model.renderResolution.scale
+        if view.preferredFramesPerSecond != model.targetFPS {
+            view.preferredFramesPerSecond = model.targetFPS
+        }
         context.coordinator.invertsCameraY = model.invertsCameraY
+        context.coordinator.cameraSensitivity = Float(model.cameraSensitivity)
         context.coordinator.renderer?.isPlayerDead = (model.playerHealth <= 0 || model.isDefeated) && !model.isRecoveringInChamber
         context.coordinator.renderer?.isHost = model.isHost
         context.coordinator.renderer?.isRecoveringInChamber = model.isRecoveringInChamber
@@ -231,7 +235,7 @@ struct MetalGameView: UIViewRepresentable {
         context.coordinator.renderer?.setInput(
             joystick: model.joystick,
             cameraMode: model.cameraMode,
-            rayBouncesEnabled: true,
+            rayBouncesEnabled: model.advancedReflectionsEnabled,
             heldTool: model.heldTool,
             lightStates: model.lightStates,
             jumpRequestID: model.jumpRequestID,
@@ -250,6 +254,7 @@ struct MetalGameView: UIViewRepresentable {
     final class Coordinator: NSObject {
         var renderer: MetalRayRenderer?
         var invertsCameraY = false
+        var cameraSensitivity: Float = 1.0
         let onFPSUpdate: (Double) -> Void
 
         init(model: GameModel) {
@@ -264,8 +269,8 @@ struct MetalGameView: UIViewRepresentable {
             guard let view = gesture.view else { return }
             let translation = gesture.translation(in: view)
             renderer?.rotateCamera(
-                deltaX: Float(translation.x),
-                deltaY: Float(translation.y) * (invertsCameraY ? -1 : 1)
+                deltaX: Float(translation.x) * cameraSensitivity,
+                deltaY: Float(translation.y) * (invertsCameraY ? -1 : 1) * cameraSensitivity
             )
             gesture.setTranslation(.zero, in: view)
         }
