@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "96"
-    static let commitHash = "b96m64"
+    static let build = "97"
+    static let commitHash = "b97wav"
     static let formatted = "v\(version) • Build \(build)"
 }
 
@@ -1561,8 +1561,8 @@ final class GameModel: ObservableObject {
     @Published var playerShield: Float = 100.0
     private var lastDamageTime: TimeInterval = 0
     @Published var currentWave = 1
-    @Published var botsRemainingInWave = 5
-    @Published var totalBotsInWave = 5
+    @Published var botsRemainingInWave = 2
+    @Published var totalBotsInWave = 2
     @Published var isWaveIntermission = false
     @Published var waveIntermissionTime: Float = 0
     @Published var isSlowMotionActive = false

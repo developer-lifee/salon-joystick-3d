@@ -1046,8 +1046,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
     private var currentWave: Int = 1
     private var botsKilledInCurrentWave: Int = 0
-    private var botsSpawnedInCurrentWave: Int = 5
-    private var totalBotsInWave: Int = 5
+    private var botsSpawnedInCurrentWave: Int = 2
+    private var totalBotsInWave: Int = 2
     private var isWaveIntermission: Bool = false
     private var intermissionTimeRemaining: Float = 0
     private var waveStatusReportCountdown: Float = 0
@@ -1376,25 +1376,34 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         currentWave = 1
         botsKilledInCurrentWave = 0
-        totalBotsInWave = 5
+        totalBotsInWave = 2
         botsSpawnedInCurrentWave = min(totalBotsInWave, npcPositions.count)
         isWaveIntermission = false
         intermissionTimeRemaining = 0
-        npcHealths = npcMaxHealths
-        onNPCHealthsUpdate?(npcHealths)
 
         for i in npcPositions.indices {
             let spawnIndex = i % npcSpawnPositions.count
-            npcPositions[i] = npcSpawnPositions[spawnIndex]
-            npcYaws[i] = Float.pi * (0.25 + Float(i) * 0.5)
-            npcRespawnTimers[i] = 0
-            npcHealths[i] = npcMaxHealths[i]
-            npcMeltProgress[i] = 0
-            botLaserActiveTimers[i] = 0
-            botLaserCooldownTimers[i] = 5.0
-            botTeleportReactionTimers[i] = 0
-            botAimTargets[i] = npcSpawnPositions[spawnIndex] + SIMD3<Float>(0, 1.1, 0)
+            if i < botsSpawnedInCurrentWave {
+                npcPositions[i] = npcSpawnPositions[spawnIndex]
+                npcYaws[i] = Float.pi * (0.25 + Float(i) * 0.5)
+                npcRespawnTimers[i] = 0
+                npcHealths[i] = npcMaxHealths[i]
+                npcMeltProgress[i] = 0
+                botLaserActiveTimers[i] = 0
+                botLaserCooldownTimers[i] = 3.5 + Float(i) * 1.5
+                botTeleportReactionTimers[i] = 0
+                botAimTargets[i] = npcSpawnPositions[spawnIndex] + SIMD3<Float>(0, 1.1, 0)
+            } else {
+                npcPositions[i] = SIMD3<Float>(0, -10, 0)
+                npcHealths[i] = 0
+                npcRespawnTimers[i] = 9999.0
+                npcMeltProgress[i] = 0
+                botLaserActiveTimers[i] = 0
+                botLaserCooldownTimers[i] = 9999.0
+                botTeleportReactionTimers[i] = 0
+            }
         }
+        onNPCHealthsUpdate?(npcHealths)
     }
 
     func setInput(
@@ -2585,7 +2594,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 isWaveIntermission = false
                 currentWave += 1
                 botsKilledInCurrentWave = 0
-                totalBotsInWave = 5 + (currentWave - 1) * 3
+                totalBotsInWave = (currentWave == 1) ? 2 : ((currentWave == 2) ? 3 : ((currentWave == 3) ? 4 : (5 + (currentWave - 4) * 2)))
                 botsSpawnedInCurrentWave = min(totalBotsInWave, npcPositions.count)
                 audio.playLaserIgnition()
                 if isRecoveringInChamber {
@@ -2594,13 +2603,24 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     onRecoveryCompleted?()
                 }
                 for i in npcPositions.indices {
-                    npcPositions[i] = npcSpawnPositions[i % npcSpawnPositions.count]
-                    npcHealths[i] = npcMaxHealths[i]
-                    npcMeltProgress[i] = 0
-                    npcRespawnTimers[i] = 0.5 + Float(i) * 0.4
-                    botLaserActiveTimers[i] = 0
-                    botTeleportReactionTimers[i] = 0
-                    botAimTargets[i] = npcPositions[i] + SIMD3<Float>(0, 1.1, 0)
+                    if i < botsSpawnedInCurrentWave {
+                        npcPositions[i] = npcSpawnPositions[i % npcSpawnPositions.count]
+                        npcHealths[i] = npcMaxHealths[i]
+                        npcMeltProgress[i] = 0
+                        npcRespawnTimers[i] = 0.5 + Float(i) * 0.4
+                        botLaserActiveTimers[i] = 0
+                        botLaserCooldownTimers[i] = 3.0 + Float(i) * 1.2
+                        botTeleportReactionTimers[i] = 0
+                        botAimTargets[i] = npcPositions[i] + SIMD3<Float>(0, 1.1, 0)
+                    } else {
+                        npcPositions[i] = SIMD3<Float>(0, -10, 0)
+                        npcHealths[i] = 0
+                        npcRespawnTimers[i] = 9999.0
+                        npcMeltProgress[i] = 0
+                        botLaserActiveTimers[i] = 0
+                        botLaserCooldownTimers[i] = 9999.0
+                        botTeleportReactionTimers[i] = 0
+                    }
                 }
                 onNPCHealthsUpdate?(npcHealths)
                 onWaveUpdate?(currentWave, totalBotsInWave, totalBotsInWave, false, 0)
@@ -2707,9 +2727,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             let rawDirection = distance > 0.001 ? offset / distance : SIMD2<Float>(0, 1)
 
             // Dynamic difficulty scaling per wave
-            let speed: Float = min(3.9, 1.9 + Float(currentWave) * 0.28 + Float(index == 0 ? 0.45 : 0.15))
-            let botCooldown: Float = max(1.8, 4.8 - Float(currentWave) * 0.35)
-            let aimSpeedScale: Float = min(11.0, 5.2 + Float(currentWave) * 0.65)
+            let speed: Float = min(3.8, 1.4 + Float(currentWave) * 0.25 + Float(index == 0 ? 0.35 : 0.10))
+            let botCooldown: Float = max(2.2, 5.5 - Float(currentWave) * 0.50)
+            let aimSpeedScale: Float = min(10.0, 3.5 + Float(currentWave) * 0.75)
 
             // 🎖️ Rol Táctico Dinámico de Escuadra: Determinado por cercanía relativa entre los bots vivos
             let dynamicRoleIndex = sortedAliveByDistance.firstIndex(of: index) ?? 0
@@ -2897,7 +2917,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             let activeShootersCount = npcPositions.indices.filter {
                 $0 != index && npcHealths[$0] > 0 && npcRespawnTimers[$0] <= 0 && botLaserActiveTimers[$0] > 0
             }.count
-            let maxConcurrentShooters = (currentWave >= 4 || totalAliveBots >= 4) ? 2 : 1
+            let maxConcurrentShooters = (currentWave >= 4 && totalAliveBots >= 3) ? 2 : 1
 
             // 🔥 ALTERNANCIA DINÁMICA: Si ningún bot está disparando actualmente en la sala,
             // el asaltante de punta (Rol 0) o el atajador (Rol 1 si son 2) toma el token de ataque de inmediato
@@ -3034,10 +3054,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                         let aimRay = simd_normalize(botAimTargets[index] - botHandOrigin)
                         let targetRay = simd_normalize(targetCenter - botHandOrigin)
                         let aimAlignment = simd_dot(aimRay, targetRay)
+                        let botDamagePerSec: Float = 14.0 + min(16.0, Float(currentWave - 1) * 3.5)
                         if aimAlignment > 0.94 && distance < 24.0 {
                             if isTargetingRemote {
                                 if !remotePlayerIsRecovering {
-                                    remoteDamageAccumulator += 28.0 * rawDt
+                                    remoteDamageAccumulator += botDamagePerSec * rawDt
                                 }
                             } else {
                                 if !isRecoveringInChamber {
@@ -3046,7 +3067,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                                         botImpactAudioCooldowns[index] = 0.45
                                         audio.playLaserPlayerHitSound()
                                     }
-                                    accumulateDamage(28.0 * rawDt)
+                                    accumulateDamage(botDamagePerSec * rawDt)
                                 }
                             }
                         }
