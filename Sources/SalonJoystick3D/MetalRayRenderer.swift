@@ -322,13 +322,19 @@ private struct RTMeshBuilder {
             // Factor de desplazamiento geológico combinado (estilo roca esculpida / Nano Banana)
             let geoDisp = 1.0 + crag1 + crag2 + crag3 + strata - (facetPlateau * 0.12)
 
-            // 4. Base plana de apoyo al suelo y parte superior erosionada
-            let baseFlattening: Float = latitude < -0.2 ? max(0.35, 1.0 + (latitude + 0.2) * 1.35) : 1.0
+            // 4. Base geológica plana firmemente anclada al suelo (Y <= 0.0)
+            // Se garantiza que el fondo penetre 4cm en el piso para eliminar por completo cualquier hueco o flotación en el aire
+            var yCoord = center.y + latSin * radii.y * geoDisp
+            if latitude < -0.15 {
+                let t = max(0.0, min(1.0, (-latitude - 0.15) / 1.1))
+                let groundContactY: Float = -0.04
+                yCoord = yCoord * (1.0 - t) + min(yCoord, groundContactY) * t
+            }
 
-            return center + SIMD3<Float>(
-                latCos * lonCos * radii.x * geoDisp,
-                latSin * radii.y * baseFlattening * geoDisp,
-                latCos * lonSin * radii.z * geoDisp
+            return SIMD3<Float>(
+                center.x + latCos * lonCos * radii.x * geoDisp,
+                yCoord,
+                center.z + latCos * lonSin * radii.z * geoDisp
             )
         }
 

@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "97"
-    static let commitHash = "b97wav"
+    static let build = "98"
+    static let commitHash = "b98fix"
     static let formatted = "v\(version) • Build \(build)"
 }
 
@@ -737,7 +737,7 @@ struct ContentView: View {
                         Image(systemName: "sparkles")
                             .font(.system(size: 13, weight: .black))
                             .foregroundStyle(.yellow)
-                        Text("✨ ¡ESPEJO PORTAL ACTIVADO! CRÚZALO AL ESTILO SUPER MARIO 64")
+                        Text("✨ ¡ESPEJO PORTAL ACTIVADO! PASO LIBRE AL HIPERESPACIO")
                             .font(.system(size: 11, weight: .heavy, design: .rounded))
                             .foregroundStyle(.white)
                     }
@@ -756,7 +756,7 @@ struct ContentView: View {
                         Image(systemName: "lock.fill")
                             .font(.system(size: 12, weight: .bold))
                             .foregroundStyle(.yellow)
-                        Text("🔒 ESPEJO PORTAL BLOQUEADO (\(model.playerScore) / \(model.rainbowGateScoreNeeded) PTS • MARIO 64)")
+                        Text("🔒 ESPEJO PORTAL BLOQUEADO (\(model.playerScore) / \(model.rainbowGateScoreNeeded) PTS)")
                             .font(.system(size: 11, weight: .heavy, design: .monospaced))
                             .foregroundStyle(.yellow)
                     }
