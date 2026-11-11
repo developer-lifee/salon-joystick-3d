@@ -2972,6 +2972,51 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 moveDirection = simd_normalize(tacticalDesiredDir * (1.0 - blend) + strongestAvoidance * blend)
             }
 
+            // 🧱 Evasión de Muros Perimetrales y Salientes para la IA (evita que los bots choquen de frente o queden atrapados al huir):
+            let inRainbowRoom = npcPositions[index].z > 17.8
+            let wallMinX: Float = inRainbowRoom ? -27.0 : -17.8
+            let wallMaxX: Float = inRainbowRoom ?  27.0 :  17.8
+            let wallMinZ: Float = inRainbowRoom ?  17.8 : -17.8
+            let wallMaxZ: Float = inRainbowRoom ?  72.0 :  17.8
+            let wallBuffer: Float = 2.6
+
+            var wallInward = SIMD2<Float>.zero
+            let dWest = botPos2D.x - wallMinX
+            if dWest < wallBuffer {
+                wallInward.x += (wallBuffer - dWest) / wallBuffer
+            }
+            let dEast = wallMaxX - botPos2D.x
+            if dEast < wallBuffer {
+                wallInward.x -= (wallBuffer - dEast) / wallBuffer
+            }
+            let dNorth = botPos2D.y - wallMinZ
+            if dNorth < wallBuffer {
+                let atPortal = abs(botPos2D.x) <= 4.8
+                if !inRainbowRoom || !atPortal {
+                    wallInward.y += (wallBuffer - dNorth) / wallBuffer
+                }
+            }
+            let dSouth = wallMaxZ - botPos2D.y
+            if dSouth < wallBuffer {
+                let atPortal = abs(botPos2D.x) <= 4.8
+                if inRainbowRoom || !atPortal {
+                    wallInward.y -= (wallBuffer - dSouth) / wallBuffer
+                }
+            }
+
+            if simd_length_squared(wallInward) > 0.0001 {
+                let wallNormal = simd_normalize(wallInward)
+                let headingIntoWall = simd_dot(moveDirection, wallNormal) < 0.20
+                if headingIntoWall {
+                    let t1 = SIMD2<Float>(-wallNormal.y, wallNormal.x)
+                    let t2 = -t1
+                    let wallTangent = (simd_dot(t1, lateralTangent) >= simd_dot(t2, lateralTangent)) ? t1 : t2
+                    let wallWeight = min(1.0, simd_length(wallInward))
+                    let wallSteer = simd_normalize(wallTangent * 0.78 + wallNormal * 0.55)
+                    moveDirection = simd_normalize(moveDirection * (1.0 - wallWeight * 0.85) + wallSteer * (wallWeight * 0.85))
+                }
+            }
+
             // Cuando el bot está disparando activamente, planta los pies para apuntar con precisión
             let stepFactor: Float = (botLaserActiveTimers[index] > 0 && distance >= minSafeDist) ? 0.22 : 1.0
             var proposedX = npcPositions[index].x + (moveDirection.x * speed * stepFactor + npcPushVelocities[index].x) * dt
@@ -3000,15 +3045,16 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 }
             }
 
-            // 🤜🤛 Barrera de Distancia Mínima con el Jugador (nunca tapar la cámara ni acercarse cuerpo a cuerpo)
-            let minPlayerBotSeparation: Float = isColossalGolem ? 6.50 : 4.50
+            // 🤜🤛 Separación física de cuerpos entre Bot y Jugador (evitar solapamiento de cápsulas sin teletransportes)
+            let minPhysicalSeparation: Float = isColossalGolem ? 1.60 : 1.05
             if abs(playerPosition.y - npcPositions[index].y) < 1.85 {
                 let toBot = SIMD2<Float>(proposedX - playerPosition.x, proposedZ - playerPosition.z)
                 let playerDist = simd_length(toBot)
-                if playerDist < minPlayerBotSeparation {
-                    let pushDir = playerDist > 0.001 ? toBot / playerDist : -rawDirection
-                    proposedX = playerPosition.x + pushDir.x * minPlayerBotSeparation
-                    proposedZ = playerPosition.z + pushDir.y * minPlayerBotSeparation
+                if playerDist < minPhysicalSeparation && playerDist > 0.0001 {
+                    let pushDir = toBot / playerDist
+                    let overlap = minPhysicalSeparation - playerDist
+                    proposedX += pushDir.x * overlap
+                    proposedZ += pushDir.y * overlap
                 }
             }
 
@@ -3017,6 +3063,15 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             resolveRockCollisions(position: &npcPos)
             resolveParkourAndCabinCollisions(position: &npcPos)
             clampToArenaBounds(position: &npcPos, previousPosition: npcPositions[index], margin: 1.15)
+
+            // Si el bot fue frenado por un muro, roca o estructura, anular la velocidad de empuje residual
+            if abs(npcPos.x - proposedX) > 0.001 {
+                npcPushVelocities[index].x = 0
+            }
+            if abs(npcPos.z - proposedZ) > 0.001 {
+                npcPushVelocities[index].y = 0
+            }
+
             proposedX = npcPos.x
             proposedZ = npcPos.z
 
@@ -3525,41 +3580,64 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
     private func clampToArenaBounds(position: inout SIMD3<Float>, previousPosition: SIMD3<Float>, margin: Float = 0.80) {
         if position.y < -4.0 {
-            position.x = max(-17.0, min(17.0, position.x))
-            position.z = max(-17.0, min(17.0, position.z))
+            let poolMargin = max(0.80, margin)
+            position.x = max(-17.8 + poolMargin, min(17.8 - poolMargin, position.x))
+            position.z = max(-17.8 + poolMargin, min(17.8 - poolMargin, position.z))
             return
         }
-        position.z = max(-17.8 + margin, min(72.0 - margin, position.z))
+
         let portalHalfWidth: Float = 5.2 - margin * 0.45
         let isGateUnlocked = isRainbowGateUnlocked
         let distToGate = simd_distance(position, SIMD3<Float>(0, position.y, 17.8))
-        if distToGate < 6.0 {
-            onRainbowGateStatusUpdate?(isGateUnlocked, playerScore, 3000)
-        } else {
-            onRainbowGateStatusUpdate?(isGateUnlocked, -1, 3000)
+        if margin < 1.0 {
+            if distToGate < 6.0 {
+                onRainbowGateStatusUpdate?(isGateUnlocked, playerScore, 3000)
+            } else {
+                onRainbowGateStatusUpdate?(isGateUnlocked, -1, 3000)
+            }
         }
 
-        if position.z < 17.8 - margin {
-            position.x = max(-17.8 + margin, min(17.8 - margin, position.x))
-        } else if position.z > 17.8 + margin {
-            position.x = max(-27.0 + margin, min(27.0 - margin, position.x))
-        } else {
-            // En el umbral del Muro Divisor Sur (Z = 17.8):
-            // 🌟 Modo Super Mario 64: Atraviesa el cuadro / espejo mágico si tiene 3,000 pts
-            if abs(position.x) <= portalHalfWidth && isGateUnlocked {
-                position.x = max(-portalHalfWidth, min(portalHalfWidth, position.x))
-                let crossedToRainbow = (previousPosition.z < 17.8 && position.z >= 17.8)
-                let crossedToPool = (previousPosition.z > 17.8 && position.z <= 17.8)
-                if crossedToRainbow || crossedToPool {
-                    audio.playLaserIgnition()
+        // 1. Límites globales norte y sur del mapa completo
+        position.z = max(-17.8 + margin, min(72.0 - margin, position.z))
+
+        // 2. Control estricto del Muro Divisor Sur (Z = 17.8) entre Salón Piscina y Gran Salón Arcoíris
+        // Determinar si el ente se encuentra dentro del vano del Gran Pórtico (X) y si el portal está abierto
+        let inPortalX = abs(position.x) <= portalHalfWidth && abs(previousPosition.x) <= portalHalfWidth
+        let canCrossDividingWall = inPortalX && isGateUnlocked
+
+        if previousPosition.z <= 17.8 {
+            // Estaba en el Patio de la Piscina (Z <= 17.8)
+            if position.z > 17.8 - margin {
+                if canCrossDividingWall {
+                    position.x = max(-portalHalfWidth, min(portalHalfWidth, position.x))
+                    if previousPosition.z < 17.8 && position.z >= 17.8 && margin < 1.0 {
+                        audio.playLaserIgnition()
+                    }
+                } else {
+                    // Bloqueo continuo anti-túnel: el muro sur retiene físicamente al personaje
+                    position.z = min(position.z, 17.8 - margin)
                 }
-            } else if previousPosition.z <= 17.8 {
-                position.z = min(position.z, 17.8 - margin)
-                position.x = max(-17.8 + margin, min(17.8 - margin, position.x))
-            } else {
-                position.z = max(position.z, 17.8 + margin)
-                position.x = max(-27.0 + margin, min(27.0 - margin, position.x))
             }
+        } else {
+            // Estaba en el Gran Salón Arcoíris (Z > 17.8)
+            if position.z < 17.8 + margin {
+                if canCrossDividingWall {
+                    position.x = max(-portalHalfWidth, min(portalHalfWidth, position.x))
+                    if previousPosition.z > 17.8 && position.z <= 17.8 && margin < 1.0 {
+                        audio.playLaserIgnition()
+                    }
+                } else {
+                    // Bloqueo continuo anti-túnel: las alas del muro retienen al personaje en el Salón Arcoíris
+                    position.z = max(position.z, 17.8 + margin)
+                }
+            }
+        }
+
+        // 3. Límites perimetrales laterales Este-Oeste según la zona resultante
+        if position.z <= 17.8 {
+            position.x = max(-17.8 + margin, min(17.8 - margin, position.x))
+        } else {
+            position.x = max(-27.0 + margin, min(27.0 - margin, position.x))
         }
     }
 
@@ -3811,7 +3889,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             pushedNPC.x -= normal.x * (overlap * npcPushShare)
             pushedNPC.z -= normal.y * (overlap * npcPushShare)
 
-            // Respetar bordes de la piscina, rocas y muros para el NPC empujado
+            // Respetar bordes de la piscina, rocas, estructuras y muros para el NPC empujado
             let wasInsidePool = npcPositions[index].x >= -5.60 && npcPositions[index].x <= 2.60 && npcPositions[index].z >= -4.45 && npcPositions[index].z <= 1.45
             let isInsidePool = pushedNPC.x >= -5.60 && pushedNPC.x <= 2.60 && pushedNPC.z >= -4.45 && pushedNPC.z <= 1.45
             if !wasInsidePool && isInsidePool && pushedNPC.y < 0.2 {
@@ -3819,8 +3897,17 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 pushedNPC.z = npcPositions[index].z
             }
             resolveRockCollisions(position: &pushedNPC)
-            pushedNPC.x = max(-17.0, min(17.0, pushedNPC.x))
-            pushedNPC.z = max(-17.0, min(17.0, pushedNPC.z))
+            resolveParkourAndCabinCollisions(position: &pushedNPC)
+            clampToArenaBounds(position: &pushedNPC, previousPosition: npcPositions[index], margin: 1.15)
+
+            // Si el NPC chocó con un muro/roca y fue frenado, anular empuje residual
+            if abs(pushedNPC.x - (npcPositions[index].x - normal.x * (overlap * npcPushShare))) > 0.001 {
+                npcPushVelocities[index].x = 0
+            }
+            if abs(pushedNPC.z - (npcPositions[index].z - normal.y * (overlap * npcPushShare))) > 0.001 {
+                npcPushVelocities[index].y = 0
+            }
+
             npcPositions[index] = pushedNPC
 
             // Transferir impulso de empuje (empujón físico) al rival
