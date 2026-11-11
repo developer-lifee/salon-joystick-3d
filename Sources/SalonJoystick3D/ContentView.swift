@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "110"
-    static let commitHash = "b110sheeritmirror"
+    static let build = "111"
+    static let commitHash = "b111cleanupgear"
     static let formatted = "v\(version) • Build \(build)"
 }
 
@@ -978,19 +978,6 @@ struct ContentView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Menú Radial de Teletransporte")
-
-                    Button {
-                        model.showsSettingsSheet = true
-                    } label: {
-                        Image(systemName: "gearshape.fill")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 34, height: 34)
-                            .background(Color.black.opacity(0.65), in: Circle())
-                            .overlay(Circle().stroke(Color.white.opacity(0.35), lineWidth: 1.2))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Ajustes y Opciones")
 
                     if model.isGameControllerConnected && !model.isMinimalHUDEnabled {
                         HStack(spacing: 5) {
