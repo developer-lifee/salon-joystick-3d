@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "105"
-    static let commitHash = "b105neonpure"
+    static let build = "106"
+    static let commitHash = "b106thermalweapons"
     static let formatted = "v\(version) • Build \(build)"
 }
 
@@ -197,7 +197,7 @@ struct ContentView: View {
                         ZStack {
                             MetalGameView(model: model)
                                 .ignoresSafeArea(.all)
-                            if model.heldTool == .laser {
+                            if model.heldTool == .laser && model.laserBattery > 0.01 {
                                 Circle()
                                     .stroke(Color.red.opacity(0.85), lineWidth: 1.5)
                                     .frame(width: 24, height: 24)
@@ -219,7 +219,7 @@ struct ContentView: View {
                         ZStack {
                             MetalGameView(model: model)
                                 .ignoresSafeArea(.all)
-                            if model.heldTool == .laser {
+                            if model.heldTool == .laser && model.laserBattery > 0.01 {
                                 Circle()
                                     .stroke(Color.red.opacity(0.85), lineWidth: 1.5)
                                     .frame(width: 24, height: 24)
@@ -352,7 +352,7 @@ struct ContentView: View {
                 } else {
 
             // GTA-Style Aim Crosshair Overlay
-            if model.heldTool == .laser {
+            if model.heldTool == .laser && model.laserBattery > 0.01 {
                 ZStack {
                     Circle()
                         .stroke(Color.red.opacity(0.85), lineWidth: 1.5)
@@ -1112,19 +1112,32 @@ struct ContentView: View {
                         .accessibilityLabel("Linterna")
 
                         Button {
+                            guard model.laserBattery > 0.02 else { return }
                             model.heldTool = (model.heldTool == .laser ? .none : .laser)
                         } label: {
-                            VStack(spacing: 2) {
-                                Image(systemName: "bolt.fill")
-                                    .font(.system(size: 17, weight: .bold))
-                                Text("Láser")
-                                    .font(.system(size: 9, weight: .bold))
+                            ZStack {
+                                Circle()
+                                    .stroke(Color.white.opacity(0.15), lineWidth: 2.5)
+                                Circle()
+                                    .trim(from: 0, to: CGFloat(model.laserBattery))
+                                    .stroke(
+                                        model.laserBattery > 0.35 ? Color.cyan : (model.laserBattery > 0.15 ? Color.orange : Color.red),
+                                        style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
+                                    )
+                                    .rotationEffect(.degrees(-90))
+
+                                VStack(spacing: 1) {
+                                    Image(systemName: model.laserBattery <= 0.02 ? "bolt.slash.fill" : "bolt.fill")
+                                        .font(.system(size: 15, weight: .bold))
+                                    Text("\(Int((model.laserBattery * 100).rounded()))%")
+                                        .font(.system(size: 8, weight: .heavy, design: .monospaced))
+                                }
+                                .foregroundStyle(model.heldTool == .laser ? .white : (model.laserBattery > 0.20 ? .cyan : .red))
                             }
-                            .foregroundStyle(model.heldTool == .laser ? .white : .red)
                             .frame(width: 48, height: 48)
                             .background(
                                 model.heldTool == .laser
-                                    ? AnyShapeStyle(Color.red)
+                                    ? AnyShapeStyle(model.laserBattery > 0.02 ? Color.red : Color.gray.opacity(0.6))
                                     : AnyShapeStyle(Color.black.opacity(0.65)),
                                 in: Circle()
                             )
@@ -1601,8 +1614,11 @@ final class GameModel: ObservableObject {
     @Published var hasRecordedVersusRoundResult: Bool = false
     @Published var coopDeaths: Int = 0
 
-    // Batería de linterna, gráficos y editor interactivo de HUD
+    // Batería de linterna y láser, calor de espejo, gráficos y editor interactivo de HUD
     @Published var flashlightBattery: Float = 1.0
+    @Published var laserBattery: Float = 1.0
+    @Published var mirrorHeat: Float = 0.0
+    @Published var mirrorOverheated: Bool = false
     @Published var isMinimalHUDEnabled: Bool = false
     @AppStorage("touchControlsOpacity") var touchControlsOpacity: Double = 0.85
     @AppStorage("advancedReflectionsEnabled") var advancedReflectionsEnabled: Bool = true
@@ -6950,25 +6966,53 @@ struct MirrorShieldJoystickButton: View {
     @State private var initialToolWasMirror: Bool = false
     @State private var didMoveSignificantly: Bool = false
 
+    private var heatColor: Color {
+        if model.mirrorOverheated {
+            return Color.red
+        } else if model.mirrorHeat > 0.70 {
+            return Color.orange
+        } else if model.mirrorHeat > 0.35 {
+            return Color.yellow
+        } else {
+            return Color.cyan
+        }
+    }
+
     var body: some View {
         ZStack {
             Circle()
-                .fill(model.heldTool == .mirror ? Color.cyan : Color.black.opacity(0.65))
+                .stroke(Color.white.opacity(0.15), lineWidth: 2.5)
+            Circle()
+                .trim(from: 0, to: CGFloat(max(0.04, model.mirrorHeat)))
+                .stroke(
+                    heatColor,
+                    style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90))
+
+            Circle()
+                .fill(
+                    model.heldTool == .mirror
+                        ? (model.mirrorOverheated ? Color.red.opacity(0.75) : Color.cyan)
+                        : (model.mirrorOverheated ? Color.red.opacity(0.35) : Color.black.opacity(0.65))
+                )
                 .frame(width: 48, height: 48)
 
             VStack(spacing: 1) {
-                Image(systemName: "shield.fill")
-                    .font(.system(size: 16, weight: .bold))
-                Text("Espejo")
-                    .font(.system(size: 8, weight: .bold))
+                Image(systemName: model.mirrorOverheated ? "flame.fill" : "shield.fill")
+                    .font(.system(size: 15, weight: .bold))
+                Text(model.mirrorOverheated ? "¡HOT!" : "\(Int((model.mirrorHeat * 100).rounded()))%")
+                    .font(.system(size: 8, weight: .heavy, design: .monospaced))
             }
-            .foregroundStyle(model.heldTool == .mirror ? .black : .cyan)
+            .foregroundStyle(model.heldTool == .mirror ? .black : heatColor)
             .offset(dragOffset)
         }
-        .overlay(Circle().stroke(Color.cyan.opacity(0.8), lineWidth: 1.5))
+        .frame(width: 48, height: 48)
+        .overlay(Circle().stroke(heatColor.opacity(0.8), lineWidth: 1.5))
         .gesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { value in
+                    guard !model.mirrorOverheated else { return }
                     let distance = hypot(value.translation.width, value.translation.height)
                     if dragOffset == .zero && !didMoveSignificantly {
                         initialToolWasMirror = (model.heldTool == .mirror)

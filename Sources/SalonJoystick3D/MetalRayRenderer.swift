@@ -1006,6 +1006,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     var onToolStatusUpdate: ((GameToolStatus) -> Void)?
     var onFlashlightBatteryUpdate: ((Float) -> Void)?
     var flashlightBattery: Float = 1.0
+    var onLaserBatteryUpdate: ((Float) -> Void)?
+    var laserBattery: Float = 1.0
+    var onMirrorHeatUpdate: ((Float, Bool) -> Void)?
+    var mirrorHeat: Float = 0.0
+    var mirrorOverheated: Bool = false
     var onScoreUpdate: ((Int) -> Void)?
     var playerScore: Int = 0
     var isRainbowGateUnlocked: Bool { playerScore >= 3000 }
@@ -2244,51 +2249,86 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if heldTool != lastHeldTool {
             lastHeldTool = heldTool
             if heldTool == .laser {
-                laserActiveRemaining = 10.0
                 laserPropagationDistance = 0.0
-                audio.playLaserIgnition()
-            } else if heldTool == .mirror && mirrorCooldownRemaining <= 0 {
-                mirrorActiveRemaining = 5.5
+                if laserBattery > 0.02 {
+                    audio.playLaserIgnition()
+                }
+            } else if heldTool == .mirror && !mirrorOverheated {
                 audio.playLaserReflectionSound()
             }
         }
 
+        // ⚡ GESTIÓN DE BATERÍA DEL LÁSER (TEMPORAL)
         if heldTool == .laser {
-            if laserCooldownRemaining > 0 {
-                laserActiveRemaining = 0
-            } else {
+            if laserBattery > 0.005 {
+                laserBattery = max(0.0, laserBattery - dt / 16.0)
                 laserActiveRemaining = 10.0
                 if isSlowMotionActive {
                     laserPropagationDistance += dt * 14.0
                 } else {
                     laserPropagationDistance = 100.0
                 }
+            } else {
+                laserBattery = 0.0
+                laserActiveRemaining = 0.0
             }
 
-            let origin = smoothedCameraTarget
-            let forward = lastCameraForward
-            for i in dummyPositions.indices where dummyAlive[i] {
-                let center = dummyPositions[i] + SIMD3<Float>(0, 0.85, 0)
-                let toCenter = center - origin
-                let proj = simd_dot(toCenter, forward)
-                if proj > 0 && proj < 22.0 {
-                    let closest = origin + forward * proj
-                    if simd_distance(center, closest) < 0.70 {
-                        dummyAlive[i] = false
-                        audio.playLightsaberDefeatSound()
-                        onScoreUpdate?(300)
+            // Daño a dummies de entrenamiento solo si la batería no está agotada
+            if laserBattery > 0.005 {
+                let origin = smoothedCameraTarget
+                let forward = lastCameraForward
+                for i in dummyPositions.indices where dummyAlive[i] {
+                    let center = dummyPositions[i] + SIMD3<Float>(0, 0.85, 0)
+                    let toCenter = center - origin
+                    let proj = simd_dot(toCenter, forward)
+                    if proj > 0 && proj < 22.0 {
+                        let closest = origin + forward * proj
+                        if simd_distance(center, closest) < 0.70 {
+                            dummyAlive[i] = false
+                            audio.playLightsaberDefeatSound()
+                            onScoreUpdate?(300)
+                        }
                     }
                 }
             }
+        } else {
+            // Recarga gradual de la batería del láser cuando no está en uso
+            laserBattery = min(1.0, laserBattery + dt / 10.0)
+            laserActiveRemaining = 0.0
         }
-        if heldTool == .mirror {
-            if mirrorCooldownRemaining > 0 {
-                mirrorCooldownRemaining = max(0, mirrorCooldownRemaining - dt)
-            } else {
-                mirrorActiveRemaining = 10.0
-            }
-        }
+        onLaserBatteryUpdate?(laserBattery)
 
+        // 🛡️🔥 GESTIÓN TÉRMICA DEL ESCUDO ESPEJO (SE CALIENTA Y DISIPA)
+        if heldTool == .mirror {
+            if mirrorOverheated {
+                mirrorActiveRemaining = 0.0
+                // Enfriamiento forzado tras sobrecalentamiento
+                mirrorHeat = max(0.0, mirrorHeat - dt / 5.0)
+                if mirrorHeat <= 0.05 {
+                    mirrorOverheated = false
+                }
+            } else {
+                // Calentamiento progresivo por mantener activo el escudo de fotones
+                mirrorHeat = min(1.0, mirrorHeat + dt / 12.0)
+                if mirrorHeat >= 1.0 {
+                    mirrorOverheated = true
+                    mirrorActiveRemaining = 0.0
+                    audio.playLightsaberDefeatSound()
+                } else {
+                    mirrorActiveRemaining = 10.0
+                }
+            }
+        } else {
+            // Disipación térmica rápida al guardar el espejo
+            mirrorHeat = max(0.0, mirrorHeat - dt / 4.0)
+            if mirrorOverheated && mirrorHeat <= 0.05 {
+                mirrorOverheated = false
+            }
+            mirrorActiveRemaining = 0.0
+        }
+        onMirrorHeatUpdate?(mirrorHeat, mirrorOverheated)
+
+        // 🔦 GESTIÓN DE BATERÍA DE LA LINTERNA
         if heldTool == .flashlight {
             flashlightBattery = max(0.0, flashlightBattery - dt / 50.0)
         } else {
@@ -2305,19 +2345,27 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             case .flashlight:
                 active = flashlightBattery; cooldown = 0
             case .laser:
-                active = 10.0; cooldown = laserCooldownRemaining
+                active = laserBattery; cooldown = laserBattery <= 0.01 ? 1.0 : 0
             case .mirror:
-                active = mirrorActiveRemaining; cooldown = mirrorCooldownRemaining
+                active = max(0.0, 1.0 - mirrorHeat); cooldown = mirrorOverheated ? 1.0 : 0
             default:
                 active = 0; cooldown = 0
             }
             let label: String
-            if cooldown > 0.01 {
-                label = String(format: "Recarga %.1f s", cooldown)
-            } else if heldTool == .mirror && active > 0.01 {
-                label = String(format: "Activo %.1f s", active)
+            if heldTool == .laser {
+                if laserBattery <= 0.01 {
+                    label = "⚠️ Batería láser agotada"
+                } else {
+                    label = String(format: "Batería Láser %d%%", Int((laserBattery * 100).rounded()))
+                }
+            } else if heldTool == .mirror {
+                if mirrorOverheated {
+                    label = String(format: "🔥 SOBRECALENTADO (Enfriando %d%%)", Int((mirrorHeat * 100).rounded()))
+                } else {
+                    label = String(format: "Calor Espejo %d%%", Int((mirrorHeat * 100).rounded()))
+                }
             } else if heldTool == .flashlight {
-                label = String(format: "Batería %d%%", Int((flashlightBattery * 100).rounded()))
+                label = String(format: "Batería Linterna %d%%", Int((flashlightBattery * 100).rounded()))
             } else {
                 label = ""
             }
@@ -3089,11 +3137,17 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 let laserRayDir = bDir
                 let facingDot = simd_dot(-laserRayDir, shieldNormal)
 
-                let isUsingMirror = isTargetingRemote ? (remotePlayerHeldTool == .mirror) : (heldTool == .mirror && mirrorActiveRemaining > 0)
+                let isUsingMirror = isTargetingRemote ? (remotePlayerHeldTool == .mirror) : (heldTool == .mirror && mirrorActiveRemaining > 0 && !mirrorOverheated)
 
                 if isUsingMirror && !hitRock && facingDot > -0.20 {
                     if !isTargetingRemote {
                         isMirrorReflectingLaser = true
+                        mirrorHeat = min(1.0, mirrorHeat + 0.22)
+                        if mirrorHeat >= 1.0 {
+                            mirrorOverheated = true
+                            mirrorActiveRemaining = 0.0
+                            audio.playLightsaberDefeatSound()
+                        }
                     }
                     // El rayo enemigo choca contra el escudo espejo
                     endVec = SIMD4<Float>(shieldCenter, 1.0)
@@ -3204,7 +3258,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
         }
 
-        guard !isPlayerDead, heldTool == .laser, laserActiveRemaining > 0 else { return }
+        guard !isPlayerDead, heldTool == .laser, laserActiveRemaining > 0, laserBattery > 0.005 else { return }
 
         let origin: SIMD3<Float>
         let direction: SIMD3<Float>
@@ -4153,8 +4207,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         let renderTool: GameHeldTool
         switch heldTool {
-        case .laser: renderTool = laserActiveRemaining > 0 ? .laser : .none
-        case .mirror: renderTool = mirrorActiveRemaining > 0 ? .mirror : .none
+        case .laser: renderTool = (laserActiveRemaining > 0 && laserBattery > 0.005) ? .laser : .none
+        case .mirror: renderTool = (mirrorActiveRemaining > 0 && !mirrorOverheated) ? .mirror : .none
         default: renderTool = heldTool
         }
 

@@ -87,6 +87,17 @@ struct MetalGameView: UIViewRepresentable {
                     model?.flashlightBattery = battery
                 }
             }
+            renderer.onLaserBatteryUpdate = { [weak model] battery in
+                Task { @MainActor in
+                    model?.laserBattery = battery
+                }
+            }
+            renderer.onMirrorHeatUpdate = { [weak model] heat, overheated in
+                Task { @MainActor in
+                    model?.mirrorHeat = heat
+                    model?.mirrorOverheated = overheated
+                }
+            }
             renderer.onCoverStatusUpdate = { [weak model] isNear in
                 Task { @MainActor in
                     model?.updateCoverStatus(isNear: isNear)
