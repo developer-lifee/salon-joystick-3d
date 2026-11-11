@@ -3556,6 +3556,19 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             return highestRock
         }
 
+        // 📚 Mesa de Madera con Libros en el Patio de la Piscina (X: 7.3, Z: 4.8)
+        let tableHalfX: Float = 1.60 + 0.12
+        let tableHalfZ: Float = 0.36 + 0.12
+        let dxTable = position.x - 7.3
+        let dzTable = position.z - 4.8
+        if abs(dxTable) <= tableHalfX && abs(dzTable) <= tableHalfZ {
+            let isOverBooks = position.x >= 6.35 && position.x <= 8.10
+            let targetSurfaceY: Float = isOverBooks ? 0.75 : 0.65
+            if position.y >= targetSurfaceY - 0.45 {
+                return targetSurfaceY
+            }
+        }
+
         // 🌊 Si está bajo la superficie (en el pozo abisal o cámara subterránea), el suelo es el fondo abisal:
         if position.y < -0.30 {
             return -11.0
@@ -3642,6 +3655,25 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     }
 
     private func resolveParkourAndCabinCollisions(position: inout SIMD3<Float>) {
+        // 📚 Colisión física horizontal con la Mesa de Madera y Libros en el Patio de la Piscina (X: 7.3, Z: 4.8)
+        let tableHalfX: Float = 1.60 + 0.36
+        let tableHalfZ: Float = 0.36 + 0.36
+        let tableTopY: Float = 0.65
+        let dxTable = position.x - 7.3
+        let dzTable = position.z - 4.8
+        if abs(dxTable) < tableHalfX && abs(dzTable) < tableHalfZ {
+            // Si el jugador está subido a la mesa (pies en o sobre la superficie), no empujar lateralmente para permitir caminar
+            if position.y < tableTopY - 0.08 {
+                let overlapX = tableHalfX - abs(dxTable)
+                let overlapZ = tableHalfZ - abs(dzTable)
+                if overlapX < overlapZ {
+                    position.x += dxTable >= 0 ? overlapX : -overlapX
+                } else {
+                    position.z += dzTable >= 0 ? overlapZ : -overlapZ
+                }
+            }
+        }
+
         guard position.z > 17.5 else { return }
         let playerRadius: Float = 0.36
         for box in rtRainbowParkourBoxes {
