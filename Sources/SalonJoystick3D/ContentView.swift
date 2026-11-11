@@ -63,9 +63,43 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "124"
-    static let commitHash = "b124removeduoscreenoptionforstandardiphone"
+    static let build = "125"
+    static let commitHash = "b125dynamiciphoneduohardwaregating"
     static let formatted = "v\(version) • Build \(build)"
+}
+
+extension UIDevice {
+    /// Detecta si el dispositivo es un iPhone Duo o tiene soporte de pantalla doble
+    static var isDuoSupported: Bool {
+        #if canImport(UIKit)
+        // 1. Identificador de máquina / modelo de hardware (ej. futuros identificadores Duo/Fold)
+        var systemInfo = utsname()
+        uname(&systemInfo)
+        let machine = withUnsafePointer(to: &systemInfo.machine) {
+            $0.withMemoryRebound(to: CChar.self, capacity: 1) { ptr in
+                String(validatingUTF8: ptr) ?? ""
+            }
+        }
+        if machine.localizedCaseInsensitiveContains("Duo") || machine.localizedCaseInsensitiveContains("Fold") {
+            return true
+        }
+
+        // 2. Nombre del dispositivo personalizado (ej. "iPhone Duo", "Duo de Esteban")
+        let devName = UIDevice.current.name
+        if devName.localizedCaseInsensitiveContains("Duo") || devName.localizedCaseInsensitiveContains("Fold") {
+            return true
+        }
+
+        // 3. Segunda pantalla externa física activa (AirPlay / DisplayPort USB-C)
+        if UIScreen.screens.count > 1 {
+            return true
+        }
+
+        return false
+        #else
+        return false
+        #endif
+    }
 }
 
 struct GameLightStates: Codable, Equatable {
@@ -1785,6 +1819,10 @@ final class GameModel: ObservableObject {
     @Published var selectedSquadMemberIndex: Int = 0
     @Published var remoteAgentsDict: [String: RemoteAgentState] = [:]
 
+    var isDuoDevice: Bool {
+        UIDevice.isDuoSupported
+    }
+
     var duoScreenMode: DuoScreenMode {
         get { DuoScreenMode(rawValue: duoScreenModeRaw) ?? .off }
         set {
@@ -2132,7 +2170,9 @@ final class GameModel: ObservableObject {
     }
 
     init() {
-        duoScreenModeRaw = 0 // En iPhone estándar siempre se inicia en pantalla única normal
+        if !UIDevice.isDuoSupported {
+            duoScreenModeRaw = 0 // Si no es un iPhone Duo, se asegura pantalla estándar normal
+        }
         audio.start()
         updateAudioPauseState()
 
@@ -6925,6 +6965,19 @@ struct MultiplayerSettingsSheet: View {
                         .foregroundStyle(.secondary)
                 }
 
+                if model.isDuoDevice {
+                    Section("📱📱 Modo Doble Pantalla (iPhone Duo)") {
+                        Picker("Pantalla iPhone Duo", selection: Binding(
+                            get: { model.duoScreenMode },
+                            set: { model.duoScreenMode = $0 }
+                        )) {
+                            ForEach(DuoScreenMode.allCases) { dMode in
+                                Text(dMode.label).tag(dMode)
+                            }
+                        }
+                    }
+                }
+
                 Section("Rol de este Dispositivo") {
                     Picker("Rol", selection: $multiplayer.role) {
                         ForEach(LocalDeviceRole.allCases) { role in
@@ -7251,6 +7304,31 @@ struct GameOptionsSheet: View {
                         Text("3ª Persona").tag(GameCameraMode.thirdPerson)
                     }
                     .pickerStyle(.segmented)
+
+                    if model.isDuoDevice {
+                        Picker("Modo Doble Pantalla (iPhone Duo)", selection: Binding(
+                            get: { model.duoScreenMode },
+                            set: { model.duoScreenMode = $0 }
+                        )) {
+                            ForEach(DuoScreenMode.allCases) { dMode in
+                                Text(dMode.label).tag(dMode)
+                            }
+                        }
+
+                        if model.duoScreenMode == .squadCamera {
+                            Button {
+                                model.cycleSquadCameraMember()
+                            } label: {
+                                HStack {
+                                    Label("Compañero en 2ª Pantalla", systemImage: "person.2.crop.square.stack.fill")
+                                    Spacer()
+                                    Text(model.selectedSquadCameraAgent.peerID)
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.cyan)
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // 🖥️ 2. SECCIÓN GRÁFICOS, FPS Y PANTALLA
