@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "123"
-    static let commitHash = "b123unifiedcyanpinkthemeandoptions"
+    static let build = "124"
+    static let commitHash = "b124removeduoscreenoptionforstandardiphone"
     static let formatted = "v\(version) • Build \(build)"
 }
 
@@ -2132,6 +2132,7 @@ final class GameModel: ObservableObject {
     }
 
     init() {
+        duoScreenModeRaw = 0 // En iPhone estándar siempre se inicia en pantalla única normal
         audio.start()
         updateAudioPauseState()
 
@@ -6924,17 +6925,6 @@ struct MultiplayerSettingsSheet: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Section("📱📱 Modo Doble Pantalla (iPhone Duo)") {
-                    Picker("Pantalla iPhone Duo", selection: Binding(
-                        get: { model.duoScreenMode },
-                        set: { model.duoScreenMode = $0 }
-                    )) {
-                        ForEach(DuoScreenMode.allCases) { dMode in
-                            Text(dMode.label).tag(dMode)
-                        }
-                    }
-                }
-
                 Section("Rol de este Dispositivo") {
                     Picker("Rol", selection: $multiplayer.role) {
                         ForEach(LocalDeviceRole.allCases) { role in
@@ -7261,29 +7251,6 @@ struct GameOptionsSheet: View {
                         Text("3ª Persona").tag(GameCameraMode.thirdPerson)
                     }
                     .pickerStyle(.segmented)
-
-                    Picker("Modo Doble Pantalla (iPhone Duo)", selection: Binding(
-                        get: { model.duoScreenMode },
-                        set: { model.duoScreenMode = $0 }
-                    )) {
-                        ForEach(DuoScreenMode.allCases) { dMode in
-                            Text(dMode.label).tag(dMode)
-                        }
-                    }
-
-                    if model.duoScreenMode == .squadCamera {
-                        Button {
-                            model.cycleSquadCameraMember()
-                        } label: {
-                            HStack {
-                                Label("Compañero en 2ª Pantalla", systemImage: "person.2.crop.square.stack.fill")
-                                Spacer()
-                                Text(model.selectedSquadCameraAgent.peerID)
-                                    .font(.caption.bold())
-                                    .foregroundStyle(.cyan)
-                            }
-                        }
-                    }
                 }
 
                 // 🖥️ 2. SECCIÓN GRÁFICOS, FPS Y PANTALLA
