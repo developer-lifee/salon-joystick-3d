@@ -25,16 +25,107 @@ final class GameCenterManager: NSObject, ObservableObject {
     @Published private(set) var connectedPlayerNames: [String] = []
     @Published var lastError: String?
     @Published var showsMatchmakerSheet = false
+    @Published var achievements: [GameAchievement] = GameCenterManager.defaultAchievements
 
     private(set) var activeMatch: GKMatch?
 
     var onPacketReceived: ((LocalMatchPacket) -> Void)?
     var onMatchStarted: (() -> Void)?
+    var onAchievementUnlocked: ((GameAchievement) -> Void)?
+
+    static let defaultAchievements: [GameAchievement] = [
+        GameAchievement(
+            id: "achievement_mirror_kill",
+            title: "Reflejo Mortal",
+            description: "Elimina a un enemigo devolviéndole su propio rayo con el Escudo Espejo.",
+            icon: "shield.righthalf.filled",
+            points: 15
+        ),
+        GameAchievement(
+            id: "achievement_coop_revive",
+            title: "Paramédico de Combate",
+            description: "Revive a un compañero caído inflando su plasta con la Bomba de Aire.",
+            icon: "wind",
+            points: 20
+        ),
+        GameAchievement(
+            id: "achievement_water_slide",
+            title: "Acrobacia Acuática",
+            description: "Lánzate a toda velocidad por el gran tobogán de 5.6m y cae de lleno a la piscina.",
+            icon: "figure.pool.swim",
+            points: 10
+        ),
+        GameAchievement(
+            id: "achievement_mirror_world",
+            title: "Al Otro Lado del Espejo",
+            description: "Alcanza 3,000 puntos y cruza el portal líquido hacia el Gran Salón Arcoíris.",
+            icon: "sparkles",
+            points: 25
+        ),
+        GameAchievement(
+            id: "achievement_colossus_defeat",
+            title: "Cazador de Sombras",
+            description: "Sobrevive a las oleadas y destruye al Gólem Colosal de Vantablack.",
+            icon: "crown.fill",
+            points: 30
+        ),
+        GameAchievement(
+            id: "achievement_deep_dive",
+            title: "Explorador Abisal",
+            description: "Bucea en la fosa profunda de la piscina (-11 m) y alcanza el reino sumergido.",
+            icon: "arrow.down.to.line.compact",
+            points: 15
+        ),
+        GameAchievement(
+            id: "achievement_efficient_battery",
+            title: "Batería Eficiente",
+            description: "Consigue una racha de 3 bajas con el láser antes de que la batería se agote.",
+            icon: "bolt.batteryblock.fill",
+            points: 20
+        )
+    ]
 
     override init() {
         super.init()
+        loadAchievements()
         configureAccessPoint()
         authenticateLocalPlayer()
+    }
+
+    func loadAchievements() {
+        if let data = UserDefaults.standard.data(forKey: "saved_achievements"),
+           let saved = try? JSONDecoder().decode([GameAchievement].self, from: data) {
+            var merged = Self.defaultAchievements
+            for i in merged.indices {
+                if let found = saved.first(where: { $0.id == merged[i].id }), found.isUnlocked {
+                    merged[i].isUnlocked = true
+                    merged[i].unlockedDate = found.unlockedDate
+                }
+            }
+            achievements = merged
+        }
+    }
+
+    func saveAchievements() {
+        if let data = try? JSONEncoder().encode(achievements) {
+            UserDefaults.standard.set(data, forKey: "saved_achievements")
+        }
+    }
+
+    func unlockAchievement(_ id: String) {
+        guard let index = achievements.firstIndex(where: { $0.id == id }), !achievements[index].isUnlocked else { return }
+        achievements[index].isUnlocked = true
+        achievements[index].unlockedDate = Date()
+        saveAchievements()
+        let unlockedItem = achievements[index]
+        onAchievementUnlocked?(unlockedItem)
+
+        if GKLocalPlayer.local.isAuthenticated {
+            let gk = GKAchievement(identifier: id)
+            gk.percentComplete = 100.0
+            gk.showsCompletionBanner = true
+            GKAchievement.report([gk]) { _ in }
+        }
     }
 
     func configureAccessPoint() {
@@ -224,6 +315,16 @@ final class GameCenterMatchmakerCoordinator: NSObject, GKMatchmakerViewControlle
             self.gameCenter.startMatch(match)
         }
     }
+}
+
+struct GameAchievement: Identifiable, Codable, Equatable {
+    let id: String
+    let title: String
+    let description: String
+    let icon: String
+    let points: Int
+    var isUnlocked: Bool = false
+    var unlockedDate: Date? = nil
 }
 
 

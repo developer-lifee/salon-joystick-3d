@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "117"
-    static let commitHash = "b117fixaudioanddeadmovement"
+    static let build = "118"
+    static let commitHash = "b118gamecenterachievements"
     static let formatted = "v\(version) • Build \(build)"
 }
 
@@ -257,6 +257,11 @@ struct ContentView: View {
                 GameOptionsSheet(model: model)
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: $model.showsAchievementsSheet) {
+                NavigationStack {
+                    AchievementsView(model: model)
+                }
             }
         } else {
             ZStack(alignment: .bottomLeading) {
@@ -745,6 +750,55 @@ struct ContentView: View {
                         }
                     }
                     .padding(.top, 2)
+                }
+
+                if let achievement = model.recentlyUnlockedAchievement {
+                    Button {
+                        model.showsAchievementsSheet = true
+                    } label: {
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle()
+                                    .fill(LinearGradient(colors: [.yellow, .orange], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                    .frame(width: 36, height: 36)
+                                Image(systemName: achievement.icon)
+                                    .font(.system(size: 17, weight: .bold))
+                                    .foregroundStyle(.black)
+                            }
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack {
+                                    Text("¡LOGRO DESBLOQUEADO!")
+                                        .font(.system(size: 9, weight: .black, design: .rounded))
+                                        .foregroundStyle(.yellow)
+                                    Spacer()
+                                    Text("+\(achievement.points) PTS")
+                                        .font(.system(size: 9, weight: .heavy, design: .monospaced))
+                                        .foregroundStyle(.white.opacity(0.85))
+                                }
+                                Text(achievement.title)
+                                    .font(.system(size: 13, weight: .black, design: .rounded))
+                                    .foregroundStyle(.white)
+                                Text(achievement.description)
+                                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                                    .foregroundStyle(.white.opacity(0.85))
+                                    .lineLimit(1)
+                            }
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: 360)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(
+                                    LinearGradient(colors: [.yellow, .orange.opacity(0.8), .yellow.opacity(0.3)], startPoint: .leading, endPoint: .trailing),
+                                    lineWidth: 1.5
+                                )
+                        )
+                        .shadow(color: .orange.opacity(0.6), radius: 10, y: 3)
+                    }
+                    .buttonStyle(.plain)
+                    .transition(.move(edge: .top).combined(with: .opacity))
                 }
 
                 if model.showsRainbowGateNotice {
@@ -1517,6 +1571,11 @@ struct ContentView: View {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             }
+            .sheet(isPresented: $model.showsAchievementsSheet) {
+                NavigationStack {
+                    AchievementsView(model: model)
+                }
+            }
             .onAppear {
                 UIApplication.shared.isIdleTimerDisabled = true
             }
@@ -1562,6 +1621,9 @@ final class GameModel: ObservableObject {
     @Published var renderResolution = GameRenderResolution.balanced
     @Published var heldTool = GameHeldTool.flashlight {
         didSet {
+            if heldTool != .laser {
+                consecutiveLaserKills = 0
+            }
             broadcastLocalState()
         }
     }
@@ -1608,6 +1670,9 @@ final class GameModel: ObservableObject {
     @Published var isNearRainbowGate: Bool = false
     @Published var rainbowGateScoreNeeded: Int = 3000
     @Published var showsRainbowGateNotice: Bool = false
+    @Published var recentlyUnlockedAchievement: GameAchievement? = nil
+    @Published var showsAchievementsSheet: Bool = false
+    var consecutiveLaserKills: Int = 0
     @Published var isDefeated = false
     @Published var isRecoveringInChamber = false
     @Published var inflationPumpsCount: Int = 0
@@ -2019,6 +2084,20 @@ final class GameModel: ObservableObject {
     init() {
         audio.start()
         updateAudioPauseState()
+
+        gameCenter.onAchievementUnlocked = { [weak self] achievement in
+            guard let self else { return }
+            self.recentlyUnlockedAchievement = achievement
+            self.audio.playLaserReflectionSound()
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4.5) { [weak self] in
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
+                    if self?.recentlyUnlockedAchievement?.id == achievement.id {
+                        self?.recentlyUnlockedAchievement = nil
+                    }
+                }
+            }
+        }
 
         // 🌟 Los reflejos Ray Tracing y el Vidrio Líquido son la identidad visual esencial del juego: siempre activos
         advancedReflectionsEnabled = true
@@ -2735,6 +2814,12 @@ final class GameModel: ObservableObject {
     func addScore(_ points: Int) {
         playerScore += points
         broadcastLocalState()
+        if points >= 250 && heldTool == .laser && laserBattery > 0.05 {
+            consecutiveLaserKills += 1
+            if consecutiveLaserKills >= 3 {
+                gameCenter.unlockAchievement("achievement_efficient_battery")
+            }
+        }
     }
 
     func takeDamage(_ damage: Float, broadcast: Bool = true) {
@@ -2874,6 +2959,7 @@ final class GameModel: ObservableObject {
         if teammateRevivePumps >= 5 {
             teammateRevivePumps = 0
             playerScore += 200
+            gameCenter.unlockAchievement("achievement_coop_revive")
             let finishPkt = LocalMatchPacket(
                 kind: .reviveTeammate,
                 peerID: multiplayer.localPeer.displayName,
@@ -7211,6 +7297,22 @@ struct GameOptionsSheet: View {
                     Toggle("Mostrar Radar Minimapa Táctico", isOn: $model.showsMinimap)
                 }
 
+                Section("🏆 Desafíos y Logros de Game Center") {
+                    NavigationLink {
+                        AchievementsView(model: model)
+                    } label: {
+                        HStack {
+                            Label("Ver Lista de Logros", systemImage: "trophy.fill")
+                                .foregroundStyle(.yellow)
+                            Spacer()
+                            let unlocked = model.gameCenter.achievements.filter { $0.isUnlocked }.count
+                            Text("\(unlocked) / \(model.gameCenter.achievements.count)")
+                                .font(.subheadline.bold())
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
                 Section("🎵 Audio y Efectos") {
                     Toggle("Música de fondo", isOn: $model.musicEnabled)
                     Toggle("Efectos de sonido y pasos", isOn: $model.footstepsEnabled)
@@ -7224,6 +7326,118 @@ struct GameOptionsSheet: View {
                     Button("Listo") {
                         dismiss()
                     }
+                }
+            }
+        }
+    }
+}
+
+struct AchievementsView: View {
+    @ObservedObject var model: GameModel
+    @Environment(\.dismiss) private var dismiss
+
+    var totalPoints: Int {
+        model.gameCenter.achievements.reduce(0) { $0 + $1.points }
+    }
+
+    var earnedPoints: Int {
+        model.gameCenter.achievements.filter { $0.isUnlocked }.reduce(0) { $0 + $1.points }
+    }
+
+    var unlockedCount: Int {
+        model.gameCenter.achievements.filter { $0.isUnlocked }.count
+    }
+
+    var body: some View {
+        List {
+            Section {
+                VStack(spacing: 12) {
+                    HStack(spacing: 18) {
+                        ZStack {
+                            Circle()
+                                .stroke(Color.white.opacity(0.12), lineWidth: 8)
+                                .frame(width: 72, height: 72)
+                            Circle()
+                                .trim(from: 0, to: CGFloat(unlockedCount) / CGFloat(max(1, model.gameCenter.achievements.count)))
+                                .stroke(
+                                    LinearGradient(colors: [.yellow, .orange, .pink], startPoint: .topLeading, endPoint: .bottomTrailing),
+                                    style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                                )
+                                .rotationEffect(.degrees(-90))
+                                .frame(width: 72, height: 72)
+
+                            VStack(spacing: 0) {
+                                Text("\(Int((Double(unlockedCount) / Double(max(1, model.gameCenter.achievements.count))) * 100))%")
+                                    .font(.system(size: 15, weight: .black, design: .rounded))
+                                    .foregroundStyle(.white)
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Progreso de Logros")
+                                .font(.headline.bold())
+                                .foregroundStyle(.white)
+                            Text("\(unlockedCount) de \(model.gameCenter.achievements.count) completados")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            Text("\(earnedPoints) / \(totalPoints) Puntos de Game Center")
+                                .font(.caption.bold())
+                                .foregroundStyle(.yellow)
+                        }
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
+                }
+                .listRowBackground(Color.white.opacity(0.04))
+            }
+
+            Section("Desafíos Disponibles") {
+                ForEach(model.gameCenter.achievements) { ach in
+                    HStack(spacing: 14) {
+                        ZStack {
+                            Circle()
+                                .fill(ach.isUnlocked ? AnyShapeStyle(LinearGradient(colors: [.yellow, .orange], startPoint: .topLeading, endPoint: .bottomTrailing)) : AnyShapeStyle(Color.white.opacity(0.08)))
+                                .frame(width: 44, height: 44)
+                            Image(systemName: ach.icon)
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundStyle(ach.isUnlocked ? .black : .secondary)
+                        }
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack {
+                                Text(ach.title)
+                                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                                    .foregroundStyle(ach.isUnlocked ? .white : .secondary)
+                                Spacer()
+                                Text("+\(ach.points) pts")
+                                    .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                                    .foregroundStyle(ach.isUnlocked ? .yellow : .secondary)
+                            }
+
+                            Text(ach.description)
+                                .font(.system(size: 11, weight: .regular))
+                                .foregroundStyle(ach.isUnlocked ? .white.opacity(0.85) : .secondary.opacity(0.8))
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            if ach.isUnlocked, let date = ach.unlockedDate {
+                                Text("Desbloqueado: \(date.formatted(date: .abbreviated, time: .shortened))")
+                                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                                    .foregroundStyle(.cyan.opacity(0.85))
+                                    .padding(.top, 1)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    .listRowBackground(ach.isUnlocked ? Color.yellow.opacity(0.06) : Color.white.opacity(0.02))
+                }
+            }
+        }
+        .navigationTitle("Logros")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Listo") {
+                    dismiss()
                 }
             }
         }

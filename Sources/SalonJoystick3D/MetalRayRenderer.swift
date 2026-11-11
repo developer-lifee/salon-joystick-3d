@@ -1054,6 +1054,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     var onNearRecoveryConsoleUpdate: ((Bool) -> Void)?
     var onRecoveryProgressUpdate: ((Float, Bool) -> Void)?
     var onRecoveryCompleted: (() -> Void)?
+    var onMirrorReflectionKill: (() -> Void)?
+    var onSlideCompleted: (() -> Void)?
+    var onCrossedRainbowGate: (() -> Void)?
+    var onColossusDefeated: (() -> Void)?
+    var onDeepDiveReached: (() -> Void)?
     var isRemotePlayerConnected: Bool = false
     var remotePlayerPosition: SIMD3<Float> = SIMD3<Float>(-3.8, 0, 3.8)
     var remotePlayerYaw: Float = .pi
@@ -1819,6 +1824,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         // 🌊 Subterranean Easter Egg & Posito de 10 cm con Pozo Profundo
         let currentlyInPool = isInsidePoolXZ(playerPosition) && playerPosition.y <= 0.35
         let isSubterranean = playerPosition.y <= -4.75
+        if isSubterranean {
+            onDeepDiveReached?()
+        }
         let currentGroundHeight = isSubterranean ? -11.0 : groundHeight(at: playerPosition, insidePool: currentlyInPool)
         let currentlyOnFloat = currentlyInPool && isStandingOnFloat(playerPosition)
         onUnderwaterStatusUpdate?(currentlyInPool && !currentlyOnFloat && playerPosition.y < -0.25 || isSubterranean)
@@ -1936,6 +1944,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         // 🌀 Subterranean Easter Egg Portal Plunge Trigger (Toboggan Slide plunge into underwater realm)
         let nearSlidePlungeZone = playerPosition.x >= -4.5 && playerPosition.x <= -0.5 && playerPosition.z >= -7.8 && playerPosition.z <= -1.0
         if isSlidingOnToboggan && (tProj >= 0.70 || playerPosition.y <= 1.8) && nearSlidePlungeZone {
+            onSlideCompleted?()
             playerPosition = SIMD3<Float>(-2.5, -5.5, -2.5)
             verticalVelocity = -0.8
             isSlidingOnToboggan = false
@@ -2453,6 +2462,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
     private func handleNPCElimination(index: Int) {
         guard index >= 0 && index < npcPositions.count else { return }
+        if index >= 2 || currentWave >= 3 {
+            onColossusDefeated?()
+        }
         // Guardar posición de muerte en el piso e iniciar animación de derretimiento líquido (Melt)
         npcDeathPositions[index] = SIMD3<Float>(npcPositions[index].x, max(0.0, npcPositions[index].y), npcPositions[index].z)
         npcMeltProgress[index] = 0.01
@@ -3267,6 +3279,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                                             audio.playLaserPlayerHitSound()
                                             onScoreUpdate?(500)
                                             handleNPCElimination(index: targetIdx)
+                                            onMirrorReflectionKill?()
                                         }
                                     }
                                     break
@@ -3660,6 +3673,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     position.x = max(-portalHalfWidth, min(portalHalfWidth, position.x))
                     if previousPosition.z < 17.8 && position.z >= 17.8 && margin < 1.0 {
                         audio.playLaserIgnition()
+                        onCrossedRainbowGate?()
                     }
                 } else {
                     // Bloqueo continuo anti-túnel: el muro sur retiene físicamente al personaje

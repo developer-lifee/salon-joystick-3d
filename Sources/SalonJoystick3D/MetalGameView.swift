@@ -187,6 +187,31 @@ struct MetalGameView: UIViewRepresentable {
                     model?.completeRecovery(wasRevivedByTeammate: false)
                 }
             }
+            renderer.onMirrorReflectionKill = { [weak model] in
+                Task { @MainActor in
+                    model?.gameCenter.unlockAchievement("achievement_mirror_kill")
+                }
+            }
+            renderer.onSlideCompleted = { [weak model] in
+                Task { @MainActor in
+                    model?.gameCenter.unlockAchievement("achievement_water_slide")
+                }
+            }
+            renderer.onCrossedRainbowGate = { [weak model] in
+                Task { @MainActor in
+                    model?.gameCenter.unlockAchievement("achievement_mirror_world")
+                }
+            }
+            renderer.onColossusDefeated = { [weak model] in
+                Task { @MainActor in
+                    model?.gameCenter.unlockAchievement("achievement_colossus_defeat")
+                }
+            }
+            renderer.onDeepDiveReached = { [weak model] in
+                Task { @MainActor in
+                    model?.gameCenter.unlockAchievement("achievement_deep_dive")
+                }
+            }
             model.onRemoteNPCSyncReceived = { [weak renderer] pos, healths, wave, rem, tot, inter, interTime, laserStarts, laserEnds in
                 renderer?.applyRemoteNPCSync(
                     positions: pos,
