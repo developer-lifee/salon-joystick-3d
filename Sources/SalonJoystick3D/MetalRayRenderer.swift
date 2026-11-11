@@ -2016,14 +2016,14 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         var proposed = playerPosition
         proposed.x += horizontalVelocity.x * dt
         proposed.z += horizontalVelocity.y * dt
-        clampToArenaBounds(position: &proposed, previousPosition: playerPosition)
+        clampToArenaBounds(position: &proposed, previousPosition: playerPosition, margin: 0.38, velocity: &horizontalVelocity)
         resolveFloatCollision(position: &proposed)
         resolveRockCollisions(position: &proposed)
         resolveParkourAndCabinCollisions(position: &proposed)
         resolveCharacterCollisions(playerPos: &proposed, dt: dt)
         resolveRockCollisions(position: &proposed)
         resolveParkourAndCabinCollisions(position: &proposed)
-        clampToArenaBounds(position: &proposed, previousPosition: playerPosition)
+        clampToArenaBounds(position: &proposed, previousPosition: playerPosition, margin: 0.38, velocity: &horizontalVelocity)
         audio.setArenaZone(isRainbowHall: proposed.z > 18.0)
         let willBeInPool = isInsidePoolXZ(proposed) && proposed.y <= 0.35
         let isDeepInWater = playerPosition.y < -0.25
@@ -3723,15 +3723,45 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
     }
 
-    private func clampToArenaBounds(position: inout SIMD3<Float>, previousPosition: SIMD3<Float>, margin: Float = 0.80) {
+    private func clampToArenaBounds(
+        position: inout SIMD3<Float>,
+        previousPosition: SIMD3<Float>,
+        margin: Float = 0.38
+    ) {
+        var dummyVelocity = SIMD2<Float>.zero
+        clampToArenaBounds(position: &position, previousPosition: previousPosition, margin: margin, velocity: &dummyVelocity)
+    }
+
+    private func clampToArenaBounds(
+        position: inout SIMD3<Float>,
+        previousPosition: SIMD3<Float>,
+        margin: Float = 0.38,
+        velocity: inout SIMD2<Float>
+    ) {
         if position.y < -4.0 {
-            let poolMargin = max(0.80, margin)
-            position.x = max(-17.8 + poolMargin, min(17.8 - poolMargin, position.x))
-            position.z = max(-17.8 + poolMargin, min(17.8 - poolMargin, position.z))
+            let poolMargin = max(0.40, margin)
+            let minX = -17.8 + poolMargin
+            let maxX = 17.8 - poolMargin
+            let minZ = -17.8 + poolMargin
+            let maxZ = 17.8 - poolMargin
+            if position.x < minX {
+                position.x = minX
+                if velocity.x < 0 { velocity.x = 0 }
+            } else if position.x > maxX {
+                position.x = maxX
+                if velocity.x > 0 { velocity.x = 0 }
+            }
+            if position.z < minZ {
+                position.z = minZ
+                if velocity.y < 0 { velocity.y = 0 }
+            } else if position.z > maxZ {
+                position.z = maxZ
+                if velocity.y > 0 { velocity.y = 0 }
+            }
             return
         }
 
-        let portalHalfWidth: Float = 5.2 - margin * 0.45
+        let portalHalfWidth: Float = 5.10
         let isGateUnlocked = isRainbowGateUnlocked
         let distToGate = simd_distance(position, SIMD3<Float>(0, position.y, 17.8))
         if margin < 1.0 {
@@ -3743,47 +3773,79 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
 
         // 1. Límites globales norte y sur del mapa completo
-        position.z = max(-17.8 + margin, min(72.0 - margin, position.z))
+        let minZ = -17.8 + margin
+        let maxZ = 72.0 - margin
+        if position.z < minZ {
+            position.z = minZ
+            if velocity.y < 0 { velocity.y = 0 }
+        } else if position.z > maxZ {
+            position.z = maxZ
+            if velocity.y > 0 { velocity.y = 0 }
+        }
 
         // 2. Control estricto del Muro Divisor Sur (Z = 17.8) entre Salón Piscina y Gran Salón Arcoíris
         // Determinar si el ente se encuentra dentro del vano del Gran Pórtico (X) y si el portal está abierto
-        let inPortalX = abs(position.x) <= portalHalfWidth && abs(previousPosition.x) <= portalHalfWidth
+        let inPortalX = abs(position.x) <= portalHalfWidth
         let canCrossDividingWall = inPortalX && isGateUnlocked
 
         if previousPosition.z <= 17.8 {
             // Estaba en el Patio de la Piscina (Z <= 17.8)
-            if position.z > 17.8 - margin {
+            let wallZ = 17.8 - margin
+            if position.z > wallZ {
                 if canCrossDividingWall {
                     position.x = max(-portalHalfWidth, min(portalHalfWidth, position.x))
+                    if position.x <= -portalHalfWidth && velocity.x < 0 { velocity.x = 0 }
+                    if position.x >= portalHalfWidth && velocity.x > 0 { velocity.x = 0 }
                     if previousPosition.z < 17.8 && position.z >= 17.8 && margin < 1.0 {
                         audio.playLaserIgnition()
                         onCrossedRainbowGate?()
                     }
                 } else {
-                    // Bloqueo continuo anti-túnel: el muro sur retiene físicamente al personaje
-                    position.z = min(position.z, 17.8 - margin)
+                    // Bloqueo continuo anti-túnel: el muro sur retiene físicamente al personaje con deslizamiento suave
+                    position.z = wallZ
+                    if velocity.y > 0 { velocity.y = 0 }
                 }
             }
         } else {
             // Estaba en el Gran Salón Arcoíris (Z > 17.8)
-            if position.z < 17.8 + margin {
+            let wallZ = 17.8 + margin
+            if position.z < wallZ {
                 if canCrossDividingWall {
                     position.x = max(-portalHalfWidth, min(portalHalfWidth, position.x))
+                    if position.x <= -portalHalfWidth && velocity.x < 0 { velocity.x = 0 }
+                    if position.x >= portalHalfWidth && velocity.x > 0 { velocity.x = 0 }
                     if previousPosition.z > 17.8 && position.z <= 17.8 && margin < 1.0 {
                         audio.playLaserIgnition()
                     }
                 } else {
-                    // Bloqueo continuo anti-túnel: las alas del muro retienen al personaje en el Salón Arcoíris
-                    position.z = max(position.z, 17.8 + margin)
+                    // Bloqueo continuo anti-túnel: las alas del muro retienen al personaje en el Salón Arcoíris con deslizamiento suave
+                    position.z = wallZ
+                    if velocity.y < 0 { velocity.y = 0 }
                 }
             }
         }
 
         // 3. Límites perimetrales laterales Este-Oeste según la zona resultante
         if position.z <= 17.8 {
-            position.x = max(-17.8 + margin, min(17.8 - margin, position.x))
+            let minX = -17.8 + margin
+            let maxX = 17.8 - margin
+            if position.x < minX {
+                position.x = minX
+                if velocity.x < 0 { velocity.x = 0 }
+            } else if position.x > maxX {
+                position.x = maxX
+                if velocity.x > 0 { velocity.x = 0 }
+            }
         } else {
-            position.x = max(-27.0 + margin, min(27.0 - margin, position.x))
+            let minX = -27.0 + margin
+            let maxX = 27.0 - margin
+            if position.x < minX {
+                position.x = minX
+                if velocity.x < 0 { velocity.x = 0 }
+            } else if position.x > maxX {
+                position.x = maxX
+                if velocity.x > 0 { velocity.x = 0 }
+            }
         }
     }
 
@@ -3983,7 +4045,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             guard position.y < rockTop - 0.10 else { continue }
 
             let center = SIMD2<Float>(rock.center.x, rock.center.z)
-            let expandedRadii = SIMD2<Float>(rock.radii.x * 1.16 + playerRadius, rock.radii.z * 1.16 + playerRadius)
+            let expandedRadii = SIMD2<Float>(rock.radii.x * 1.02 + playerRadius, rock.radii.z * 1.02 + playerRadius)
             var offset = SIMD2<Float>(position.x, position.z) - center
             var normalizedOffset = offset / expandedRadii
             var normalizedDistance = simd_length(normalizedOffset)
@@ -4236,7 +4298,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             // 🌈 Muros Perimetrales del Gran Salón Arcoíris (Z: 17.8..72.0, X: -27.0..27.0, Y: 0..9.0)
             (SIMD3<Float>(-27.2, 0.0, 17.8), SIMD3<Float>(-26.8, 9.0, 72.2)), // Muro Oeste
             (SIMD3<Float>( 26.8, 0.0, 17.8), SIMD3<Float>( 27.2, 9.0, 72.2)), // Muro Este
-            (SIMD3<Float>(-27.2, 0.0, 71.8), SIMD3<Float>( 27.2, 9.0, 72.2))  // Muro Sur Final
+            (SIMD3<Float>(-27.2, 0.0, 71.8), SIMD3<Float>( 27.2, 9.0, 72.2)), // Muro Sur Final
+            // Muro Divisor Sur (Alas Este y Oeste en Z = 17.8)
+            (SIMD3<Float>(-18.0, 0.0, 17.6), SIMD3<Float>(-5.2, 7.0, 18.0)),
+            (SIMD3<Float>(  5.2, 0.0, 17.6), SIMD3<Float>( 18.0, 7.0, 18.0))
         ]
 
         var allAABBs = staticAABBs
