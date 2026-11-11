@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "116"
-    static let commitHash = "b116individualhudopacity"
+    static let build = "117"
+    static let commitHash = "b117fixaudioanddeadmovement"
     static let formatted = "v\(version) • Build \(build)"
 }
 
@@ -848,10 +848,15 @@ struct ContentView: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 JoystickView(onChanged: { vector in
+                    guard !model.isDefeated, model.gameState == .playing else {
+                        model.joystick = .zero
+                        return
+                    }
                     model.joystick = vector
                 }, isLiquidGlass: model.isLiquidGlassUIEnabled)
                 .frame(width: 156, height: 156)
                 .opacity(model.hudJoystickOpacity)
+                .disabled(model.isDefeated || model.gameState != .playing)
                 .modifier(HUDDraggableModifier(
                     isEditing: model.isEditingHUDLayout,
                     isSelected: model.selectedHUDGroup == 0,
@@ -1110,6 +1115,7 @@ struct ContentView: View {
                     }
                 }
                 .opacity(model.hudSkillsOpacity)
+                .disabled(model.isDefeated || model.gameState != .playing)
                 .modifier(HUDDraggableModifier(
                     isEditing: model.isEditingHUDLayout,
                     isSelected: model.selectedHUDGroup == 3,
@@ -1196,6 +1202,7 @@ struct ContentView: View {
                     .background(.black.opacity(0.55), in: Capsule())
                     .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: 1))
                     .opacity(model.hudWeaponsOpacity)
+                    .disabled(model.isDefeated || model.gameState != .playing)
                     .modifier(HUDDraggableModifier(
                         isEditing: model.isEditingHUDLayout,
                         isSelected: model.selectedHUDGroup == 1,
@@ -1207,6 +1214,7 @@ struct ContentView: View {
                     ))
 
                     Button {
+                        guard !model.isDefeated, model.gameState == .playing else { return }
                         model.requestJump()
                     } label: {
                         Image(systemName: "arrow.up")
@@ -1222,6 +1230,7 @@ struct ContentView: View {
                     .accessibilityLabel("Saltar")
                     .accessibilityIdentifier("jumpButton")
                     .opacity(model.hudJumpOpacity)
+                    .disabled(model.isDefeated || model.gameState != .playing)
                     .modifier(HUDDraggableModifier(
                         isEditing: model.isEditingHUDLayout,
                         isSelected: model.selectedHUDGroup == 2,
@@ -1526,17 +1535,26 @@ final class GameModel: ObservableObject {
     let audio = ChiptuneAudioEngine()
     @Published var multiplayer = LocalMultiplayerSession()
     @Published var gameCenter = GameCenterManager()
+    func updateAudioPauseState() {
+        let shouldPause = (gameState != .playing) || showsSettingsSheet || showsMultiplayerSheet || isEditingHUDLayout
+        audio.setPaused(shouldPause)
+    }
+
     @Published var gameState: GameState = .mainMenu {
         didSet {
-            if gameState == .playing {
-                audio.setMusicEnabled(musicEnabled)
-            } else {
-                audio.setMusicEnabled(false)
-            }
+            updateAudioPauseState()
         }
     }
-    @Published var showsSettingsSheet = false
-    @Published var showsMultiplayerSheet = false
+    @Published var showsSettingsSheet = false {
+        didSet {
+            updateAudioPauseState()
+        }
+    }
+    @Published var showsMultiplayerSheet = false {
+        didSet {
+            updateAudioPauseState()
+        }
+    }
 
     @Published var cameraMode = GameCameraMode.firstPerson {
         didSet { }
@@ -1624,7 +1642,11 @@ final class GameModel: ObservableObject {
     @AppStorage("advancedReflectionsEnabled") var advancedReflectionsEnabled: Bool = true
     @AppStorage("targetFPS") var targetFPS: Int = 60
     @AppStorage("cameraSensitivity") var cameraSensitivity: Double = 1.0
-    @Published var isEditingHUDLayout: Bool = false
+    @Published var isEditingHUDLayout: Bool = false {
+        didSet {
+            updateAudioPauseState()
+        }
+    }
     @Published var selectedHUDGroup: Int = 0
     @AppStorage("hudJoystickX") var hudJoystickX: Double = 0
     @AppStorage("hudJoystickY") var hudJoystickY: Double = 0
@@ -1996,6 +2018,7 @@ final class GameModel: ObservableObject {
 
     init() {
         audio.start()
+        updateAudioPauseState()
 
         // 🌟 Los reflejos Ray Tracing y el Vidrio Líquido son la identidad visual esencial del juego: siempre activos
         advancedReflectionsEnabled = true
@@ -2756,6 +2779,8 @@ final class GameModel: ObservableObject {
                 isDefeated = true
                 isTeamDefeated = false
                 heldTool = .none
+                joystick = .zero
+                audio.stopAllNonMusicEffects()
                 audio.playSlimeDeflateSound()
                 if !hasRecordedVersusRoundResult {
                     hasRecordedVersusRoundResult = true
@@ -2767,6 +2792,8 @@ final class GameModel: ObservableObject {
                 isDefeated = true
                 isTeamDefeated = false
                 heldTool = .none
+                joystick = .zero
+                audio.stopAllNonMusicEffects()
                 audio.playSlimeDeflateSound()
                 audio.playRobloxOofDefeatSound()
             }
@@ -2907,9 +2934,11 @@ final class GameModel: ObservableObject {
         isWaveIntermission = false
         heldTool = .none
         remotePlayerHeldTool = .none
+        joystick = .zero
         isSlowMotionActive = false
         resetRequestID &+= 1
         respawnRequestID &+= 1
+        updateAudioPauseState()
 
         if !fromNetwork && isAnyMultiplayerConnected {
             let packet = LocalMatchPacket(
@@ -2933,12 +2962,14 @@ final class GameModel: ObservableObject {
         remotePlayerIsRecovering = false
         recoveryTimeRemaining = 0
         heldTool = .none
+        joystick = .zero
         currentWave = 1
         botsRemainingInWave = 2
         totalBotsInWave = 2
         isWaveIntermission = false
         resetRequestID &+= 1
         respawnRequestID &+= 1
+        updateAudioPauseState()
     }
 
     func requestJump() {
@@ -4617,6 +4648,7 @@ final class WaterSurface {
 final class ChiptuneAudioEngine {
     private let engine = AVAudioEngine()
     private let musicNode = AVAudioPlayerNode()
+    private let glideNode = AVAudioPlayerNode()
     private let effectsNode = AVAudioPlayerNode()
     private let waterNode = AVAudioPlayerNode()
     private let splashNode = AVAudioPlayerNode()
@@ -4652,6 +4684,7 @@ final class ChiptuneAudioEngine {
     private var nextLanding = 0
     private var nodesAttached = false
     private var started = false
+    private var isPaused = false
     private var musicEnabled = true
     private var effectsEnabled = true
     private var waterEnabled = true
@@ -4661,6 +4694,47 @@ final class ChiptuneAudioEngine {
     func start() {
         audioQueue.async { [weak self] in
             self?.startEngine()
+        }
+    }
+
+    func setPaused(_ paused: Bool) {
+        audioQueue.async { [weak self] in
+            guard let self else { return }
+            self.isPaused = paused
+            if paused {
+                self.musicNode.pause()
+                self.glideNode.volume = 0
+                self.glideNode.pause()
+                self.waterNode.volume = 0
+                self.waterNode.pause()
+                self.effectsNode.stop()
+                self.splashNode.stop()
+                self.landingNode.stop()
+                self.slowMoFXNode.stop()
+            } else {
+                guard self.started else { return }
+                if self.musicEnabled {
+                    self.musicNode.play()
+                }
+                self.glideNode.play()
+                self.waterNode.play()
+                self.updateGlideVolume()
+                self.updateWaterMovementVolume()
+            }
+        }
+    }
+
+    func stopAllNonMusicEffects() {
+        audioQueue.async { [weak self] in
+            guard let self else { return }
+            self.glideIntensity = 0
+            self.waterMovementIntensity = 0
+            self.glideNode.volume = 0
+            self.waterNode.volume = 0
+            self.effectsNode.stop()
+            self.splashNode.stop()
+            self.landingNode.stop()
+            self.slowMoFXNode.stop()
         }
     }
 
@@ -4693,6 +4767,9 @@ final class ChiptuneAudioEngine {
             self.effectsEnabled = enabled
             self.updateGlideVolume()
             self.landingNode.volume = enabled ? 1 : 0
+            if !enabled {
+                self.effectsNode.stop()
+            }
         }
     }
 
@@ -4744,6 +4821,7 @@ final class ChiptuneAudioEngine {
 
             if !nodesAttached {
                 engine.attach(musicNode)
+                engine.attach(glideNode)
                 engine.attach(effectsNode)
                 engine.attach(waterNode)
                 engine.attach(splashNode)
@@ -4753,6 +4831,7 @@ final class ChiptuneAudioEngine {
                 engine.attach(slowMoFXNode)
 
                 engine.connect(musicNode, to: masterMixer, format: format)
+                engine.connect(glideNode, to: masterMixer, format: format)
                 engine.connect(effectsNode, to: masterMixer, format: format)
                 engine.connect(waterNode, to: masterMixer, format: format)
                 engine.connect(splashNode, to: masterMixer, format: format)
@@ -4782,8 +4861,8 @@ final class ChiptuneAudioEngine {
                 waterNode.play()
             }
             if let glideBuffer {
-                effectsNode.scheduleBuffer(glideBuffer, at: nil, options: .loops)
-                effectsNode.play()
+                glideNode.scheduleBuffer(glideBuffer, at: nil, options: .loops)
+                glideNode.play()
             }
         } catch {
             print("Audio engine could not start: \(error.localizedDescription)")
@@ -4809,7 +4888,7 @@ final class ChiptuneAudioEngine {
     func playWaterDisturbance(intensity: Float) {
         audioQueue.async { [weak self] in
             guard let self else { return }
-            guard self.started, self.waterEnabled, !self.splashBuffers.isEmpty else { return }
+            guard self.started, self.waterEnabled, !self.isPaused, !self.splashBuffers.isEmpty else { return }
             let index = self.nextSplash % self.splashBuffers.count
             self.nextSplash += 1
             self.splashNode.volume = 0.42 + max(0, min(1, intensity)) * 0.38
@@ -4824,7 +4903,7 @@ final class ChiptuneAudioEngine {
     func playUnderwaterGlug(intensity: Float) {
         audioQueue.async { [weak self] in
             guard let self else { return }
-            guard self.started, self.waterEnabled, !self.splashBuffers.isEmpty else { return }
+            guard self.started, self.waterEnabled, !self.isPaused, !self.splashBuffers.isEmpty else { return }
             let index = self.nextSplash % self.splashBuffers.count
             self.nextSplash += 1
             self.splashNode.volume = 0.35 + max(0, min(1, intensity)) * 0.40
@@ -4838,7 +4917,7 @@ final class ChiptuneAudioEngine {
 
     func playLaserPlayerHitSound() {
         audioQueue.async { [weak self] in
-            guard let self, self.started, self.effectsEnabled else { return }
+            guard let self, self.started, self.effectsEnabled, !self.isPaused else { return }
             if let laserPlayerHitBuffer = self.laserPlayerHitBuffer {
                 self.effectsNode.volume = 0.95
                 self.effectsNode.scheduleBuffer(laserPlayerHitBuffer)
@@ -4851,7 +4930,7 @@ final class ChiptuneAudioEngine {
 
     func playLaserReflectionSound() {
         audioQueue.async { [weak self] in
-            guard let self, self.started, self.effectsEnabled else { return }
+            guard let self, self.started, self.effectsEnabled, !self.isPaused else { return }
             if let laserReflectionBuffer = self.laserReflectionBuffer {
                 self.effectsNode.volume = 0.85
                 self.effectsNode.scheduleBuffer(laserReflectionBuffer)
@@ -4866,11 +4945,10 @@ final class ChiptuneAudioEngine {
         audioQueue.async { [weak self] in
             guard let self, self.started, self.effectsEnabled else { return }
             if let robloxOofBuffer = self.robloxOofBuffer {
+                self.effectsNode.stop()
                 self.effectsNode.volume = 1.0
                 self.effectsNode.scheduleBuffer(robloxOofBuffer)
-                if !self.effectsNode.isPlaying {
-                    self.effectsNode.play()
-                }
+                self.effectsNode.play()
             }
         }
     }
@@ -4889,7 +4967,7 @@ final class ChiptuneAudioEngine {
 
     func playRecoveryChamberEnterSound() {
         audioQueue.async { [weak self] in
-            guard let self, self.started, self.effectsEnabled, let buffer = self.recoveryChamberEnterBuffer else { return }
+            guard let self, self.started, self.effectsEnabled, !self.isPaused, let buffer = self.recoveryChamberEnterBuffer else { return }
             self.effectsNode.volume = 0.95
             self.effectsNode.scheduleBuffer(buffer)
             if !self.effectsNode.isPlaying {
@@ -4900,7 +4978,7 @@ final class ChiptuneAudioEngine {
 
     func playRecoveryCompleteSound() {
         audioQueue.async { [weak self] in
-            guard let self, self.started, self.effectsEnabled, let buffer = self.recoveryCompleteBuffer else { return }
+            guard let self, self.started, self.effectsEnabled, !self.isPaused, let buffer = self.recoveryCompleteBuffer else { return }
             self.effectsNode.volume = 1.0
             self.effectsNode.scheduleBuffer(buffer)
             if !self.effectsNode.isPlaying {
@@ -4911,7 +4989,7 @@ final class ChiptuneAudioEngine {
 
     func playTeammateRevivePulseSound() {
         audioQueue.async { [weak self] in
-            guard let self, self.started, self.effectsEnabled, let buffer = self.teammateRevivePulseBuffer else { return }
+            guard let self, self.started, self.effectsEnabled, !self.isPaused, let buffer = self.teammateRevivePulseBuffer else { return }
             self.effectsNode.volume = 1.0
             self.effectsNode.scheduleBuffer(buffer)
             if !self.effectsNode.isPlaying {
@@ -4923,17 +5001,16 @@ final class ChiptuneAudioEngine {
     func playSlimeDeflateSound() {
         audioQueue.async { [weak self] in
             guard let self, self.started, self.effectsEnabled, let buffer = self.slimeDeflateBuffer else { return }
+            self.effectsNode.stop()
             self.effectsNode.volume = 1.0
             self.effectsNode.scheduleBuffer(buffer)
-            if !self.effectsNode.isPlaying {
-                self.effectsNode.play()
-            }
+            self.effectsNode.play()
         }
     }
 
     func playAirPumpStrokeSound() {
         audioQueue.async { [weak self] in
-            guard let self, self.started, self.effectsEnabled, let buffer = self.airPumpStrokeBuffer else { return }
+            guard let self, self.started, self.effectsEnabled, !self.isPaused, let buffer = self.airPumpStrokeBuffer else { return }
             self.effectsNode.volume = 1.0
             self.effectsNode.scheduleBuffer(buffer)
             if !self.effectsNode.isPlaying {
@@ -4944,7 +5021,7 @@ final class ChiptuneAudioEngine {
 
     func playBalloonBouncePopSound() {
         audioQueue.async { [weak self] in
-            guard let self, self.started, self.effectsEnabled, let buffer = self.balloonBouncePopBuffer else { return }
+            guard let self, self.started, self.effectsEnabled, !self.isPaused, let buffer = self.balloonBouncePopBuffer else { return }
             self.effectsNode.volume = 1.0
             self.effectsNode.scheduleBuffer(buffer)
             if !self.effectsNode.isPlaying {
@@ -4987,7 +5064,7 @@ final class ChiptuneAudioEngine {
 
     func playSubterraneanPortalPlungeSound() {
         audioQueue.async { [weak self] in
-            guard let self, self.started, self.effectsEnabled else { return }
+            guard let self, self.started, self.effectsEnabled, !self.isPaused else { return }
             if let buffer = self.subterraneanPortalBuffer {
                 self.slowMoFXNode.stop()
                 self.slowMoFXNode.volume = 0.95
@@ -4999,7 +5076,7 @@ final class ChiptuneAudioEngine {
 
     func playSwimStrokeSound(intensity: Float = 0.80) {
         audioQueue.async { [weak self] in
-            guard let self, self.started, self.waterEnabled else { return }
+            guard let self, self.started, self.waterEnabled, !self.isPaused else { return }
             if let buffer = self.swimStrokeBuffer {
                 self.splashNode.stop()
                 self.splashNode.volume = 0.42 + max(0, min(1, intensity)) * 0.46
@@ -5012,7 +5089,7 @@ final class ChiptuneAudioEngine {
     func playLanding(intensity: Float) {
         audioQueue.async { [weak self] in
             guard let self else { return }
-            guard self.started, self.effectsEnabled, !self.landingBuffers.isEmpty else { return }
+            guard self.started, self.effectsEnabled, !self.isPaused, !self.landingBuffers.isEmpty else { return }
             let index = self.nextLanding % self.landingBuffers.count
             self.nextLanding += 1
             self.landingNode.volume = 0.62 + max(0, min(1, intensity)) * 0.34
@@ -5026,7 +5103,7 @@ final class ChiptuneAudioEngine {
     func playLaserIgnition() {
         audioQueue.async { [weak self] in
             guard let self else { return }
-            guard self.started, self.effectsEnabled else { return }
+            guard self.started, self.effectsEnabled, !self.isPaused else { return }
             if let laserIgnitionBuffer = self.laserIgnitionBuffer {
                 self.effectsNode.volume = 0.88
                 self.effectsNode.scheduleBuffer(laserIgnitionBuffer)
@@ -5828,13 +5905,13 @@ final class ChiptuneAudioEngine {
     }
 
     private func updateGlideVolume() {
-        effectsNode.volume = effectsEnabled && glideIntensity > 0.01
+        glideNode.volume = effectsEnabled && glideIntensity > 0.01 && !isPaused
             ? 0.14 + glideIntensity * 0.36
             : 0
     }
 
     private func updateWaterMovementVolume() {
-        waterNode.volume = waterEnabled && waterMovementIntensity > 0.01
+        waterNode.volume = waterEnabled && waterMovementIntensity > 0.01 && !isPaused
             ? 0.12 + waterMovementIntensity * 0.36
             : 0
     }

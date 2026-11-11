@@ -1577,6 +1577,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             if !isGamePaused {
                 elapsedTime += effectiveDt
                 updateSimulation(dt: effectiveDt, rawDt: rawDt)
+            } else {
+                audio.setGlideIntensity(0)
+                audio.setWaterMovementIntensity(0)
             }
             writeInstanceDescriptors()
             writeUniforms(texture: drawable.texture, dt: effectiveDt)
@@ -1792,8 +1795,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 let distToTeammate = simd_distance(playerPosition, smoothedRemotePos)
                 let teammateBoosting = isRemotePlayerConnected && !remotePlayerIsRecovering && distToTeammate < 2.5
                 onRecoveryProgressUpdate?(recoveryTimeRemaining, teammateBoosting)
-                return
             }
+            audio.setGlideIntensity(0)
+            audio.setWaterMovementIntensity(0)
+            return
         } else {
             // Proximidad a compañero caído en cualquier lugar del mapa para sacar la Bomba de Aire
             let distToFallenTeammate = simd_distance(playerPosition, smoothedRemotePos)
@@ -3140,8 +3145,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 }
             }
 
-            // Bot Laser Combat AI with symmetric active/cooldown windows & 3D visual beams
-            if botLaserCooldownTimers[index] > 0 {
+            let isTargetAlive = isTargetingRemote ? !remotePlayerIsRecovering : !isPlayerDead
+            if !isTargetAlive {
+                botLaserActiveTimers[index] = 0
+                botLaserCooldownTimers[index] = 1.0
+            } else if botLaserCooldownTimers[index] > 0 {
                 let cooldownRate: Float = (targetIsUsingMirror && distance < 22.0) ? 3.2 : 1.0
                 botLaserCooldownTimers[index] = max(0, botLaserCooldownTimers[index] - dt * cooldownRate)
                 let maxEngageDist: Float = (botInRainbow || playerInRainbow) ? 38.0 : 28.0
@@ -3340,7 +3348,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
         }
 
-        guard !isPlayerDead, heldTool == .laser, laserActiveRemaining > 0, laserBattery > 0.005 else { return }
+        guard !isPlayerDead, !isGamePaused, heldTool == .laser, laserActiveRemaining > 0, laserBattery > 0.005 else { return }
 
         let origin: SIMD3<Float>
         let direction: SIMD3<Float>

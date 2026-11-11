@@ -262,12 +262,12 @@ struct MetalGameView: UIViewRepresentable {
         context.coordinator.renderer?.remotePlayerHeldTool = model.remotePlayerHeldTool
         context.coordinator.renderer?.remotePlayerIsFiringLaser = model.remotePlayerIsFiringLaser
         context.coordinator.renderer?.remoteAgents = model.sortedRemoteAgents
-        let isPaused = model.gameState != .playing
+        let isPaused = model.gameState != .playing || model.showsSettingsSheet || model.showsMultiplayerSheet || model.isEditingHUDLayout
         context.coordinator.renderer?.setInput(
-            joystick: model.joystick,
+            joystick: (model.isDefeated || isPaused) ? .zero : model.joystick,
             cameraMode: model.cameraMode,
             rayBouncesEnabled: model.advancedReflectionsEnabled,
-            heldTool: model.heldTool,
+            heldTool: model.isDefeated ? .none : model.heldTool,
             lightStates: model.lightStates,
             jumpRequestID: model.jumpRequestID,
             isSlowMotionActive: model.isSlowMotionActive,
