@@ -1375,17 +1375,20 @@ kernel void raytracePatio(
         direct += lampContribution / float(activeLampSamples);
 
         if (bounce == 0 && (uniforms.lightStates.y > 0.001f || uniforms.lightStates.z > 0.001f)) {
+            // Posiciones reales de los letreros de neón montados en los muros perimetrales:
+            // Letrero Neón Piscina (Muro Norte: X = -6.60, Y = 3.75, Z = -17.45)
+            // Letrero Neón SHEERIT (Muro Sur: X = 8.40, Y = 3.73, Z = 17.45)
             float3 neonPositions[2] = {
-                float3(-5.25f, 3.45f, -9.34f),
-                float3( 5.45f, 3.45f,  9.34f)
+                float3(-6.60f, 3.75f, -17.45f),
+                float3( 8.40f, 3.73f,  17.45f)
             };
             float3 neonColors[2] = {
                 float3(1.0f, 0.012f, 0.006f),
                 float3(0.008f, 0.18f, 1.0f)
             };
             float neonPowers[2] = {
-                38.0f * uniforms.lightStates.y,
-                34.0f * uniforms.lightStates.z
+                28.0f * uniforms.lightStates.y,
+                26.0f * uniforms.lightStates.z
             };
             for (uint neonIndex = 0; neonIndex < 2; ++neonIndex) {
                 float3 toNeon = neonPositions[neonIndex] - position;
@@ -1393,15 +1396,24 @@ kernel void raytracePatio(
                 float neonDistance = sqrt(max(neonDistanceSquared, 1e-4f));
                 float3 neonDirection = toNeon / neonDistance;
                 float neonNDotL = saturate(dot(normal, neonDirection));
-                if (neonNDotL > 0.0f && neonDistance < 10.0f) {
-                    float neonAttenuation = neonPowers[neonIndex] /
-                        (1.0f + neonDistanceSquared * 0.32f);
-                    direct += albedo * neonColors[neonIndex] *
-                              neonAttenuation * neonNDotL;
-                    float3 neonHalf = normalize(neonDirection - currentRay.direction);
-                    float neonGloss = pow(saturate(dot(normal, neonHalf)), 190.0f);
-                    direct += neonColors[neonIndex] * neonAttenuation * neonGloss *
-                              (waterSurface ? 0.82f : 0.08f);
+                if (neonNDotL > 0.0f && neonDistance < 14.0f) {
+                    // Oclusión por sombra para que la luz del neón no atraviese columnas ni objetos
+                    ray neonShadow;
+                    neonShadow.origin = position + normal * 0.015f;
+                    neonShadow.direction = neonDirection;
+                    neonShadow.max_distance = max(0.0f, neonDistance - 0.04f);
+                    tracer.accept_any_intersection(true);
+                    auto neonBlocker = tracer.intersect(neonShadow, accelerationStructure, 0x03);
+                    if (neonBlocker.type == intersection_type::none) {
+                        float neonAttenuation = neonPowers[neonIndex] /
+                            (1.0f + neonDistanceSquared * 0.35f);
+                        direct += albedo * neonColors[neonIndex] *
+                                  neonAttenuation * neonNDotL;
+                        float3 neonHalf = normalize(neonDirection - currentRay.direction);
+                        float neonGloss = pow(saturate(dot(normal, neonHalf)), 190.0f);
+                        direct += neonColors[neonIndex] * neonAttenuation * neonGloss *
+                                  (waterSurface ? 0.82f : 0.08f);
+                    }
                 }
             }
         }
@@ -1501,61 +1513,6 @@ kernel void raytracePatio(
             }
         }
 
-        // Every active source uses the same finite planar-mirror light transport.
-        if (rayBouncesEnabled && !(kind > 0.5f && kind < 1.5f)) {
-            direct += mirroredLightContribution(
-                position, normal, currentRay.direction, albedo,
-                uniforms.lightPosition.xyz, float3(0.0f), uniforms.lightColor.xyz,
-                uniforms.lightColor.w, false
-            );
-
-            float3 neonPositions[2] = {
-                float3(-5.25f, 3.45f, -9.34f),
-                float3( 5.45f, 3.45f,  9.34f)
-            };
-            float3 neonColors[2] = {
-                float3(1.0f, 0.012f, 0.006f),
-                float3(0.008f, 0.18f, 1.0f)
-            };
-            float neonPowers[2] = {
-                38.0f * uniforms.lightStates.y,
-                34.0f * uniforms.lightStates.z
-            };
-            for (uint neonIndex = 0; neonIndex < 2; ++neonIndex) {
-                direct += mirroredLightContribution(
-                    position, normal, currentRay.direction, albedo,
-                    neonPositions[neonIndex], float3(0.0f), neonColors[neonIndex],
-                    neonPowers[neonIndex], false
-                );
-            }
-
-            if (uniforms.lightStates.w > 0.001f) {
-                float3 stripSources[4] = {
-                    float3(clamp(position.x, -5.35f, 2.35f), 0.48f, -4.20f),
-                    float3(clamp(position.x, -5.35f, 2.35f), 0.48f,  1.20f),
-                    float3(-5.35f, 0.48f, clamp(position.z, -4.20f, 1.20f)),
-                    float3( 2.35f, 0.48f, clamp(position.z, -4.20f, 1.20f))
-                };
-                for (uint stripIndex = 0; stripIndex < 4; ++stripIndex) {
-                    direct += mirroredLightContribution(
-                        position, normal, currentRay.direction, albedo,
-                        stripSources[stripIndex], float3(0.0f), float3(1.0f, 0.60f, 0.16f),
-                        2.2f * uniforms.lightStates.w, false
-                    );
-                }
-            }
-
-            if (uniforms.toolParameters.x > 0.5f && uniforms.toolParameters.x < 1.5f) {
-                float battery = clamp(uniforms.toolParameters.y, 0.0f, 1.0f);
-                if (battery > 0.001f) {
-                    direct += mirroredLightContribution(
-                        position, normal, currentRay.direction, albedo,
-                        uniforms.toolOrigin.xyz, uniforms.toolDirection.xyz,
-                        float3(1.0f, 0.88f, 0.68f), 19.0f * battery, true
-                    );
-                }
-            }
-        }
 
         if (rayBouncesEnabled && waterSurface) {
             float3 refractedDirection = refract(currentRay.direction, normal, 1.0f / 1.333f);

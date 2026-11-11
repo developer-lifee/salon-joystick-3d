@@ -2203,8 +2203,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     -1.45,
                     1
                 )
-                playerWaterWakeCountdown = 0.38 // Cadencia realista de pasos en agua
-                audio.playWaterDisturbance(intensity: min(0.60, max(0.20, speed / 2.0)))
+                playerWaterWakeCountdown = 0.38 // Cadencia de ondulación visual en la superficie
             }
         } else {
             playerWaterWakeCountdown = 0
