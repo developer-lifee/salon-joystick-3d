@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "113"
-    static let commitHash = "b113ultracooltv"
+    static let build = "114"
+    static let commitHash = "b114postefixminimap"
     static let formatted = "v\(version) • Build \(build)"
 }
 
@@ -73,10 +73,10 @@ struct GameLightStates: Codable, Equatable {
     var piscinaNeon = false
     var sheeritNeon = false
     var poolStrips = false
-    var postIntensity: Float = 0
-    var piscinaNeonIntensity: Float = 1
-    var sheeritNeonIntensity: Float = 1
-    var poolStripsIntensity: Float = 1
+    var postIntensity: Float = 1.0
+    var piscinaNeonIntensity: Float = 1.0
+    var sheeritNeonIntensity: Float = 1.0
+    var poolStripsIntensity: Float = 1.0
 
     var areAllLightsOff: Bool {
         !post && !piscinaNeon && !sheeritNeon && !poolStrips
@@ -94,6 +94,10 @@ struct GameLightStates: Codable, Equatable {
         piscinaNeon = true
         sheeritNeon = true
         poolStrips = true
+        if postIntensity <= 0.01 { postIntensity = 1.0 }
+        if piscinaNeonIntensity <= 0.01 { piscinaNeonIntensity = 1.0 }
+        if sheeritNeonIntensity <= 0.01 { sheeritNeonIntensity = 1.0 }
+        if poolStripsIntensity <= 0.01 { poolStripsIntensity = 1.0 }
     }
 
     mutating func toggleAllLights() {
@@ -115,19 +119,27 @@ struct GameLightStates: Codable, Equatable {
 
     mutating func toggle(_ fixture: GameLightFixture) {
         switch fixture {
-        case .post: post.toggle()
-        case .piscinaNeon: piscinaNeon.toggle()
-        case .sheeritNeon: sheeritNeon.toggle()
-        case .poolStrips: poolStrips.toggle()
+        case .post:
+            post.toggle()
+            if post && postIntensity <= 0.01 { postIntensity = 1.0 }
+        case .piscinaNeon:
+            piscinaNeon.toggle()
+            if piscinaNeon && piscinaNeonIntensity <= 0.01 { piscinaNeonIntensity = 1.0 }
+        case .sheeritNeon:
+            sheeritNeon.toggle()
+            if sheeritNeon && sheeritNeonIntensity <= 0.01 { sheeritNeonIntensity = 1.0 }
+        case .poolStrips:
+            poolStrips.toggle()
+            if poolStrips && poolStripsIntensity <= 0.01 { poolStripsIntensity = 1.0 }
         }
     }
 
     func intensity(_ fixture: GameLightFixture) -> Float {
         switch fixture {
-        case .post: postIntensity
-        case .piscinaNeon: piscinaNeonIntensity
-        case .sheeritNeon: sheeritNeonIntensity
-        case .poolStrips: poolStripsIntensity
+        case .post: (postIntensity <= 0.01) ? 1.0 : postIntensity
+        case .piscinaNeon: (piscinaNeonIntensity <= 0.01) ? 1.0 : piscinaNeonIntensity
+        case .sheeritNeon: (sheeritNeonIntensity <= 0.01) ? 1.0 : sheeritNeonIntensity
+        case .poolStrips: (poolStripsIntensity <= 0.01) ? 1.0 : poolStripsIntensity
         }
     }
 
@@ -931,7 +943,13 @@ struct ContentView: View {
                     }
                 }
 
-                // Bar 1: Action/Skill Capsules (Slow-Mo, Warp)
+                if model.showsMinimap && !model.isMinimalHUDEnabled {
+                    TacticalMinimapView(model: model)
+                        .padding(.bottom, 2)
+                        .transition(.scale.combined(with: .opacity))
+                }
+
+                // Bar 1: Action/Skill Capsules (Slow-Mo, Warp, Radar)
                 HStack(spacing: 8) {
                     Button {
                         model.toggleSlowMotion()
@@ -978,6 +996,31 @@ struct ContentView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Menú Radial de Teletransporte")
+
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                            model.showsMinimap.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "map.fill")
+                                .font(.system(size: 13, weight: .bold))
+                            Text("Radar")
+                                .font(.system(size: 11, weight: .bold))
+                        }
+                        .foregroundStyle(model.showsMinimap ? .black : .green)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            model.showsMinimap
+                                ? AnyShapeStyle(Color.green)
+                                : AnyShapeStyle(Color.black.opacity(0.65)),
+                            in: Capsule()
+                        )
+                        .overlay(Capsule().stroke(Color.green.opacity(0.8), lineWidth: 1.5))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Minimapa Radar Táctico")
 
                     if model.isGameControllerConnected && !model.isMinimalHUDEnabled {
                         HStack(spacing: 5) {
@@ -1790,7 +1833,9 @@ final class GameModel: ObservableObject {
     @Published var remotePlayerIsFiringLaser: Bool = false
     @Published var showConnectedToast: Bool = false
     @Published private(set) var localPlayerPosition = SIMD3<Float>(3.8, 0, 3.8)
-    private var localPlayerYaw: Float = .pi
+    @Published private(set) var localPlayerYaw: Float = .pi
+    @Published var npcPositions: [SIMD3<Float>] = []
+    @AppStorage("showsMinimap") var showsMinimap: Bool = true
     private var cancellables = Set<AnyCancellable>()
 
     var isAnyMultiplayerConnected: Bool {
@@ -2542,6 +2587,7 @@ final class GameModel: ObservableObject {
                    let total = packet.totalBots {
                     let intermission = packet.isIntermission ?? false
                     let intermissionTime = packet.intermissionTime ?? 0
+                    self.npcPositions = positions
                     self.npcHealths = healths
                     self.currentWave = wave
                     self.botsRemainingInWave = remaining
@@ -5842,6 +5888,202 @@ struct JoystickView: View {
     }
 }
 
+// 🧭 Minimapa Radar Táctico 3D estilo Apple Liquid Glass
+struct TacticalMinimapView: View {
+    @ObservedObject var model: GameModel
+    @State private var isFullView: Bool = false
+
+    var body: some View {
+        let size: CGFloat = isFullView ? 155 : 98
+        let radius: CGFloat = size / 2
+        let worldRadius: Float = isFullView ? 46.0 : 23.0
+        let pxPerMeter = radius / CGFloat(worldRadius)
+        let playerPos = model.localPlayerPosition
+        let playerYaw = model.localPlayerYaw
+
+        ZStack {
+            // Fondo de Cristal Líquido Translúcido
+            Circle()
+                .fill(Color.black.opacity(0.65))
+                .background(.ultraThinMaterial, in: Circle())
+
+            // Rejilla Concéntrica de Radar Táctico
+            Circle()
+                .stroke(Color.cyan.opacity(0.20), lineWidth: 1)
+                .frame(width: size * 0.52, height: size * 0.52)
+            Circle()
+                .stroke(Color.cyan.opacity(0.35), lineWidth: 1)
+                .frame(width: size * 0.94, height: size * 0.94)
+
+            // Ejes de Cruz Radar
+            Path { path in
+                path.move(to: CGPoint(x: radius, y: 5))
+                path.addLine(to: CGPoint(x: radius, y: size - 5))
+                path.move(to: CGPoint(x: 5, y: radius))
+                path.addLine(to: CGPoint(x: size - 5, y: radius))
+            }
+            .stroke(Color.cyan.opacity(0.18), lineWidth: 1)
+
+            // Contenido del Mapa proyectado relativo al jugador
+            Group {
+                // 1. Salón Arcoíris (Z = 17.8 a 72.0, X = -27.0 a 27.0)
+                let rainbowW = CGFloat(54.0) * pxPerMeter
+                let rainbowH = CGFloat(72.0 - 17.8) * pxPerMeter
+                let rainbowCenterX = radius + CGFloat(0.0 - playerPos.x) * pxPerMeter
+                let rainbowCenterY = radius + CGFloat(44.9 - playerPos.z) * pxPerMeter
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: [.red.opacity(0.15), .yellow.opacity(0.12), .green.opacity(0.12), .blue.opacity(0.15), .purple.opacity(0.15)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .overlay(Rectangle().stroke(Color.purple.opacity(0.35), lineWidth: 1))
+                    .frame(width: rainbowW, height: rainbowH)
+                    .position(x: rainbowCenterX, y: rainbowCenterY)
+
+                // 2. Muros Perimetrales del Patio Piscina (Z = -17.8 a 17.8, X = -17.8 a 17.8)
+                let arenaW = CGFloat(35.6) * pxPerMeter
+                let arenaH = CGFloat(35.6) * pxPerMeter
+                let arenaCenterX = radius + CGFloat(0.0 - playerPos.x) * pxPerMeter
+                let arenaCenterY = radius + CGFloat(0.0 - playerPos.z) * pxPerMeter
+                Rectangle()
+                    .stroke(Color.white.opacity(0.35), lineWidth: 1.2)
+                    .frame(width: arenaW, height: arenaH)
+                    .position(x: arenaCenterX, y: arenaCenterY)
+
+                // 3. Piscina Central (Agua): [-5.35, 2.35] en X, [-4.2, 1.2] en Z
+                let poolW = CGFloat(2.35 - (-5.35)) * pxPerMeter
+                let poolH = CGFloat(1.20 - (-4.20)) * pxPerMeter
+                let poolCenterX = radius + CGFloat(-1.50 - playerPos.x) * pxPerMeter
+                let poolCenterY = radius + CGFloat(-1.50 - playerPos.z) * pxPerMeter
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color.cyan.opacity(0.28))
+                    .overlay(RoundedRectangle(cornerRadius: 2).stroke(Color.cyan.opacity(0.65), lineWidth: 1))
+                    .frame(width: poolW, height: poolH)
+                    .position(x: poolCenterX, y: poolCenterY)
+
+                // 4. Muro Divisorio Sur (Z = 17.8) con Gran Pórtico Abierto en el Centro
+                let wallY = radius + CGFloat(17.8 - playerPos.z) * pxPerMeter
+                let portalX = radius + CGFloat(0.0 - playerPos.x) * pxPerMeter
+                Path { p in
+                    let leftX1 = radius + CGFloat(-17.8 - playerPos.x) * pxPerMeter
+                    let leftX2 = radius + CGFloat(-5.2 - playerPos.x) * pxPerMeter
+                    p.move(to: CGPoint(x: leftX1, y: wallY))
+                    p.addLine(to: CGPoint(x: leftX2, y: wallY))
+
+                    let rightX1 = radius + CGFloat(5.2 - playerPos.x) * pxPerMeter
+                    let rightX2 = radius + CGFloat(17.8 - playerPos.x) * pxPerMeter
+                    p.move(to: CGPoint(x: rightX1, y: wallY))
+                    p.addLine(to: CGPoint(x: rightX2, y: wallY))
+                }
+                .stroke(Color.white.opacity(0.65), lineWidth: 2)
+
+                // Portal Arcoíris en (0, 17.8)
+                Image(systemName: "sparkles")
+                    .font(.system(size: isFullView ? 11 : 8, weight: .bold))
+                    .foregroundStyle(model.playerScore >= 3000 ? Color.yellow : Color.cyan)
+                    .position(x: portalX, y: wallY)
+            }
+            .clipShape(Circle()) // Recorta cualquier geometría que se salga del círculo
+
+            // 5. Enemigos / Bots (Puntos Rojos Tácticos con Alerta de Perímetro)
+            ForEach(Array(model.npcPositions.enumerated()), id: \.offset) { index, botPos in
+                let health = (index < model.npcHealths.count) ? model.npcHealths[index] : 0
+                if health > 0 && botPos.y > -5.0 {
+                    let dx = CGFloat(botPos.x - playerPos.x) * pxPerMeter
+                    let dz = CGFloat(botPos.z - playerPos.z) * pxPerMeter
+                    let dist = sqrt(dx * dx + dz * dz)
+                    let maxRadarR = radius - 7
+                    let isClamped = dist > maxRadarR
+                    let finalDx = isClamped ? (dx / dist) * maxRadarR : dx
+                    let finalDz = isClamped ? (dz / dist) * maxRadarR : dz
+
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: isClamped ? 5 : 7, height: isClamped ? 5 : 7)
+                        .shadow(color: .red.opacity(0.9), radius: 3)
+                        .position(x: radius + finalDx, y: radius + finalDz)
+                }
+            }
+
+            // 6. Compañero de Equipo Multijugador (Punto Verde)
+            if model.isAnyMultiplayerConnected {
+                let dx = CGFloat(model.remotePlayerPosition.x - playerPos.x) * pxPerMeter
+                let dz = CGFloat(model.remotePlayerPosition.z - playerPos.z) * pxPerMeter
+                let dist = sqrt(dx * dx + dz * dz)
+                let maxRadarR = radius - 7
+                let isClamped = dist > maxRadarR
+                let finalDx = isClamped ? (dx / dist) * maxRadarR : dx
+                let finalDz = isClamped ? (dz / dist) * maxRadarR : dz
+
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: isClamped ? 5 : 7, height: isClamped ? 5 : 7)
+                    .shadow(color: .green.opacity(0.9), radius: 3)
+                    .position(x: radius + finalDx, y: radius + finalDz)
+            }
+
+            // 7. Jugador Local en el Centro con Flecha Direccional de Vista
+            ZStack {
+                Image(systemName: "location.north.fill")
+                    .font(.system(size: isFullView ? 12 : 10, weight: .black))
+                    .foregroundStyle(.cyan)
+                    .rotationEffect(Angle(radians: -Double(playerYaw)))
+                    .shadow(color: .cyan.opacity(0.8), radius: 4)
+
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: 3.5, height: 3.5)
+            }
+            .position(x: radius, y: radius)
+
+            // 8. Letras Cardinales (N, S, O, E)
+            VStack {
+                Text("N")
+                    .font(.system(size: 6.5, weight: .black))
+                    .foregroundStyle(.white.opacity(0.75))
+                Spacer()
+                Text("S")
+                    .font(.system(size: 6.5, weight: .black))
+                    .foregroundStyle(.white.opacity(0.75))
+            }
+            .padding(.vertical, 2)
+
+            HStack {
+                Text("O")
+                    .font(.system(size: 6.5, weight: .black))
+                    .foregroundStyle(.white.opacity(0.75))
+                Spacer()
+                Text("E")
+                    .font(.system(size: 6.5, weight: .black))
+                    .foregroundStyle(.white.opacity(0.75))
+            }
+            .padding(.horizontal, 2)
+
+            // 9. Borde Exterior Estilo Apple Liquid Glass
+            Circle()
+                .stroke(
+                    LinearGradient(
+                        colors: [.cyan.opacity(0.85), .white.opacity(0.4), .cyan.opacity(0.65)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1.5
+                )
+        }
+        .frame(width: size, height: size)
+        .contentShape(Circle())
+        .onTapGesture {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                isFullView.toggle()
+            }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+    }
+}
+
 struct TacticalRemoteControllerView: View {
     @ObservedObject var model: GameModel
     @State private var feedback = UIImpactFeedbackGenerator(style: .medium)
@@ -6843,6 +7085,7 @@ struct GameOptionsSheet: View {
                     }
 
                     Toggle("Tema Vidrio Líquido (Apple Liquid Glass)", isOn: $model.isLiquidGlassUIEnabled)
+                    Toggle("Mostrar Radar Minimapa Táctico", isOn: $model.showsMinimap)
                 }
 
                 Section("🎵 Audio y Efectos") {

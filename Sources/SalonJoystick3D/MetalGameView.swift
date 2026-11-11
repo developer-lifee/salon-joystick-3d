@@ -142,6 +142,8 @@ struct MetalGameView: UIViewRepresentable {
             renderer.isAuthorityForNPCs = model.isHost
             renderer.onNPCSyncUpdate = { [weak model] positions, healths, wave, remaining, total, isIntermission, intermissionTime, laserStarts, laserEnds in
                 Task { @MainActor in
+                    model?.npcPositions = positions
+                    model?.npcHealths = healths
                     model?.broadcastEnemySync(
                         positions: positions,
                         healths: healths,
