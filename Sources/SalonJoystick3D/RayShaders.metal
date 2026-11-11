@@ -1471,9 +1471,9 @@ kernel void raytracePatio(
             }
         }
 
-        // 🌈 Iluminación Prismática Ray-Traced del Gran Salón Arcoíris (Z > 15.0)
-        // Empieza completamente apagado cuando las luces están en 0, y despierta con el espectro arcoíris al ir encendiendo las 4 luces
-        if (position.z > 14.5f && totalLights > 0.001f) {
+        // 🌈 Iluminación Prismática Ray-Traced del Gran Salón Arcoíris (estrictamente Z > 18.0)
+        // Confinada dentro del Salón Arcoíris para que no se filtre a través de los muros o pórtico sur hacia el Salón de la Piscina
+        if (position.z > 18.0f && totalLights > 0.001f) {
             float3 rainbowPos[4] = {
                 float3(-13.5f, 5.4f, 32.0f), // Sector 1 (Rojo-Naranja): Cabaña NW + Entrada Arcoíris
                 float3( 13.5f, 5.4f, 32.0f), // Sector 2 (Amarillo-Esmeralda): Cabaña NE + Parkour Medio

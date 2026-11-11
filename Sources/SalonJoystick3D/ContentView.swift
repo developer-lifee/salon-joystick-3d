@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "111"
-    static let commitHash = "b111cleanupgear"
+    static let build = "112"
+    static let commitHash = "b112rainbowleakfix"
     static let formatted = "v\(version) • Build \(build)"
 }
 
