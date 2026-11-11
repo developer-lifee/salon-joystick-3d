@@ -2345,14 +2345,14 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if heldTool == .mirror {
             if mirrorOverheated {
                 mirrorActiveRemaining = 0.0
-                // Enfriamiento forzado tras sobrecalentamiento
-                mirrorHeat = max(0.0, mirrorHeat - dt / 5.0)
+                // Enfriamiento tras sobrecalentamiento
+                mirrorHeat = max(0.0, mirrorHeat - dt / 3.5)
                 if mirrorHeat <= 0.05 {
                     mirrorOverheated = false
                 }
             } else {
-                // Calentamiento progresivo por mantener activo el escudo de fotones
-                mirrorHeat = min(1.0, mirrorHeat + dt / 12.0)
+                // Calentamiento progresivo por mantener activo el escudo de fotones (modo pasivo)
+                mirrorHeat = min(1.0, mirrorHeat + dt / 16.0)
                 if mirrorHeat >= 1.0 {
                     mirrorOverheated = true
                     mirrorActiveRemaining = 0.0
@@ -2362,8 +2362,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 }
             }
         } else {
-            // Disipación térmica rápida al guardar el espejo
-            mirrorHeat = max(0.0, mirrorHeat - dt / 4.0)
+            // Disipación térmica rápida al guardar o bajar el espejo
+            mirrorHeat = max(0.0, mirrorHeat - dt / 3.0)
             if mirrorOverheated && mirrorHeat <= 0.05 {
                 mirrorOverheated = false
             }
@@ -3229,7 +3229,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 if isUsingMirror && !hitObstacle && facingDot > -0.20 {
                     if !isTargetingRemote {
                         isMirrorReflectingLaser = true
-                        mirrorHeat = min(1.0, mirrorHeat + 0.22)
+                        mirrorHeat = min(1.0, mirrorHeat + dt * 0.18)
                         if mirrorHeat >= 1.0 {
                             mirrorOverheated = true
                             mirrorActiveRemaining = 0.0
