@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "122"
-    static let commitHash = "b122minimaprealtimearrowandlights"
+    static let build = "123"
+    static let commitHash = "b123unifiedcyanpinkthemeandoptions"
     static let formatted = "v\(version) • Build \(build)"
 }
 
@@ -373,35 +373,36 @@ struct ContentView: View {
                     MainMenuView(model: model)
                 } else {
 
-            // GTA-Style Aim Crosshair Overlay
+            // GTA-Style Aim Crosshair Overlay (Estética Neón Cyan & Pink)
             if model.heldTool == .laser && model.laserBattery > 0.01 {
                 ZStack {
                     Circle()
-                        .stroke(Color.red.opacity(0.85), lineWidth: 1.5)
+                        .stroke(Color.pink.opacity(0.85), lineWidth: 1.5)
                         .frame(width: 28, height: 28)
-                        .shadow(color: .red.opacity(0.8), radius: 4)
+                        .shadow(color: Color.pink.opacity(0.8), radius: 5)
 
                     Circle()
                         .fill(Color.cyan)
-                        .frame(width: 4, height: 4)
+                        .frame(width: 4.5, height: 4.5)
+                        .shadow(color: Color.cyan.opacity(0.9), radius: 4)
 
                     Rectangle()
-                        .fill(Color.red.opacity(0.6))
+                        .fill(Color.pink.opacity(0.75))
                         .frame(width: 8, height: 1.5)
                         .offset(x: -18)
 
                     Rectangle()
-                        .fill(Color.red.opacity(0.6))
+                        .fill(Color.pink.opacity(0.75))
                         .frame(width: 8, height: 1.5)
                         .offset(x: 18)
 
                     Rectangle()
-                        .fill(Color.red.opacity(0.6))
+                        .fill(Color.pink.opacity(0.75))
                         .frame(width: 1.5, height: 8)
                         .offset(y: -18)
 
                     Rectangle()
-                        .fill(Color.red.opacity(0.6))
+                        .fill(Color.pink.opacity(0.75))
                         .frame(width: 1.5, height: 8)
                         .offset(y: 18)
                 }
@@ -411,7 +412,7 @@ struct ContentView: View {
 
             if model.isSlowMotionActive {
                 RadialGradient(
-                    colors: [.clear, .yellow.opacity(0.15), .black.opacity(0.55)],
+                    colors: [.clear, Color.pink.opacity(0.12), .black.opacity(0.55)],
                     center: .center,
                     startRadius: 80,
                     endRadius: 480
@@ -421,7 +422,7 @@ struct ContentView: View {
             }
 
             VStack(alignment: .leading, spacing: 5) {
-                // 🍄 Capa de Escudo / Poción estilo Fortnite / Hongos Free Fire
+                // 🍄 Capa de Escudo / Poción (Electric Cyan)
                 HStack(spacing: 7) {
                     Image(systemName: "shield.fill")
                         .font(.system(size: 11, weight: .bold))
@@ -434,21 +435,22 @@ struct ContentView: View {
                         .foregroundStyle(.cyan)
                 }
 
+                // ❤️ Capa de Salud / HP (Neon Pink)
                 HStack(spacing: 7) {
                     Image(systemName: "heart.fill")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.red)
+                        .foregroundStyle(Color.pink)
                     ProgressView(value: Double(model.playerHealth), total: 100.0)
-                        .tint(model.playerHealth > 30 ? .green : .red)
+                        .tint(model.playerHealth > 25 ? Color.pink : Color.red)
                         .frame(width: 95)
                     Text("\(Int(model.playerHealth)) HP")
                         .font(.caption.monospacedDigit().bold())
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.pink)
                 }
 
                 HStack(spacing: 6) {
-                    Image(systemName: "star.fill")
-                        .foregroundStyle(.yellow)
+                    Image(systemName: "sparkles")
+                        .foregroundStyle(Color.cyan)
                     Text("Puntos: \(model.playerScore)")
                         .font(.caption.bold())
                         .foregroundStyle(.white)
@@ -458,9 +460,16 @@ struct ContentView: View {
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(LinearGradient(colors: [.white.opacity(0.85), .white.opacity(0.25)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.2)
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color.cyan.opacity(0.85), Color.pink.opacity(0.85)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1.4
+                    )
             )
-            .shadow(color: .black.opacity(0.20), radius: 8, x: 0, y: 4)
+            .shadow(color: Color.cyan.opacity(0.20), radius: 8, x: 0, y: 4)
             .padding(.leading, 14)
             .padding(.top, 48)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -1011,7 +1020,7 @@ struct ContentView: View {
                         .transition(.scale.combined(with: .opacity))
                 }
 
-                // Bar 1: Action/Skill Capsules (Slow-Mo, Warp, Radar)
+                // Bar 1: Action/Skill Capsules (Slow-Mo, Warp, Radar) - Paleta Cyan & Pink
                 HStack(spacing: 8) {
                     Button {
                         model.toggleSlowMotion()
@@ -1022,16 +1031,16 @@ struct ContentView: View {
                             Text("Slow-Mo")
                                 .font(.system(size: 11, weight: .bold))
                         }
-                        .foregroundStyle(model.isSlowMotionActive ? .black : .yellow)
+                        .foregroundStyle(model.isSlowMotionActive ? .black : Color.pink)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                         .background(
                             model.isSlowMotionActive
-                                ? AnyShapeStyle(Color.yellow)
+                                ? AnyShapeStyle(Color.pink)
                                 : AnyShapeStyle(Color.black.opacity(0.65)),
                             in: Capsule()
                         )
-                        .overlay(Capsule().stroke(Color.yellow.opacity(0.8), lineWidth: 1.5))
+                        .overlay(Capsule().stroke(Color.pink.opacity(0.85), lineWidth: 1.5))
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Cámara Lenta Slow Motion")
@@ -1045,7 +1054,7 @@ struct ContentView: View {
                             Text("Warp")
                                 .font(.system(size: 11, weight: .bold))
                         }
-                        .foregroundStyle(model.showsLightRadialMenu ? .black : .cyan)
+                        .foregroundStyle(model.showsLightRadialMenu ? .black : Color.cyan)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                         .background(
@@ -1054,7 +1063,7 @@ struct ContentView: View {
                                 : AnyShapeStyle(Color.black.opacity(0.65)),
                             in: Capsule()
                         )
-                        .overlay(Capsule().stroke(Color.cyan.opacity(0.8), lineWidth: 1.5))
+                        .overlay(Capsule().stroke(Color.cyan.opacity(0.85), lineWidth: 1.5))
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Menú Radial de Teletransporte")
@@ -1070,16 +1079,21 @@ struct ContentView: View {
                             Text("Radar")
                                 .font(.system(size: 11, weight: .bold))
                         }
-                        .foregroundStyle(model.showsMinimap ? .black : .green)
+                        .foregroundStyle(model.showsMinimap ? .black : Color.cyan)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                         .background(
                             model.showsMinimap
-                                ? AnyShapeStyle(Color.green)
+                                ? AnyShapeStyle(LinearGradient(colors: [Color.cyan, Color.pink], startPoint: .leading, endPoint: .trailing))
                                 : AnyShapeStyle(Color.black.opacity(0.65)),
                             in: Capsule()
                         )
-                        .overlay(Capsule().stroke(Color.green.opacity(0.8), lineWidth: 1.5))
+                        .overlay(
+                            Capsule().stroke(
+                                LinearGradient(colors: [Color.cyan.opacity(0.85), Color.pink.opacity(0.85)], startPoint: .leading, endPoint: .trailing),
+                                lineWidth: 1.5
+                            )
+                        )
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Minimapa Radar Táctico")
@@ -1088,7 +1102,7 @@ struct ContentView: View {
                         HStack(spacing: 5) {
                             Image(systemName: "gamecontroller.fill")
                                 .font(.system(size: 11, weight: .bold))
-                                .foregroundStyle(.green)
+                                .foregroundStyle(Color.cyan)
                             Text(model.gameControllerName)
                                 .font(.system(size: 9, weight: .bold))
                                 .foregroundStyle(.white.opacity(0.9))
@@ -1096,7 +1110,7 @@ struct ContentView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 5)
                         .background(.ultraThinMaterial, in: Capsule())
-                        .overlay(Capsule().stroke(Color.green.opacity(0.5), lineWidth: 1))
+                        .overlay(Capsule().stroke(Color.cyan.opacity(0.6), lineWidth: 1))
                     }
 
                     if model.isNearRecoveryConsole && model.remotePlayerIsRecovering {
@@ -1304,19 +1318,32 @@ struct ContentView: View {
             .padding(.bottom, 48)
 
             VStack(alignment: .trailing, spacing: 8) {
+                // ⚙️ Botón de Ajustes (Cyan & Pink Liquid Glass)
                 Button {
                     model.showsSettingsSheet = true
                 } label: {
                     Image(systemName: "gearshape.fill")
                         .font(.system(size: 19, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.cyan)
                         .frame(width: 44, height: 44)
-                        .background(.black.opacity(0.68), in: Circle())
-                        .overlay(Circle().stroke(Color.white.opacity(0.35), lineWidth: 1.2))
+                        .background(.ultraThinMaterial, in: Circle())
+                        .background(Color.black.opacity(0.40), in: Circle())
+                        .overlay(
+                            Circle().stroke(
+                                LinearGradient(
+                                    colors: [Color.cyan.opacity(0.85), Color.pink.opacity(0.85)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.5
+                            )
+                        )
+                        .shadow(color: Color.cyan.opacity(0.35), radius: 6)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Ajustes y Opciones")
 
+                // 🔊 Botón de Audio (Cyan cuando activo, Pink cuando silenciado)
                 Button {
                     let audioOn = model.footstepsEnabled
                     model.footstepsEnabled = !audioOn
@@ -1325,36 +1352,56 @@ struct ContentView: View {
                 } label: {
                     Image(systemName: model.footstepsEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
                         .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(model.footstepsEnabled ? .green : .red)
+                        .foregroundStyle(model.footstepsEnabled ? Color.cyan : Color.pink)
                         .frame(width: 44, height: 44)
-                        .background(.black.opacity(0.68), in: Circle())
-                        .overlay {
-                            Circle().stroke((model.footstepsEnabled ? Color.green : Color.red).opacity(0.6), lineWidth: 1.5)
-                        }
+                        .background(.ultraThinMaterial, in: Circle())
+                        .background(Color.black.opacity(0.40), in: Circle())
+                        .overlay(
+                            Circle().stroke(
+                                model.footstepsEnabled ? Color.cyan.opacity(0.85) : Color.pink.opacity(0.85),
+                                lineWidth: 1.5
+                            )
+                        )
+                        .shadow(color: (model.footstepsEnabled ? Color.cyan : Color.pink).opacity(0.35), radius: 6)
                 }
                 .accessibilityLabel("Controles de audio")
 
+                // ⏸️ Botón de Pausa (Estética Liquid Glass Neón)
                 Button {
                     model.togglePause()
                 } label: {
                     Image(systemName: model.gameState == .paused ? "play.fill" : "pause.fill")
                         .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(model.gameState == .paused ? Color.pink : .white)
                         .frame(width: 44, height: 44)
-                        .background(.black.opacity(0.68), in: Circle())
-                        .overlay {
-                            Circle().stroke(.white.opacity(0.3), lineWidth: 1.5)
-                        }
+                        .background(.ultraThinMaterial, in: Circle())
+                        .background(Color.black.opacity(0.40), in: Circle())
+                        .overlay(
+                            Circle().stroke(
+                                LinearGradient(
+                                    colors: [Color.pink.opacity(0.85), Color.cyan.opacity(0.85)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.5
+                            )
+                        )
+                        .shadow(color: Color.pink.opacity(0.35), radius: 6)
                 }
                 .accessibilityLabel("Pausa")
 
                 if model.showsFPS {
                     Text("\(Int(model.framesPerSecond.rounded())) FPS")
                         .font(.caption.monospacedDigit().bold())
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.cyan)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(.black.opacity(0.62), in: RoundedRectangle(cornerRadius: 6))
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .background(Color.black.opacity(0.50), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(Color.cyan.opacity(0.6), lineWidth: 1.0)
+                        )
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
@@ -6673,41 +6720,42 @@ struct PauseMenuView: View {
     var body: some View {
         ZStack {
             // Ultra-subtle liquid glass tint (crystal clear background so 3D scene stays visible!)
-            Color.black.opacity(0.30)
+            Color.black.opacity(0.35)
                 .ignoresSafeArea()
 
             VStack(spacing: 22) {
-                //  iOS 18 Liquid Glass Title Header
+                //  iOS 18 Liquid Glass Title Header (Cyan & Pink)
                 HStack(spacing: 10) {
                     Image(systemName: "pause.circle.fill")
                         .font(.system(size: 26, weight: .bold))
                         .foregroundStyle(
-                            LinearGradient(colors: [.white, .cyan], startPoint: .top, endPoint: .bottom)
+                            LinearGradient(colors: [Color.cyan, Color.pink], startPoint: .topLeading, endPoint: .bottomTrailing)
                         )
 
                     Text("PAUSA")
                         .font(.system(size: 32, weight: .black, design: .rounded))
                         .tracking(3)
                         .foregroundStyle(
-                            LinearGradient(colors: [.white, .cyan], startPoint: .leading, endPoint: .trailing)
+                            LinearGradient(colors: [Color.cyan, Color.pink], startPoint: .leading, endPoint: .trailing)
                         )
-                        .shadow(color: .cyan.opacity(0.8), radius: 12)
+                        .shadow(color: Color.pink.opacity(0.7), radius: 12)
                 }
 
                 if model.isAnyMultiplayerConnected {
                     HStack(spacing: 8) {
-                        Circle().fill(Color.green).frame(width: 8, height: 8)
+                        Circle().fill(Color.cyan).frame(width: 8, height: 8)
                         Text("ENLAZADO: \(model.activePeerDisplayName.uppercased())")
                             .font(.system(size: 11, weight: .black, design: .monospaced))
-                            .foregroundStyle(.green)
+                            .foregroundStyle(Color.cyan)
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 6)
                     .background(Color.black.opacity(0.55), in: Capsule())
+                    .overlay(Capsule().stroke(Color.cyan.opacity(0.5), lineWidth: 1.0))
                 }
 
                 VStack(spacing: 14) {
-                    // Continuar - Primary Liquid Glass Focus Button
+                    // Continuar - Primary Liquid Glass Focus Button (Gradient Cyan -> Pink)
                     Button {
                         model.gameState = .playing
                     } label: {
@@ -6724,13 +6772,17 @@ struct PauseMenuView: View {
                             ZStack {
                                 Capsule()
                                     .fill(
-                                        LinearGradient(colors: [.blue.opacity(0.85), .cyan.opacity(0.85)], startPoint: .leading, endPoint: .trailing)
+                                        LinearGradient(
+                                            colors: [Color(red: 0.12, green: 0.86, blue: 1.0), Color(red: 1.0, green: 0.28, blue: 0.65)],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
                                     )
                                 Capsule()
                                     .stroke(Color.white.opacity(0.90), lineWidth: 1.5)
                             }
                         )
-                        .shadow(color: .cyan.opacity(0.60), radius: 12)
+                        .shadow(color: Color(red: 1.0, green: 0.28, blue: 0.65).opacity(0.55), radius: 12)
                     }
                     .buttonStyle(.plain)
 
@@ -6750,21 +6802,25 @@ struct PauseMenuView: View {
                         .background(
                             ZStack {
                                 Capsule()
-                                    .fill(Color.white.opacity(0.20))
+                                    .fill(Color.white.opacity(0.18))
                                     .background(Color.black.opacity(0.35), in: Capsule())
 
                                 Capsule()
                                     .stroke(
-                                        LinearGradient(colors: [.white.opacity(0.90), .white.opacity(0.25)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                                        LinearGradient(
+                                            colors: [Color.cyan.opacity(0.85), Color.pink.opacity(0.85)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
                                         lineWidth: 1.2
                                     )
                             }
                         )
-                        .shadow(color: .black.opacity(0.25), radius: 10)
+                        .shadow(color: Color.cyan.opacity(0.20), radius: 8)
                     }
                     .buttonStyle(.plain)
 
-                    // Menú Principal - Coral Liquid Glass Pill Button
+                    // Menú Principal - Neon Pink Liquid Glass Pill Button
                     Button {
                         model.returnToMainMenu()
                     } label: {
@@ -6775,22 +6831,26 @@ struct PauseMenuView: View {
                                 .font(.system(size: 14, weight: .black, design: .rounded))
                                 .tracking(1.5)
                         }
-                        .foregroundStyle(Color(red: 1.0, green: 0.40, blue: 0.40))
+                        .foregroundStyle(Color.pink)
                         .frame(width: 250, height: 50)
                         .background(
                             ZStack {
                                 Capsule()
-                                    .fill(Color.red.opacity(0.18))
+                                    .fill(Color.pink.opacity(0.16))
                                     .background(Color.black.opacity(0.35), in: Capsule())
 
                                 Capsule()
                                     .stroke(
-                                        LinearGradient(colors: [Color.red.opacity(0.90), Color.orange.opacity(0.50)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                                        LinearGradient(
+                                            colors: [Color.pink.opacity(0.85), Color.cyan.opacity(0.60)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
                                         lineWidth: 1.2
                                     )
                             }
                         )
-                        .shadow(color: .red.opacity(0.35), radius: 10)
+                        .shadow(color: Color.pink.opacity(0.30), radius: 8)
                     }
                     .buttonStyle(.plain)
                 }
@@ -6800,13 +6860,13 @@ struct PauseMenuView: View {
             .background(
                 ZStack {
                     RoundedRectangle(cornerRadius: 28)
-                        .fill(Color.white.opacity(0.18))
-                        .background(Color.black.opacity(0.38), in: RoundedRectangle(cornerRadius: 28))
+                        .fill(Color.white.opacity(0.16))
+                        .background(Color.black.opacity(0.40), in: RoundedRectangle(cornerRadius: 28))
 
                     RoundedRectangle(cornerRadius: 28)
                         .stroke(
                             LinearGradient(
-                                colors: [.white.opacity(0.92), .cyan.opacity(0.60), .white.opacity(0.30)],
+                                colors: [Color.cyan.opacity(0.90), Color.pink.opacity(0.85)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
@@ -6815,7 +6875,7 @@ struct PauseMenuView: View {
                 }
             )
             .shadow(color: Color.black.opacity(0.40), radius: 20, x: 0, y: 8)
-            .shadow(color: Color.cyan.opacity(0.25), radius: 12, x: 0, y: 0)
+            .shadow(color: Color.pink.opacity(0.25), radius: 12, x: 0, y: 0)
         }
     }
 }
@@ -7094,13 +7154,14 @@ struct GameOptionsSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("🎮 Mando Inalámbrico (Gamepad)") {
+                // 🎮 1. SECCIÓN CONTROLES Y JUGABILIDAD
+                Section("🎮 Controles y Jugabilidad") {
                     HStack {
                         Label(
-                            model.isGameControllerConnected ? "Mando Conectado" : "Sin Mando",
+                            model.isGameControllerConnected ? "Mando Conectado" : "Mando Inalámbrico",
                             systemImage: model.isGameControllerConnected ? "gamecontroller.fill" : "gamecontroller"
                         )
-                        .foregroundStyle(model.isGameControllerConnected ? Color.green : Color.secondary)
+                        .foregroundStyle(model.isGameControllerConnected ? Color.cyan : Color.secondary)
 
                         Spacer()
 
@@ -7124,13 +7185,77 @@ struct GameOptionsSheet: View {
                             .padding(.vertical, 4)
                         }
                     } else {
-                        Text("Puedes conectar mandos Bluetooth de Xbox, PlayStation o Nintendo Switch a tu iPhone para jugar.")
+                        Text("Compatible con mandos inalámbricos Bluetooth de Xbox, PlayStation o Nintendo Switch.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                }
 
-                Section("📱 Cámara y Personalización del HUD") {
+                    Button {
+                        dismiss()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                            if model.gameState != .playing {
+                                model.gameState = .playing
+                            }
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                model.isEditingHUDLayout = true
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "slider.horizontal.below.square.and.square.filled")
+                                .font(.title3)
+                                .foregroundStyle(.cyan)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Personalizar Posición y Tamaño de Botones HUD")
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.primary)
+                                Text("Mueve el joystick, armas, salto y habilidades táctiles")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.bold())
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Sensibilidad de Cámara")
+                            Spacer()
+                            Text(String(format: "%.1fx", model.cameraSensitivity))
+                                .font(.caption.bold())
+                                .foregroundStyle(.secondary)
+                        }
+                        Slider(value: $model.cameraSensitivity, in: 0.4...2.0, step: 0.1)
+                            .tint(.cyan)
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Opacidad General de Botones")
+                            Spacer()
+                            Text("\(Int(model.touchControlsOpacity * 100))%")
+                                .font(.caption.bold())
+                                .foregroundStyle(.secondary)
+                        }
+                        Slider(value: Binding<Double>(
+                            get: { model.touchControlsOpacity },
+                            set: { newVal in
+                                model.touchControlsOpacity = newVal
+                                model.hudJoystickOpacity = newVal
+                                model.hudWeaponsOpacity = newVal
+                                model.hudJumpOpacity = newVal
+                                model.hudSkillsOpacity = newVal
+                            }
+                        ), in: 0.2...1.0, step: 0.05)
+                        .tint(.pink)
+                    }
+
+                    Toggle("Invertir eje Y (Cámara)", isOn: $model.invertsCameraY)
+
                     Picker("Perspectiva de Cámara", selection: $model.cameraMode) {
                         Text("1ª Persona").tag(GameCameraMode.firstPerson)
                         Text("3ª Persona").tag(GameCameraMode.thirdPerson)
@@ -7159,74 +7284,10 @@ struct GameOptionsSheet: View {
                             }
                         }
                     }
-
-                    Button {
-                        dismiss()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                            if model.gameState != .playing {
-                                model.gameState = .playing
-                            }
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                model.isEditingHUDLayout = true
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: "slider.horizontal.below.square.and.square.filled")
-                                .font(.title3)
-                                .foregroundStyle(.cyan)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Personalizar Posición y Tamaño de Botones HUD")
-                                    .font(.subheadline.bold())
-                                    .foregroundStyle(.primary)
-                                Text("Mueve el joystick, armas, salto y habilidades a tu gusto")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption.bold())
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.vertical, 4)
-                    }
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text("Sensibilidad de Cámara")
-                            Spacer()
-                            Text(String(format: "%.1fx", model.cameraSensitivity))
-                                .font(.caption.bold())
-                                .foregroundStyle(.secondary)
-                        }
-                        Slider(value: $model.cameraSensitivity, in: 0.4...2.0, step: 0.1)
-                    }
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text("Opacidad General de Botones")
-                            Spacer()
-                            Text("\(Int(model.touchControlsOpacity * 100))%")
-                                .font(.caption.bold())
-                                .foregroundStyle(.secondary)
-                        }
-                        Slider(value: Binding<Double>(
-                            get: { model.touchControlsOpacity },
-                            set: { newVal in
-                                model.touchControlsOpacity = newVal
-                                model.hudJoystickOpacity = newVal
-                                model.hudWeaponsOpacity = newVal
-                                model.hudJumpOpacity = newVal
-                                model.hudSkillsOpacity = newVal
-                            }
-                        ), in: 0.2...1.0, step: 0.05)
-                    }
-
-                    Toggle("Invertir eje Y (Cámara)", isOn: $model.invertsCameraY)
-                    Toggle("Mostrar contador de FPS", isOn: $model.showsFPS)
                 }
 
-                Section("⚙️ Batería, FPS y Calidad Ray Tracing") {
+                // 🖥️ 2. SECCIÓN GRÁFICOS, FPS Y PANTALLA
+                Section("🖥️ Gráficos, FPS y Pantalla") {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Perfiles Rápidos de Energía y Gráficos")
                             .font(.caption.bold())
@@ -7325,38 +7386,75 @@ struct GameOptionsSheet: View {
                         Text("60 FPS (Fluidez Máxima)").tag(60)
                     }
 
-                    Toggle("Reflejos Ray Tracing (Agua, Piso y Espejos)", isOn: $model.advancedReflectionsEnabled)
-
                     Picker("Resolución interna 3D", selection: $model.renderResolution) {
                         ForEach(GameRenderResolution.allCases) { resolution in
                             Text(resolution.label).tag(resolution)
                         }
                     }
 
+                    Toggle("Reflejos Ray Tracing (Agua, Piso y Espejos)", isOn: $model.advancedReflectionsEnabled)
                     Toggle("Tema Vidrio Líquido (Apple Liquid Glass)", isOn: $model.isLiquidGlassUIEnabled)
                     Toggle("Mostrar Radar Minimapa Táctico", isOn: $model.showsMinimap)
+                    Toggle("Mostrar contador de FPS", isOn: $model.showsFPS)
                 }
 
-                Section("🏆 Desafíos y Logros de Game Center") {
+                // 🎵 3. SECCIÓN AUDIO Y SONIDO
+                Section("🎵 Audio y Sonido") {
+                    Toggle("Música de fondo", isOn: $model.musicEnabled)
+                    Toggle("Efectos de sonido y pasos", isOn: $model.footstepsEnabled)
+                    Toggle("Sonido de agua", isOn: $model.waterSoundEnabled)
+                }
+
+                // 🏆 4. SECCIÓN DESAFÍOS Y LOGROS (GAME CENTER)
+                Section("🏆 Desafíos y Logros (Game Center)") {
                     NavigationLink {
                         AchievementsView(model: model)
                     } label: {
                         HStack {
                             Label("Ver Lista de Logros", systemImage: "trophy.fill")
-                                .foregroundStyle(.yellow)
+                                .foregroundStyle(Color.pink)
                             Spacer()
                             let unlocked = model.gameCenter.achievements.filter { $0.isUnlocked }.count
                             Text("\(unlocked) / \(model.gameCenter.achievements.count)")
                                 .font(.subheadline.bold())
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Color.cyan)
                         }
                     }
                 }
 
-                Section("🎵 Audio y Efectos") {
-                    Toggle("Música de fondo", isOn: $model.musicEnabled)
-                    Toggle("Efectos de sonido y pasos", isOn: $model.footstepsEnabled)
-                    Toggle("Sonido de agua", isOn: $model.waterSoundEnabled)
+                // ℹ️ 5. SECCIÓN INFORMACIÓN DEL SISTEMA
+                Section("ℹ️ Información del Sistema") {
+                    HStack {
+                        Text("Versión")
+                        Spacer()
+                        Text(GameAppVersion.formatted)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                    }
+
+                    HStack {
+                        Text("Motor Gráfico")
+                        Spacer()
+                        Text("Metal Hardware Ray Tracing")
+                            .font(.caption.bold())
+                            .foregroundStyle(.cyan)
+                    }
+
+                    HStack {
+                        Text("Dispositivo")
+                        Spacer()
+                        Text("Apple Silicon GPU (A-Series)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    HStack {
+                        Text("Multijugador")
+                        Spacer()
+                        Text("Multipeer + Game Center")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             .navigationTitle("Ajustes y Opciones")
@@ -7366,6 +7464,8 @@ struct GameOptionsSheet: View {
                     Button("Listo") {
                         dismiss()
                     }
+                    .fontWeight(.bold)
+                    .foregroundStyle(Color.cyan)
                 }
             }
         }
@@ -7695,8 +7795,8 @@ struct MainMenuView: View {
 
                         Spacer(minLength: isCompactLandscape ? 10 : 40)
 
-                        //  iOS 18 Control Center Liquid Glass Action Tiles
-                        VStack(spacing: isCompactLandscape ? 8 : 16) {
+                        //  iOS 18 Control Center Liquid Glass Action Tiles (Paleta Unificada Cyan & Pink)
+                        VStack(spacing: isCompactLandscape ? 9 : 14) {
                             Button {
                                 model.startGame()
                             } label: {
@@ -7710,18 +7810,16 @@ struct MainMenuView: View {
                                     )
                                     .font(isCompactLandscape ? .subheadline.bold() : .headline.bold())
                                     .lineLimit(1)
-                                    .minimumScaleFactor(0.75)
+                                    .minimumScaleFactor(0.80)
                                 }
                                 .foregroundStyle(.white)
-                                .frame(maxWidth: isCompactLandscape ? 320 : 340, minHeight: isCompactLandscape ? 44 : 58)
+                                .frame(maxWidth: isCompactLandscape ? 360 : 390, minHeight: isCompactLandscape ? 46 : 56)
                                 .background(
                                     ZStack {
                                         RoundedRectangle(cornerRadius: isCompactLandscape ? 16 : 22)
                                             .fill(
                                                 LinearGradient(
-                                                    colors: model.isAnyMultiplayerConnected
-                                                        ? [.green.opacity(0.90), .teal.opacity(0.90)]
-                                                        : [.blue.opacity(0.85), .cyan.opacity(0.85)],
+                                                    colors: [Color(red: 0.12, green: 0.86, blue: 1.0), Color(red: 1.0, green: 0.28, blue: 0.65)],
                                                     startPoint: .leading,
                                                     endPoint: .trailing
                                                 )
@@ -7730,7 +7828,7 @@ struct MainMenuView: View {
                                             .stroke(Color.white.opacity(0.85), lineWidth: 1.5)
                                     }
                                 )
-                                .shadow(color: (model.isAnyMultiplayerConnected ? Color.green : Color.cyan).opacity(0.65), radius: 14)
+                                .shadow(color: Color(red: 1.0, green: 0.28, blue: 0.65).opacity(0.55), radius: 12)
                             }
                             .buttonStyle(.plain)
 
@@ -7740,30 +7838,61 @@ struct MainMenuView: View {
                                 HStack(spacing: 12) {
                                     Image(systemName: model.isAnyMultiplayerConnected ? "checkmark.seal.fill" : "person.2.fill")
                                         .font(isCompactLandscape ? .subheadline.bold() : .title3.bold())
-                                        .foregroundStyle(model.isAnyMultiplayerConnected ? .green : .white)
+                                        .foregroundStyle(model.isAnyMultiplayerConnected ? Color.cyan : Color(red: 1.0, green: 0.35, blue: 0.70))
                                     Text(
                                         model.isAnyMultiplayerConnected
                                             ? "SALA ACTIVA (\(model.activePeerDisplayName))"
-                                            : "MULTIJUGADOR LOCAL / ONLINE"
+                                            : "MULTIJUGADOR ONLINE / LOCAL"
                                     )
                                     .font(isCompactLandscape ? .subheadline.bold() : .headline.bold())
                                     .lineLimit(1)
-                                    .minimumScaleFactor(0.75)
+                                    .minimumScaleFactor(0.80)
                                 }
                                 .foregroundStyle(.white)
-                                .frame(maxWidth: isCompactLandscape ? 320 : 340, minHeight: isCompactLandscape ? 44 : 58)
+                                .frame(maxWidth: isCompactLandscape ? 360 : 390, minHeight: isCompactLandscape ? 46 : 56)
                                 .background(
                                     ZStack {
                                         RoundedRectangle(cornerRadius: isCompactLandscape ? 16 : 22)
-                                            .fill(model.isAnyMultiplayerConnected ? Color.green.opacity(0.25) : Color.white.opacity(0.18))
+                                            .fill(Color.white.opacity(0.16))
+                                            .background(Color.black.opacity(0.40), in: RoundedRectangle(cornerRadius: isCompactLandscape ? 16 : 22))
+
+                                        RoundedRectangle(cornerRadius: isCompactLandscape ? 16 : 22)
+                                            .stroke(
+                                                LinearGradient(
+                                                    colors: [Color.cyan.opacity(0.85), Color.pink.opacity(0.85)],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                ),
+                                                lineWidth: 1.4
+                                            )
+                                    }
+                                )
+                                .shadow(color: Color.cyan.opacity(0.25), radius: 8)
+                            }
+                            .buttonStyle(.plain)
+
+                            Button {
+                                model.showsSettingsSheet = true
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "gearshape.fill")
+                                        .font(isCompactLandscape ? .subheadline.bold() : .title3.bold())
+                                        .foregroundStyle(Color.cyan)
+                                    Text("OPCIONES Y AJUSTES")
+                                        .font(isCompactLandscape ? .subheadline.bold() : .headline.bold())
+                                }
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: isCompactLandscape ? 360 : 390, minHeight: isCompactLandscape ? 46 : 56)
+                                .background(
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: isCompactLandscape ? 16 : 22)
+                                            .fill(Color.white.opacity(0.14))
                                             .background(Color.black.opacity(0.35), in: RoundedRectangle(cornerRadius: isCompactLandscape ? 16 : 22))
 
                                         RoundedRectangle(cornerRadius: isCompactLandscape ? 16 : 22)
                                             .stroke(
                                                 LinearGradient(
-                                                    colors: model.isAnyMultiplayerConnected
-                                                        ? [.green.opacity(0.95), .cyan.opacity(0.50)]
-                                                        : [.white.opacity(0.90), .white.opacity(0.25)],
+                                                    colors: [Color.pink.opacity(0.75), Color.cyan.opacity(0.75)],
                                                     startPoint: .topLeading,
                                                     endPoint: .bottomTrailing
                                                 ),
@@ -7771,31 +7900,7 @@ struct MainMenuView: View {
                                             )
                                     }
                                 )
-                                .shadow(color: .black.opacity(0.3), radius: 10)
-                            }
-                            .buttonStyle(.plain)
-
-                            Button {
-                                model.showsSettingsSheet = true
-                            } label: {
-                                HStack(spacing: 10) {
-                                    Image(systemName: "gearshape.fill")
-                                        .font(.subheadline.bold())
-                                    Text("OPCIONES Y AJUSTES")
-                                        .font(.subheadline.bold())
-                                }
-                                .foregroundStyle(.white.opacity(0.90))
-                                .frame(maxWidth: 280, minHeight: isCompactLandscape ? 38 : 46)
-                                .background(
-                                    ZStack {
-                                        Capsule()
-                                            .fill(Color.white.opacity(0.15))
-                                            .background(Color.black.opacity(0.30), in: Capsule())
-
-                                        Capsule()
-                                            .stroke(Color.white.opacity(0.60), lineWidth: 1.0)
-                                    }
-                                )
+                                .shadow(color: Color.pink.opacity(0.20), radius: 8)
                             }
                             .buttonStyle(.plain)
 
