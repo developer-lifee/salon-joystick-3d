@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "121"
-    static let commitHash = "b121translucentslimematerial"
+    static let build = "122"
+    static let commitHash = "b122minimaprealtimearrowandlights"
     static let formatted = "v\(version) • Build \(build)"
 }
 
@@ -6182,6 +6182,43 @@ struct TacticalMinimapView: View {
             }
             .clipShape(Circle()) // Recorta cualquier geometría que se salga del círculo
 
+            // 💡 Puntos de Luminarias de la Arena (Poste, Neón Piscina, Neón Sheerit, Borde Piscina)
+            let lightPoints: [(fixture: GameLightFixture, x: Float, z: Float, isOn: Bool, color: Color)] = [
+                (.post, -7.55, 12.65, model.lightStates.post, .yellow),
+                (.piscinaNeon, -7.70, -16.80, model.lightStates.piscinaNeon, .cyan),
+                (.sheeritNeon, 6.20, 16.80, model.lightStates.sheeritNeon, .orange),
+                (.poolStrips, -1.50, -1.50, model.lightStates.poolStrips, .teal)
+            ]
+
+            ForEach(lightPoints, id: \.fixture.rawValue) { pt in
+                let lx = radius + CGFloat(pt.x - playerPos.x) * pxPerMeter
+                let lz = radius + CGFloat(pt.z - playerPos.z) * pxPerMeter
+                let dx = lx - radius
+                let dz = lz - radius
+                let dist = sqrt(dx * dx + dz * dz)
+                let maxRadarR = radius - 8
+                let isClamped = dist > maxRadarR
+                let finalX = isClamped ? (radius + (dx / dist) * maxRadarR) : lx
+                let finalY = isClamped ? (radius + (dz / dist) * maxRadarR) : lz
+
+                ZStack {
+                    if pt.isOn {
+                        Circle()
+                            .fill(pt.color.opacity(0.40))
+                            .frame(width: isFullView ? 14 : 10, height: isFullView ? 14 : 10)
+                            .blur(radius: 2)
+                    }
+                    Circle()
+                        .fill(pt.isOn ? pt.color : Color.gray.opacity(0.45))
+                        .frame(width: isFullView ? 8 : 6, height: isFullView ? 8 : 6)
+                        .overlay(Circle().stroke(Color.black, lineWidth: 1))
+                    Image(systemName: pt.isOn ? "lightbulb.fill" : "lightbulb")
+                        .font(.system(size: isFullView ? 6 : 4.5, weight: .bold))
+                        .foregroundStyle(pt.isOn ? .black : .white.opacity(0.8))
+                }
+                .position(x: finalX, y: finalY)
+            }
+
             // 5. Enemigos / Bots (Puntos Rojos Tácticos con Alerta de Perímetro)
             ForEach(Array(model.npcPositions.enumerated()), id: \.offset) { index, botPos in
                 let health = (index < model.npcHealths.count) ? model.npcHealths[index] : 0
@@ -6222,10 +6259,10 @@ struct TacticalMinimapView: View {
             // 7. Jugador Local en el Centro con Flecha Direccional de Vista
             ZStack {
                 Image(systemName: "location.north.fill")
-                    .font(.system(size: isFullView ? 12 : 10, weight: .black))
+                    .font(.system(size: isFullView ? 14 : 11, weight: .black))
                     .foregroundStyle(.cyan)
-                    .rotationEffect(Angle(radians: -Double(playerYaw)))
-                    .shadow(color: .cyan.opacity(0.8), radius: 4)
+                    .rotationEffect(Angle(radians: Double(atan2(sin(playerYaw), -cos(playerYaw)))))
+                    .shadow(color: .cyan.opacity(0.9), radius: 4)
 
                 Circle()
                     .fill(Color.white)

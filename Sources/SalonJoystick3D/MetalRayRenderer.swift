@@ -1753,11 +1753,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 let prev = smoothedRemoteAgents[agent.peerID] ?? agent.position
                 smoothedRemoteAgents[agent.peerID] = prev + (agent.position - prev) * interp
             }
-            netSyncTimer += rawDt
-            if netSyncTimer >= 0.065 {
-                netSyncTimer = 0
-                onLocalPlayerTransformUpdate?(playerPosition, playerYaw)
-            }
+        }
+
+        // 🧭 Sincronización continua de posición y rotación hacia el Minimapa y HUD táctico
+        netSyncTimer += rawDt
+        if netSyncTimer >= 0.045 {
+            netSyncTimer = 0
+            onLocalPlayerTransformUpdate?(playerPosition, playerYaw)
         }
         let wasRidingFloat = isStandingOnFloat(playerPosition)
         let floatDisplacement = updateFloatSimulation(dt: dt)
