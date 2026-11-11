@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "106"
-    static let commitHash = "b106thermalweapons"
+    static let build = "107"
+    static let commitHash = "b107settingsheet"
     static let formatted = "v\(version) • Build \(build)"
 }
 
@@ -243,6 +243,8 @@ struct ContentView: View {
             }
             .sheet(isPresented: $model.showsSettingsSheet) {
                 GameOptionsSheet(model: model)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
             }
         } else {
             ZStack(alignment: .bottomLeading) {
@@ -977,6 +979,19 @@ struct ContentView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("Menú Radial de Teletransporte")
 
+                    Button {
+                        model.showsSettingsSheet = true
+                    } label: {
+                        Image(systemName: "gearshape.fill")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 34, height: 34)
+                            .background(Color.black.opacity(0.65), in: Circle())
+                            .overlay(Circle().stroke(Color.white.opacity(0.35), lineWidth: 1.2))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Ajustes y Opciones")
+
                     if model.isGameControllerConnected && !model.isMinimalHUDEnabled {
                         HStack(spacing: 5) {
                             Image(systemName: "gamecontroller.fill")
@@ -1192,85 +1207,18 @@ struct ContentView: View {
             .padding(.bottom, 48)
 
             VStack(alignment: .trailing, spacing: 8) {
-                Menu {
-                    Toggle(isOn: $model.showsFPS) {
-                        Label("Mostrar FPS", systemImage: "speedometer")
-                    }
-
-                    Picker("Resolución interna", selection: $model.renderResolution) {
-                        ForEach(GameRenderResolution.allCases) { resolution in
-                            Text(resolution.label)
-                                .tag(resolution)
-                        }
-                    }
-
-                    Section("Controles") {
-                        Toggle(isOn: $model.invertsCameraY) {
-                            Label("Invertir cámara", systemImage: "arrow.up.and.down")
-                        }
-                    }
-
-                    Section("Audio") {
-                        Toggle(isOn: $model.musicEnabled) {
-                            Label("Música", systemImage: "music.note")
-                        }
-                        Toggle(isOn: $model.footstepsEnabled) {
-                            Label("Movimiento", systemImage: "wind")
-                        }
-                        Toggle(isOn: $model.waterSoundEnabled) {
-                            Label("Agua", systemImage: "water.waves")
-                        }
-                    }
-
-                    Section("Partida local (Multijugador)") {
-                        Picker("Modo de Juego", selection: $model.multiplayer.mode) {
-                            ForEach(LocalMatchMode.allCases) { mode in
-                                Text(mode.label).tag(mode)
-                            }
-                        }
-                        Picker("Rol de Dispositivo", selection: $model.multiplayer.role) {
-                            ForEach(LocalDeviceRole.allCases) { role in
-                                Text(role.label).tag(role)
-                            }
-                        }
-                        Button {
-                            model.multiplayer.host()
-                        } label: {
-                            Label("Crear sala (Host 3D)", systemImage: "wifi")
-                        }
-                        Button {
-                            model.multiplayer.join()
-                        } label: {
-                            Label("Unirse a sala", systemImage: "person.2")
-                        }
-                        if model.multiplayer.isConnected {
-                            Label(
-                                model.multiplayer.role == .remoteController
-                                    ? "Control Remoto Conectado"
-                                    : "Jugador Conectado",
-                                systemImage: "checkmark.circle.fill"
-                            )
-                            Button("Desconectar", role: .destructive) {
-                                model.multiplayer.stop()
-                            }
-                        }
-                    }
-
-                    Section("Ajustes Avanzados") {
-                        Button {
-                            model.showsSettingsSheet = true
-                        } label: {
-                            Label("Abrir Opciones Completas", systemImage: "slider.horizontal.3")
-                        }
-                    }
+                Button {
+                    model.showsSettingsSheet = true
                 } label: {
                     Image(systemName: "gearshape.fill")
                         .font(.system(size: 19, weight: .semibold))
                         .foregroundStyle(.white)
                         .frame(width: 44, height: 44)
-                        .background(.black.opacity(0.58), in: Circle())
+                        .background(.black.opacity(0.68), in: Circle())
+                        .overlay(Circle().stroke(Color.white.opacity(0.35), lineWidth: 1.2))
                 }
-                .accessibilityLabel("Ajustes de renderizado")
+                .buttonStyle(.plain)
+                .accessibilityLabel("Ajustes y Opciones")
 
                 Button {
                     let audioOn = model.footstepsEnabled
@@ -1507,6 +1455,8 @@ struct ContentView: View {
             }
             .sheet(isPresented: $model.showsSettingsSheet) {
                 GameOptionsSheet(model: model)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
             }
             .onAppear {
                 UIApplication.shared.isIdleTimerDisabled = true
