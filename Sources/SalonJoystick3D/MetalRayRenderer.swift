@@ -319,11 +319,14 @@ private struct RTMeshBuilder {
             // 3. Estratos sedimentarios escalonados
             let strata = sin(latitude * 8.0 + seed * 1.5) * 0.06
 
-            // Factor de desplazamiento geológico combinado (estilo roca esculpida / Nano Banana)
-            let geoDisp = 1.0 + crag1 + crag2 + crag3 + strata - (facetPlateau * 0.12)
+            // Factor de desplazamiento geológico modulado por latCos
+            // CRÍTICO: En los polos (latitude = +/- pi/2), latCos == 0, por lo que todo el ruido de longitud
+            // se desvanece a 0. Esto garantiza que todos los segmentos converjan al MISMO punto exacto
+            // en la cumbre y en la base, sellando la roca 100% estanca sin fisuras ni huecos por donde ver el interior.
+            let poleBlend = max(0.0, latCos)
+            let geoDisp = 1.0 + (crag1 + crag2 + crag3 + strata - (facetPlateau * 0.12)) * poleBlend
 
             // 4. Base geológica plana firmemente anclada al suelo (Y <= 0.0)
-            // Se garantiza que el fondo penetre 4cm en el piso para eliminar por completo cualquier hueco o flotación en el aire
             var yCoord = center.y + latSin * radii.y * geoDisp
             if latitude < -0.15 {
                 let t = max(0.0, min(1.0, (-latitude - 0.15) / 1.1))
@@ -3414,8 +3417,37 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     }
                 }
             }
+            for rock in rtRiverRocks where rock.center.z > 18.0 {
+                let rx = (position.x - rock.center.x) / (rock.radii.x * 1.05)
+                let rz = (position.z - rock.center.z) / (rock.radii.z * 1.05)
+                let distSq = rx * rx + rz * rz
+                if distSq < 1.0 {
+                    let rockTop = rock.center.y + rock.radii.y * sqrt(max(0.0, 1.0 - distSq)) * 1.02
+                    if rockTop > 0.05 && position.y >= rockTop - 0.45 {
+                        highestPlatform = max(highestPlatform, rockTop)
+                    }
+                }
+            }
             return highestPlatform
         }
+
+        // 🪨 Superficie superior de las Rocas de Río / Búlders (soporte sólido para pararse encima y no caer dentro)
+        var highestRock: Float = 0.0
+        for rock in rtRiverRocks where rock.center.z <= 18.0 {
+            let rx = (position.x - rock.center.x) / (rock.radii.x * 1.05)
+            let rz = (position.z - rock.center.z) / (rock.radii.z * 1.05)
+            let distSq = rx * rx + rz * rz
+            if distSq < 1.0 {
+                let rockTop = rock.center.y + rock.radii.y * sqrt(max(0.0, 1.0 - distSq)) * 1.02
+                if rockTop > 0.05 && position.y >= rockTop - 0.45 {
+                    highestRock = max(highestRock, rockTop)
+                }
+            }
+        }
+        if highestRock > 0.05 {
+            return highestRock
+        }
+
         // 🌊 Si está bajo la superficie (en el pozo abisal o cámara subterránea), el suelo es el fondo abisal:
         if position.y < -0.30 {
             return -11.0
@@ -3650,10 +3682,12 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let playerRadius: Float = 0.38
 
         for rock in rtRiverRocks {
-            guard position.y < rock.center.y + rock.radii.y + 0.08 else { continue }
+            let rockTop = rock.center.y + rock.radii.y * 1.02
+            // Si el jugador está sobre la roca (o en el tope), no empujar lateralmente para permitir caminar encima
+            guard position.y < rockTop - 0.10 else { continue }
 
             let center = SIMD2<Float>(rock.center.x, rock.center.z)
-            let expandedRadii = SIMD2<Float>(rock.radii.x + playerRadius, rock.radii.z + playerRadius)
+            let expandedRadii = SIMD2<Float>(rock.radii.x * 1.16 + playerRadius, rock.radii.z * 1.16 + playerRadius)
             var offset = SIMD2<Float>(position.x, position.z) - center
             var normalizedOffset = offset / expandedRadii
             var normalizedDistance = simd_length(normalizedOffset)
@@ -3852,7 +3886,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         // 2. Obstáculos, Pilares Azules y Rocas (Ray vs Ellipsoid: Anti-Oclusión completa)
         for rock in rtRiverRocks {
-            let expanded = rock.radii + SIMD3<Float>(repeating: cameraBumper)
+            let expanded = rock.radii * 1.25 + SIMD3<Float>(repeating: cameraBumper + 0.12)
             let relO = (origin - rock.center) / expanded
             let relD = rayDir / expanded
             let a = simd_dot(relD, relD)
@@ -3866,7 +3900,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 if t0 > 0.05 && t0 < closestHit {
                     closestHit = t0
                 } else if t1 > 0.05 && t1 < closestHit && c < 0 {
-                    closestHit = min(closestHit, 0.20)
+                    closestHit = min(closestHit, 0.15)
                 }
             }
         }
@@ -4995,7 +5029,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         builder.addBox(center: lampPosition + SIMD3<Float>(0, 0.08, 0), size: SIMD3<Float>(0.62, 0.16, 0.62), material: metal)
 
         for (index, rock) in rtRiverRocks.enumerated() {
-            let stone = RTMaterial(color: rock.color, roughness: 0.32, reflectivity: 0.18, kind: 3)
+            let stone = RTMaterial(color: rock.color, roughness: 0.92, reflectivity: 0.01, kind: 3)
             builder.addRiverRock(
                 center: rock.center,
                 radii: rock.radii,
@@ -5131,21 +5165,12 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
             let mat = RTMaterial(
                 color: baseColor,
-                roughness: 0.78,
+                roughness: 0.96,
                 emission: .zero,
-                reflectivity: 0.02,
+                reflectivity: 0.0,
                 kind: 0
             )
             builder.addBox(center: box.center, size: box.size, material: mat)
-
-            // Borde superior neón arcoíris para visualizar las alturas de parkour en la oscuridad al encender las luces
-            let neonTrim = rainbowNeonMats[idx % rainbowNeonMats.count]
-            let topY = box.center.y + box.size.y * 0.5 + 0.02
-            builder.addBox(
-                center: SIMD3<Float>(box.center.x, topY, box.center.z),
-                size: SIMD3<Float>(box.size.x * 0.96, 0.04, box.size.z * 0.96),
-                material: neonTrim
-            )
         }
 
         return builder

@@ -1117,7 +1117,7 @@ kernel void raytracePatio(
             roughness = 0.005f;
             baseReflectivity = 0.98f;
         } else if (kind > 2.5f && kind < 3.5f) {
-            if (position.y > -0.15f && position.y < 0.06f) {
+            if (position.y > -0.15f && position.y < 0.06f && normal.y > 0.88f) {
                 // 💧 Zonas orgánicas de piso húmedo vs. losa seca (charcos realistas por zonas, no en todo el piso)
                 float2 grid = fract(position.xz * 2.2f);
                 float grout = step(0.04f, grid.x) * step(0.04f, grid.y);
@@ -1167,8 +1167,8 @@ kernel void raytracePatio(
                 float3 mineralVein = mix(float3(0.70f, 0.72f, 0.75f), float3(1.25f, 1.20f, 1.15f), crevice);
                 float3 mossTint = float3(0.24f, 0.30f, 0.20f); // Líquenes secos en la parte superior
                 albedo = mix(albedo * mineralVein, mossTint, topExposure * 0.28f);
-                roughness = 0.82f;
-                baseReflectivity = 0.04f;
+                roughness = 0.92f;
+                baseReflectivity = 0.01f;
             }
         } else if (kind < 0.5f && abs(normal.y) < 0.35f && (abs(position.x) > 16.5f || abs(position.z) > 16.5f || abs(position.x) > 25.5f || position.z > 69.5f)) {
             // 🧱 Muros Perimetrales: Paneles Modulares Cyber / Titanio con Juntas y Remaches
