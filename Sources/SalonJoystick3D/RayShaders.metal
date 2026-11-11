@@ -1116,6 +1116,13 @@ kernel void raytracePatio(
             normal = normalize(normal + liquidRipple);
             roughness = 0.005f;
             baseReflectivity = 0.98f;
+            if (bounce >= 1) {
+                // 🌌 En el reflejo del espejo norte (bounce >= 1), el Gran Portal resplandece con la magia cósmica del Salón Arcoíris en lugar de ser un vacío negro
+                float portalPhase = dot(position.xy, float2(0.35f, 0.45f)) + uniforms.waterSimulation.y * 1.6f;
+                float3 portalRainbow = 0.5f + 0.5f * cos(portalPhase * 2.2f + float3(0.0f, 2.0f, 4.0f));
+                emission = portalRainbow * 0.92f;
+                baseReflectivity = 0.04f;
+            }
         } else if (kind > 2.5f && kind < 3.5f) {
             if (position.y > -0.15f && position.y < 0.06f && normal.y > 0.88f) {
                 // 💧 Zonas orgánicas de piso húmedo vs. losa seca (charcos realistas por zonas, no en todo el piso)
@@ -1374,21 +1381,21 @@ kernel void raytracePatio(
         }
         direct += lampContribution / float(activeLampSamples);
 
-        if (bounce == 0 && (uniforms.lightStates.y > 0.001f || uniforms.lightStates.z > 0.001f)) {
+        if (bounce <= 1 && (uniforms.lightStates.y > 0.001f || uniforms.lightStates.z > 0.001f)) {
             // Posiciones reales de los letreros de neón montados en los muros perimetrales:
             // Letrero Neón Piscina (Muro Norte: X = -6.60, Y = 3.75, Z = -17.45)
-            // Letrero Neón SHEERIT (Muro Sur: X = 8.40, Y = 3.73, Z = 17.45)
+            // Letrero Neón SHEERIT (Muro Sur: X = 8.75, Y = 3.73, Z = 17.48)
             float3 neonPositions[2] = {
                 float3(-6.60f, 3.75f, -17.45f),
-                float3( 8.40f, 3.73f,  17.45f)
+                float3( 8.75f, 3.73f,  17.48f)
             };
             float3 neonColors[2] = {
                 float3(1.0f, 0.012f, 0.006f),
-                float3(0.008f, 0.18f, 1.0f)
+                float3(0.008f, 0.22f, 1.0f)
             };
             float neonPowers[2] = {
                 28.0f * uniforms.lightStates.y,
-                26.0f * uniforms.lightStates.z
+                34.0f * uniforms.lightStates.z
             };
             for (uint neonIndex = 0; neonIndex < 2; ++neonIndex) {
                 float3 toNeon = neonPositions[neonIndex] - position;
@@ -1396,30 +1403,35 @@ kernel void raytracePatio(
                 float neonDistance = sqrt(max(neonDistanceSquared, 1e-4f));
                 float3 neonDirection = toNeon / neonDistance;
                 float neonNDotL = saturate(dot(normal, neonDirection));
-                if (neonNDotL > 0.0f && neonDistance < 14.0f) {
-                    // Oclusión por sombra para que la luz del neón no atraviese columnas ni objetos
-                    ray neonShadow;
-                    neonShadow.origin = position + normal * 0.015f;
-                    neonShadow.direction = neonDirection;
-                    neonShadow.max_distance = max(0.0f, neonDistance - 0.04f);
-                    tracer.accept_any_intersection(true);
-                    auto neonBlocker = tracer.intersect(neonShadow, accelerationStructure, 0x03);
-                    if (neonBlocker.type == intersection_type::none) {
+                float maxRange = (neonIndex == 1) ? 26.0f : 16.0f;
+                if (neonNDotL > 0.0f && neonDistance < maxRange) {
+                    bool isOccluded = false;
+                    if (bounce == 0) {
+                        // Oclusión por sombra para rayos primarios
+                        ray neonShadow;
+                        neonShadow.origin = position + normal * 0.015f;
+                        neonShadow.direction = neonDirection;
+                        neonShadow.max_distance = max(0.0f, neonDistance - 0.04f);
+                        tracer.accept_any_intersection(true);
+                        auto neonBlocker = tracer.intersect(neonShadow, accelerationStructure, 0x03);
+                        isOccluded = (neonBlocker.type != intersection_type::none);
+                    }
+                    if (!isOccluded) {
                         float neonAttenuation = neonPowers[neonIndex] /
-                            (1.0f + neonDistanceSquared * 0.35f);
+                            (1.0f + neonDistanceSquared * 0.28f);
                         direct += albedo * neonColors[neonIndex] *
                                   neonAttenuation * neonNDotL;
                         float3 neonHalf = normalize(neonDirection - currentRay.direction);
                         float neonGloss = pow(saturate(dot(normal, neonHalf)), 190.0f);
                         direct += neonColors[neonIndex] * neonAttenuation * neonGloss *
-                                  (waterSurface ? 0.82f : 0.08f);
+                                  (waterSurface ? 0.82f : 0.12f);
                     }
                 }
             }
         }
 
         // Treat the four visible pool strips as one nearest line-area sample.
-        if (bounce == 0 && uniforms.lightStates.w > 0.001f) {
+        if (bounce <= 1 && uniforms.lightStates.w > 0.001f) {
             float3 stripSamples[4] = {
                 float3(clamp(position.x, -5.35f, 2.35f), 0.48f, -4.20f),
                 float3(clamp(position.x, -5.35f, 2.35f), 0.48f,  1.20f),

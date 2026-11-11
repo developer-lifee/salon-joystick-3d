@@ -517,16 +517,43 @@ private struct RTMeshBuilder {
             [top, center, bottom],
             [top, center]
         ]
+
+        let totalSignWidth = Float(glyphs.count - 1) * 0.72 + 0.50
+        let signCenter = origin + SIMD2<Float>(totalSignWidth * 0.5, 0.45)
+
+        // 1. Placa de Montaje Arquitectónica de Titanio Oscuro (da contraste, presencia y evita que el letrero se pierda en el muro vacío)
+        let mountBackplate = RTMaterial(
+            color: SIMD3<Float>(0.045, 0.055, 0.08),
+            roughness: 0.35,
+            reflectivity: 0.16,
+            kind: 0.0
+        )
+        let mountBorder = RTMaterial(
+            color: SIMD3<Float>(0.02, 0.45, 0.95),
+            roughness: 0.15,
+            emission: SIMD3<Float>(0.05, 0.45, 2.2),
+            reflectivity: 0.45,
+            kind: 7
+        )
+        // Panel trasero biselado montado sobre el muro (frente al muro Z = 17.60)
+        addBox(center: SIMD3<Float>(signCenter.x, signCenter.y, z + 0.05), size: SIMD3<Float>(totalSignWidth + 0.90, 1.38, 0.03), material: mountBackplate)
+        // Marco perimetral neón cian que encuadra el letrero
+        addBox(center: SIMD3<Float>(signCenter.x, signCenter.y + 0.67, z + 0.04), size: SIMD3<Float>(totalSignWidth + 0.92, 0.035, 0.035), material: mountBorder)
+        addBox(center: SIMD3<Float>(signCenter.x, signCenter.y - 0.67, z + 0.04), size: SIMD3<Float>(totalSignWidth + 0.92, 0.035, 0.035), material: mountBorder)
+        addBox(center: SIMD3<Float>(signCenter.x - (totalSignWidth + 0.90) * 0.5, signCenter.y, z + 0.04), size: SIMD3<Float>(0.035, 1.38, 0.035), material: mountBorder)
+        addBox(center: SIMD3<Float>(signCenter.x + (totalSignWidth + 0.90) * 0.5, signCenter.y, z + 0.04), size: SIMD3<Float>(0.035, 1.38, 0.035), material: mountBorder)
+
+        // 2. Tubos de Neón con emisión vibrante y visibilidad nítida en espejos a 35m
         let halo = RTMaterial(
-            color: SIMD3<Float>(0.002, 0.025, 0.16),
-            roughness: 0.2,
-            emission: SIMD3<Float>(0.005, 0.12, 0.85),
+            color: SIMD3<Float>(0.005, 0.04, 0.32),
+            roughness: 0.18,
+            emission: SIMD3<Float>(0.015, 0.42, 3.2),
             kind: 7
         )
         let core = RTMaterial(
-            color: SIMD3<Float>(0.01, 0.20, 1.0),
-            roughness: 0.08,
-            emission: SIMD3<Float>(0.04, 1.15, 8.0),
+            color: SIMD3<Float>(0.02, 0.35, 1.0),
+            roughness: 0.05,
+            emission: SIMD3<Float>(0.08, 2.2, 14.0),
             kind: 7
         )
 
@@ -536,15 +563,15 @@ private struct RTMeshBuilder {
                 addFlatSegment(
                     from: segment.0 + offset,
                     to: segment.1 + offset,
-                    z: z + 0.015,
-                    thickness: 0.12,
+                    z: z + 0.018,
+                    thickness: 0.15,
                     material: halo
                 )
                 addFlatSegment(
                     from: segment.0 + offset,
                     to: segment.1 + offset,
                     z: z,
-                    thickness: 0.045,
+                    thickness: 0.065,
                     material: core
                 )
             }
@@ -5191,7 +5218,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         builder.addBox(center: SIMD3<Float>(1.24, 2.05, -17.52), size: SIMD3<Float>(0.16, 2.72, 0.16), material: metal)
         builder.addBox(center: SIMD3<Float>(5.76, 2.05, -17.52), size: SIMD3<Float>(0.16, 2.72, 0.16), material: metal)
         builder.addNeonPoolSign(origin: SIMD2<Float>(-7.7, 3.30), z: -17.58)
-        builder.addNeonSheeritSign(origin: SIMD2<Float>(6.2, 3.28), z: 17.58)
+        builder.addNeonSheeritSign(origin: SIMD2<Float>(6.3, 3.28), z: 17.50)
 
         let lampPosition = SIMD3<Float>(-7.55, 0, 12.65)
         builder.addBox(center: lampPosition + SIMD3<Float>(0, 1.42, 0), size: SIMD3<Float>(0.13, 2.75, 0.13), material: metal)
