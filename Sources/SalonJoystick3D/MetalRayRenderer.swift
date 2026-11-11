@@ -2923,8 +2923,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             let lateralTangent = SIMD2<Float>(-rawDirection.y * orbitSign, rawDirection.x * orbitSign)
             var tacticalDesiredDir: SIMD2<Float>
 
-            let botInRainbow = npcPositions[index].z > 18.0
-            let playerInRainbow = targetPos.z > 18.0
+            let botInRainbow = npcPositions[index].z > 17.8
+            let playerInRainbow = targetPos.z > 17.8
             if botInRainbow != playerInRainbow && abs(npcPositions[index].x) > 3.6 {
                 // 🌈 Si el jugador cruzó al otro salón (Piscina <-> Salón Arcoíris), el bot se dirige primero al Gran Pórtico (X = 0, Z = 17.8)
                 let portalTarget = SIMD2<Float>(0.0, playerInRainbow ? 20.5 : 15.0)
@@ -3158,69 +3158,52 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
 
             let isTargetAlive = isTargetingRemote ? !remotePlayerIsRecovering : !isPlayerDead
+            let botHandOrigin = npcPositions[index] + SIMD3<Float>(0.42, 0.88, 0.20)
+            let targetCenter = targetPos + SIMD3<Float>(0, 1.10, 0)
+            let bTotalDist = max(0.001, simd_distance(botHandOrigin, targetCenter))
+            let bDir = simd_normalize(targetCenter - botHandOrigin)
+
             if !isTargetAlive {
                 botLaserActiveTimers[index] = 0
                 botLaserCooldownTimers[index] = 1.0
+            } else if botInRainbow != playerInRainbow {
+                // 🚫 El bot y el jugador están en salones separados por el muro y el espejo mágico (Z = 17.8).
+                // Cortar cualquier disparo activo y esperar a cruzar el portal.
+                botLaserActiveTimers[index] = 0
+                botLaserCooldownTimers[index] = max(0.6, botLaserCooldownTimers[index])
+                currentBotLaserStarts[index] = .zero
+                currentBotLaserEnds[index] = .zero
             } else if botLaserCooldownTimers[index] > 0 {
                 let cooldownRate: Float = (targetIsUsingMirror && distance < 22.0) ? 3.2 : 1.0
                 botLaserCooldownTimers[index] = max(0, botLaserCooldownTimers[index] - dt * cooldownRate)
                 let maxEngageDist: Float = (botInRainbow || playerInRainbow) ? 38.0 : 28.0
                 if botLaserCooldownTimers[index] == 0 && distance < maxEngageDist && distance >= 1.2 && botTeleportReactionTimers[index] <= 0 {
-                    if activeShootersCount < maxConcurrentShooters {
-                        botLaserActiveTimers[index] = targetIsUsingMirror ? 2.6 : 1.9
-                        botLaserPropagationDistances[index] = 0
-                        botLaserOrigins[index] = npcPositions[index] + SIMD3<Float>(0.42, 0.88, 0.20)
-                        botLaserDistancesToPlayer[index] = simd_distance(botLaserOrigins[index], currentAimTarget)
+                    // Verificar línea de visión libre antes de iniciar disparo
+                    let los = findRayObstacleHit(from: botHandOrigin, to: targetCenter)
+                    if !los.hit || los.hitDistance >= (distance - 0.45) {
+                        if activeShootersCount < maxConcurrentShooters {
+                            botLaserActiveTimers[index] = targetIsUsingMirror ? 2.6 : 1.9
+                            botLaserPropagationDistances[index] = 0
+                            botLaserOrigins[index] = botHandOrigin
+                            botLaserDistancesToPlayer[index] = simd_distance(botLaserOrigins[index], currentAimTarget)
+                        } else {
+                            // Espera su turno de disparo mientras ataja / flanquea tácticamente
+                            botLaserCooldownTimers[index] = 0.45 + Float(dynamicRoleIndex) * 0.20
+                        }
                     } else {
-                        // Espera su turno de disparo mientras ataja / flanquea tácticamente
-                        botLaserCooldownTimers[index] = 0.45 + Float(dynamicRoleIndex) * 0.20
+                        // Obstruido por cobertura
+                        botLaserCooldownTimers[index] = 0.35
                     }
                 }
             } else if botLaserActiveTimers[index] > 0 && botTeleportReactionTimers[index] <= 0 {
                 botLaserActiveTimers[index] = max(0, botLaserActiveTimers[index] - dt)
 
-                let botHandOrigin = npcPositions[index] + SIMD3<Float>(0.42, 0.88, 0.20)
-                let targetCenter = targetPos + SIMD3<Float>(0, 1.10, 0)
-                let bTotalDist = max(0.001, simd_distance(botHandOrigin, targetCenter))
-                let bDir = simd_normalize(targetCenter - botHandOrigin)
+                // 🪨 Comprobar oclusión por Muro Divisor/Espejo (Z = 17.8), muros perimetrales, rocas y cabañas
+                let obs = findRayObstacleHit(from: botHandOrigin, to: targetCenter)
+                let hitObstacle = obs.hit && obs.hitDistance < (bTotalDist - 0.45)
+                let closestHitDist = hitObstacle ? obs.hitDistance : bTotalDist
+                let bEndActual = hitObstacle ? obs.hitPoint : (botHandOrigin + bDir * bTotalDist)
 
-                // 🪨 Check Rock & Parkour/Cabin Cover Occlusion (El láser de bot NO atraviesa las piedras ni las cabañas/obstáculos arcoíris)
-                var closestHitDist: Float = bTotalDist
-                var hitRock = false
-                for rock in rtRiverRocks {
-                    let center = rock.center
-                    let radius = max(rock.radii.x, rock.radii.z)
-                    let toCenter = center - botHandOrigin
-                    let proj = simd_dot(toCenter, bDir)
-                    if proj > 0.1 && proj < closestHitDist {
-                        let closestPointOnRay = botHandOrigin + bDir * proj
-                        let distToRock = simd_distance(center, closestPointOnRay)
-                        if distToRock < (radius + 0.35) {
-                            closestHitDist = proj - 0.2
-                            hitRock = true
-                        }
-                    }
-                }
-                for box in rtRainbowParkourBoxes {
-                    let half = box.size * 0.5
-                    let bMin = box.center - half
-                    let bMax = box.center + half
-                    let invDir = SIMD3<Float>(
-                        abs(bDir.x) > 0.0001 ? 1.0 / bDir.x : 1e6,
-                        abs(bDir.y) > 0.0001 ? 1.0 / bDir.y : 1e6,
-                        abs(bDir.z) > 0.0001 ? 1.0 / bDir.z : 1e6
-                    )
-                    let t1 = (bMin - botHandOrigin) * invDir
-                    let t2 = (bMax - botHandOrigin) * invDir
-                    let tMin = max(max(min(t1.x, t2.x), min(t1.y, t2.y)), min(t1.z, t2.z))
-                    let tMax = min(min(max(t1.x, t2.x), max(t1.y, t2.y)), max(t1.z, t2.z))
-                    if tMax >= max(0.15, tMin) && tMin < closestHitDist {
-                        closestHitDist = max(0.15, tMin - 0.1)
-                        hitRock = true
-                    }
-                }
-
-                let bEndActual = botHandOrigin + bDir * closestHitDist
                 let bProgress: Float = 1.0
                 let startVec = SIMD4<Float>(botHandOrigin, 1.0)
                 var endVec: SIMD4<Float> = .zero
@@ -3241,7 +3224,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
                 let isUsingMirror = isTargetingRemote ? (remotePlayerHeldTool == .mirror) : (heldTool == .mirror && mirrorActiveRemaining > 0 && !mirrorOverheated)
 
-                if isUsingMirror && !hitRock && facingDot > -0.20 {
+                if isUsingMirror && !hitObstacle && facingDot > -0.20 {
                     if !isTargetingRemote {
                         isMirrorReflectingLaser = true
                         mirrorHeat = min(1.0, mirrorHeat + 0.22)
@@ -3289,8 +3272,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     }
                 } else {
                     endVec = SIMD4<Float>(bEndActual, 1.0)
-                    // Damage only applies when photon front reaches target AND bot is actually aligned AND NO ROCK OBSTRUCTS
-                    if bProgress >= 1.0 && !hitRock {
+                    // Damage only applies when photon front reaches target AND bot is actually aligned AND NO WALL/ROCK OBSTRUCTS
+                    if bProgress >= 1.0 && !hitObstacle {
                         let aimRay = simd_normalize(botAimTargets[index] - botHandOrigin)
                         let targetRay = simd_normalize(targetCenter - botHandOrigin)
                         let aimAlignment = simd_dot(aimRay, targetRay)
@@ -3354,6 +3337,104 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
     }
 
+    private func findRayObstacleHit(from origin: SIMD3<Float>, to target: SIMD3<Float>) -> (hit: Bool, hitDistance: Float, hitPoint: SIMD3<Float>) {
+        let diff = target - origin
+        let totalDist = simd_length(diff)
+        guard totalDist > 0.001 else { return (false, totalDist, target) }
+        let dir = diff / totalDist
+        var closestHitDist = totalDist
+        var hitObstacle = false
+        var bestHitPoint = target
+
+        // 🚪 1. Muro Divisor Sur y Gran Espejo Mágico Portal (Z = 17.8)
+        // Separa el Salón Piscina (Z <= 17.8) del Gran Salón Arcoíris (Z > 17.8).
+        // Tanto el muro de concreto como el espejo portal son 100% impenetrables para los rayos láser.
+        if (origin.z < 17.8 && target.z > 17.8) || (origin.z > 17.8 && target.z < 17.8) {
+            if abs(dir.z) > 0.0001 {
+                let t = (17.8 - origin.z) / dir.z
+                if t > 0.02 && t < closestHitDist {
+                    let hp = origin + dir * t
+                    // El muro y el portal abarcan todo el ancho X (-27.5 a 27.5) y altura Y (-1.0 a 10.0)
+                    if hp.x >= -27.5 && hp.x <= 27.5 && hp.y >= -1.0 && hp.y <= 10.0 {
+                        closestHitDist = t
+                        hitObstacle = true
+                        bestHitPoint = hp
+                    }
+                }
+            }
+        }
+
+        // 🧱 2. Muros perimetrales
+        // Muro Norte Piscina (Z = -17.8)
+        if (origin.z > -17.8 && target.z < -17.8) || (origin.z < -17.8 && target.z > -17.8) {
+            if abs(dir.z) > 0.0001 {
+                let t = (-17.8 - origin.z) / dir.z
+                if t > 0.02 && t < closestHitDist {
+                    closestHitDist = t
+                    hitObstacle = true
+                    bestHitPoint = origin + dir * t
+                }
+            }
+        }
+        // Muro Sur Arcoíris (Z = 72.0)
+        if (origin.z < 72.0 && target.z > 72.0) || (origin.z > 72.0 && target.z < 72.0) {
+            if abs(dir.z) > 0.0001 {
+                let t = (72.0 - origin.z) / dir.z
+                if t > 0.02 && t < closestHitDist {
+                    closestHitDist = t
+                    hitObstacle = true
+                    bestHitPoint = origin + dir * t
+                }
+            }
+        }
+
+        // 🪨 3. Rocas del Río y Patio
+        for rock in rtRiverRocks {
+            let center = rock.center
+            let radius = max(rock.radii.x, rock.radii.z)
+            let toCenter = center - origin
+            let proj = simd_dot(toCenter, dir)
+            if proj > 0.1 && proj < closestHitDist {
+                let closestPointOnRay = origin + dir * proj
+                let distToRock = simd_distance(center, closestPointOnRay)
+                if distToRock < (radius + 0.35) {
+                    let hitDist = max(0.1, proj - 0.2)
+                    if hitDist < closestHitDist {
+                        closestHitDist = hitDist
+                        hitObstacle = true
+                        bestHitPoint = origin + dir * hitDist
+                    }
+                }
+            }
+        }
+
+        // 🌈 4. Cabañas y Cajas de Parkour Arcoíris
+        for box in rtRainbowParkourBoxes {
+            let half = box.size * 0.5
+            let bMin = box.center - half
+            let bMax = box.center + half
+            let invDir = SIMD3<Float>(
+                abs(dir.x) > 0.0001 ? 1.0 / dir.x : 1e6,
+                abs(dir.y) > 0.0001 ? 1.0 / dir.y : 1e6,
+                abs(dir.z) > 0.0001 ? 1.0 / dir.z : 1e6
+            )
+            let t1 = (bMin - origin) * invDir
+            let t2 = (bMax - origin) * invDir
+            let tMin = max(max(min(t1.x, t2.x), min(t1.y, t2.y)), min(t1.z, t2.z))
+            let tMax = min(min(max(t1.x, t2.x), max(t1.y, t2.y)), max(t1.z, t2.z))
+            if tMax >= max(0.15, tMin) && tMin < closestHitDist {
+                let hitDist = max(0.15, tMin - 0.1)
+                if hitDist < closestHitDist {
+                    closestHitDist = hitDist
+                    hitObstacle = true
+                    bestHitPoint = origin + dir * hitDist
+                }
+            }
+        }
+
+        return (hitObstacle, closestHitDist, bestHitPoint)
+    }
+
     private func checkCombatHits(dt: Float) {
         for i in playerLaserHitCooldowns.indices {
             if playerLaserHitCooldowns[i] > 0 {
@@ -3383,6 +3464,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             guard alongRay > 0, alongRay < closestDistance else { continue }
             let closestPoint = origin + direction * alongRay
             guard simd_distance(center, closestPoint) < (1.42 * scale) else { continue }
+
+            // 🛡️ Comprobar que no haya un muro, el espejo portal, rocas o cajas bloqueando el tiro
+            let obs = findRayObstacleHit(from: origin, to: center)
+            if obs.hit && obs.hitDistance < (alongRay - 0.45) {
+                continue
+            }
+
             closestIndex = index
             closestDistance = alongRay
         }
@@ -3427,20 +3515,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     let distToBody = simd_distance(closestPoint, segmentPoint)
 
                     if distToBody < 0.78 && remotePlayerHitCooldown <= 0 {
-                        var hitObstacle = false
-                        for rock in rtRiverRocks {
-                            let center = rock.center
-                            let radius = max(rock.radii.x, rock.radii.z)
-                            let toCenter = center - origin
-                            let proj = simd_dot(toCenter, direction)
-                            if proj > 0.1 && proj < alongRay {
-                                let closestPointOnRay = origin + direction * proj
-                                if simd_distance(center, closestPointOnRay) < (radius + 0.35) {
-                                    hitObstacle = true
-                                    break
-                                }
-                            }
-                        }
+                        let obs = findRayObstacleHit(from: origin, to: segmentPoint)
+                        let hitObstacle = obs.hit && obs.hitDistance < (alongRay - 0.45)
                         if !hitObstacle {
                             let rivalFacing = SIMD3<Float>(sin(target.yaw), 0, cos(target.yaw))
                             let facingDot = simd_dot(-direction, rivalFacing)
@@ -3494,6 +3570,12 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             guard alongRay > 0, alongRay < closestReflectedDistance else { continue }
             let closestPoint = mirrorPoint + reflected * alongRay
             guard simd_distance(center, closestPoint) < 0.48 else { continue }
+
+            let obs = findRayObstacleHit(from: mirrorPoint, to: center)
+            if obs.hit && obs.hitDistance < (alongRay - 0.45) {
+                continue
+            }
+
             reflectedTarget = index
             closestReflectedDistance = alongRay
         }
