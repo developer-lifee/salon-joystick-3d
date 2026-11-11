@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "125"
-    static let commitHash = "b125dynamiciphoneduohardwaregating"
+    static let build = "126"
+    static let commitHash = "b126fixedencendedorplacementandhorizontaloptionstabs"
     static let formatted = "v\(version) • Build \(build)"
 }
 
@@ -970,41 +970,50 @@ struct ContentView: View {
             .padding(.leading, 18)
             .padding(.bottom, 22)
 
-            VStack(alignment: .trailing, spacing: 12) {
-                // Top Action Row: Tool Status Badge & Contextual Light Button (Side-by-side to eliminate crowding)
-                HStack(spacing: 10) {
-                    if !model.toolStatus.label.isEmpty {
-                        HStack(spacing: 5) {
-                            Circle()
-                                .fill(model.toolStatus.activeRemaining > 0 ? Color.red : Color.orange)
-                                .frame(width: 7, height: 7)
-                                .shadow(color: (model.toolStatus.activeRemaining > 0 ? Color.red : Color.orange).opacity(0.8), radius: 3)
-
-                            Text(model.toolStatus.label)
-                                .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                .foregroundStyle(.white)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .overlay(
-                            Capsule()
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [
-                                            (model.toolStatus.activeRemaining > 0 ? Color.red : Color.orange).opacity(0.8),
-                                            Color.white.opacity(0.2)
-                                        ],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    ),
-                                    lineWidth: 1.2
-                                )
-                        )
-                        .shadow(color: .black.opacity(0.35), radius: 6, x: 0, y: 2)
+            VStack(alignment: .trailing, spacing: 10) {
+                // 1. Radar Minimapa Táctico (Anclado limpiamente arriba de la barra de acciones)
+                if model.showsMinimap && !model.isMinimalHUDEnabled {
+                    TacticalMinimapView(model: model)
+                        .padding(.bottom, 2)
                         .transition(.scale.combined(with: .opacity))
-                    }
+                }
 
+                // 2. Estado de herramienta / Escudo activo
+                if !model.toolStatus.label.isEmpty {
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(model.toolStatus.activeRemaining > 0 ? Color.pink : Color.cyan)
+                            .frame(width: 7, height: 7)
+                            .shadow(color: (model.toolStatus.activeRemaining > 0 ? Color.pink : Color.cyan).opacity(0.8), radius: 3)
+
+                        Text(model.toolStatus.label)
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        (model.toolStatus.activeRemaining > 0 ? Color.pink : Color.cyan).opacity(0.85),
+                                        Color.white.opacity(0.25)
+                                    ],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ),
+                                lineWidth: 1.2
+                            )
+                    )
+                    .shadow(color: .black.opacity(0.35), radius: 6, x: 0, y: 2)
+                    .transition(.scale.combined(with: .opacity))
+                }
+
+                // 3. Bar 1: Action/Skill Capsules (Encendedor Contextual, Slow-Mo, Warp, Radar) - Paleta Cyan & Pink
+                HStack(spacing: 8) {
+                    // 💡 Encendedor Contextual de Luz Cercana (Siempre anclado abajo junto a las habilidades, sin saltar arriba al abrir el radar)
                     if let nearbyLight = model.nearbyLight {
                         ContextualLightButton(
                             isOn: model.lightStates.isEnabled(nearbyLight),
@@ -1017,18 +1026,19 @@ struct ContentView: View {
                                 get: { dimmerFixture != nil },
                                 set: { if !$0 { dimmerFixture = nil } }
                             ),
-                            arrowEdge: .trailing
+                            arrowEdge: .bottom
                         ) {
                             if let fixture = dimmerFixture {
                                 VStack(alignment: .leading, spacing: 10) {
                                     HStack {
                                         Image(systemName: "lightbulb.fill")
-                                            .foregroundStyle(.yellow)
+                                            .foregroundStyle(Color.cyan)
                                         Text(fixture.label)
                                             .font(.headline)
                                         Spacer()
                                         Text("\(Int((model.lightStates.intensity(fixture) * 100).rounded()))%")
                                             .font(.caption.monospacedDigit())
+                                            .foregroundStyle(Color.cyan)
                                     }
                                     Slider(
                                         value: Binding(
@@ -1037,7 +1047,7 @@ struct ContentView: View {
                                         ),
                                         in: 0.1...1
                                     )
-                                    .tint(.yellow)
+                                    .tint(.cyan)
                                 }
                                 .padding(14)
                                 .frame(width: 260)
@@ -1046,16 +1056,6 @@ struct ContentView: View {
                         }
                         .transition(.scale.combined(with: .opacity))
                     }
-                }
-
-                if model.showsMinimap && !model.isMinimalHUDEnabled {
-                    TacticalMinimapView(model: model)
-                        .padding(.bottom, 2)
-                        .transition(.scale.combined(with: .opacity))
-                }
-
-                // Bar 1: Action/Skill Capsules (Slow-Mo, Warp, Radar) - Paleta Cyan & Pink
-                HStack(spacing: 8) {
                     Button {
                         model.toggleSlowMotion()
                     } label: {
@@ -3207,30 +3207,44 @@ private struct ContextualLightButton: View {
     let onLongPress: () -> Void
 
     var body: some View {
-        Image(systemName: isOn ? "lightbulb.fill" : "lightbulb.slash.fill")
-            .font(.system(size: 20, weight: .semibold))
-            .foregroundStyle(isOn ? .yellow : .white)
-            .frame(width: 44, height: 44)
-            .background(.black.opacity(0.64), in: Circle())
-            .overlay(Circle().stroke(Color.yellow.opacity(isOn ? 0.85 : 0.40), lineWidth: 1.5))
-            .contentShape(Circle())
-            .gesture(
-                LongPressGesture(minimumDuration: 0.45)
-                    .exclusively(before: TapGesture())
-                    .onEnded { result in
-                        switch result {
-                        case .first:
-                            onLongPress()
-                        case .second:
-                            onTap()
-                        }
-                    }
+        HStack(spacing: 5) {
+            Image(systemName: isOn ? "lightbulb.fill" : "lightbulb.slash.fill")
+                .font(.system(size: 13, weight: .bold))
+            Text(label)
+                .font(.system(size: 11, weight: .bold))
+        }
+        .foregroundStyle(isOn ? Color.cyan : Color.white.opacity(0.85))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            isOn ? AnyShapeStyle(Color.cyan.opacity(0.25)) : AnyShapeStyle(Color.black.opacity(0.65)),
+            in: Capsule()
+        )
+        .overlay(
+            Capsule().stroke(
+                isOn ? Color.cyan.opacity(0.90) : Color.white.opacity(0.35),
+                lineWidth: 1.5
             )
-            .accessibilityAddTraits(.isButton)
-            .accessibilityLabel(isOn ? "Apagar \(label)" : "Encender \(label)")
-            .accessibilityAction(.default) {
-                onTap()
-            }
+        )
+        .shadow(color: isOn ? Color.cyan.opacity(0.40) : Color.clear, radius: 6)
+        .contentShape(Capsule())
+        .gesture(
+            LongPressGesture(minimumDuration: 0.45)
+                .exclusively(before: TapGesture())
+                .onEnded { result in
+                    switch result {
+                    case .first:
+                        onLongPress()
+                    case .second:
+                        onTap()
+                    }
+                }
+        )
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel(isOn ? "Apagar \(label)" : "Encender \(label)")
+        .accessibilityAction(.default) {
+            onTap()
+        }
     }
 }
 
@@ -7190,315 +7204,389 @@ struct MultiplayerSettingsSheet: View {
     }
 }
 
+enum GameOptionsTab: String, CaseIterable, Identifiable {
+    case controls = "Controles"
+    case graphics = "Gráficos"
+    case audio = "Sonido"
+    case achievements = "Logros"
+    case system = "Sistema"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .controls: "gamecontroller.fill"
+        case .graphics: "display"
+        case .audio: "speaker.wave.2.fill"
+        case .achievements: "trophy.fill"
+        case .system: "info.circle.fill"
+        }
+    }
+}
+
 struct GameOptionsSheet: View {
     @ObservedObject var model: GameModel
     @Environment(\.dismiss) private var dismiss
+    @State private var selectedTab: GameOptionsTab = .controls
 
     var body: some View {
         NavigationStack {
-            Form {
-                // 🎮 1. SECCIÓN CONTROLES Y JUGABILIDAD
-                Section("🎮 Controles y Jugabilidad") {
-                    HStack {
-                        Label(
-                            model.isGameControllerConnected ? "Mando Conectado" : "Mando Inalámbrico",
-                            systemImage: model.isGameControllerConnected ? "gamecontroller.fill" : "gamecontroller"
-                        )
-                        .foregroundStyle(model.isGameControllerConnected ? Color.cyan : Color.secondary)
-
-                        Spacer()
-
-                        Text(model.isGameControllerConnected ? model.gameControllerName : "Ninguno detectado")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    if model.isGameControllerConnected {
-                        DisclosureGroup("Mapeo de Botones (Xbox / PS / Switch)") {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("• **Stick Izquierdo**: Movimiento de personaje").font(.caption)
-                                Text("• **Stick Derecho**: Cámara / Apuntar").font(.caption)
-                                Text("• **Botón A / ✕**: Saltar").font(.caption)
-                                Text("• **Botón B / ◯ / RT / R2**: Disparar Láser").font(.caption)
-                                Text("• **Botón Y / △ / LT / L2**: Linterna (Prender/Apagar)").font(.caption)
-                                Text("• **Botón X / ▢ / LB / L1**: Escudo Espejo").font(.caption)
-                                Text("• **D-Pad Arriba**: Conmutar Luz de arena").font(.caption)
-                                Text("• **R3 (Pulsar Stick Der.)**: Cámara Lenta").font(.caption)
+            VStack(spacing: 0) {
+                //  Barra de Pestañas Horizontales ("Pestañas de para el lado")
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(GameOptionsTab.allCases) { tab in
+                            Button {
+                                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                    selectedTab = tab
+                                }
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: tab.icon)
+                                        .font(.system(size: 12, weight: .bold))
+                                    Text(tab.rawValue)
+                                        .font(.system(size: 13, weight: .bold))
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .foregroundStyle(selectedTab == tab ? .white : .secondary)
+                                .background(
+                                    selectedTab == tab
+                                        ? AnyShapeStyle(LinearGradient(colors: [Color.cyan.opacity(0.85), Color.pink.opacity(0.85)], startPoint: .leading, endPoint: .trailing))
+                                        : AnyShapeStyle(Color.white.opacity(0.08)),
+                                    in: Capsule()
+                                )
+                                .overlay(
+                                    Capsule()
+                                        .stroke(
+                                            selectedTab == tab
+                                                ? LinearGradient(colors: [Color.cyan, Color.pink], startPoint: .leading, endPoint: .trailing)
+                                                : LinearGradient(colors: [Color.white.opacity(0.18), Color.white.opacity(0.06)], startPoint: .leading, endPoint: .trailing),
+                                            lineWidth: 1.2
+                                        )
+                                )
+                                .shadow(color: selectedTab == tab ? Color.pink.opacity(0.40) : .clear, radius: 6)
                             }
-                            .padding(.vertical, 4)
+                            .buttonStyle(.plain)
                         }
-                    } else {
-                        Text("Compatible con mandos inalámbricos Bluetooth de Xbox, PlayStation o Nintendo Switch.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                }
+                .background(.ultraThinMaterial)
+                .overlay(Divider(), alignment: .bottom)
 
-                    Button {
-                        dismiss()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                            if model.gameState != .playing {
-                                model.gameState = .playing
+                Form {
+                    switch selectedTab {
+                    case .controls:
+                        Section("🎮 Mando Inalámbrico") {
+                            HStack {
+                                Label(
+                                    model.isGameControllerConnected ? "Mando Conectado" : "Mando Inalámbrico",
+                                    systemImage: model.isGameControllerConnected ? "gamecontroller.fill" : "gamecontroller"
+                                )
+                                .foregroundStyle(model.isGameControllerConnected ? Color.cyan : Color.secondary)
+
+                                Spacer()
+
+                                Text(model.isGameControllerConnected ? model.gameControllerName : "Ninguno detectado")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
                             }
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                model.isEditingHUDLayout = true
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: "slider.horizontal.below.square.and.square.filled")
-                                .font(.title3)
-                                .foregroundStyle(.cyan)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Personalizar Posición y Tamaño de Botones HUD")
-                                    .font(.subheadline.bold())
-                                    .foregroundStyle(.primary)
-                                Text("Mueve el joystick, armas, salto y habilidades táctiles")
+
+                            if model.isGameControllerConnected {
+                                DisclosureGroup("Mapeo de Botones (Xbox / PS / Switch)") {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text("• **Stick Izquierdo**: Movimiento de personaje").font(.caption)
+                                        Text("• **Stick Derecho**: Cámara / Apuntar").font(.caption)
+                                        Text("• **Botón A / ✕**: Saltar").font(.caption)
+                                        Text("• **Botón B / ◯ / RT / R2**: Disparar Láser").font(.caption)
+                                        Text("• **Botón Y / △ / LT / L2**: Linterna (Prender/Apagar)").font(.caption)
+                                        Text("• **Botón X / ▢ / LB / L1**: Escudo Espejo").font(.caption)
+                                        Text("• **D-Pad Arriba**: Conmutar Luz de arena").font(.caption)
+                                        Text("• **R3 (Pulsar Stick Der.)**: Cámara Lenta").font(.caption)
+                                    }
+                                    .padding(.vertical, 4)
+                                }
+                            } else {
+                                Text("Compatible con mandos inalámbricos Bluetooth de Xbox, PlayStation o Nintendo Switch.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption.bold())
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.vertical, 4)
-                    }
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text("Sensibilidad de Cámara")
-                            Spacer()
-                            Text(String(format: "%.1fx", model.cameraSensitivity))
-                                .font(.caption.bold())
-                                .foregroundStyle(.secondary)
-                        }
-                        Slider(value: $model.cameraSensitivity, in: 0.4...2.0, step: 0.1)
-                            .tint(.cyan)
-                    }
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text("Opacidad General de Botones")
-                            Spacer()
-                            Text("\(Int(model.touchControlsOpacity * 100))%")
-                                .font(.caption.bold())
-                                .foregroundStyle(.secondary)
-                        }
-                        Slider(value: Binding<Double>(
-                            get: { model.touchControlsOpacity },
-                            set: { newVal in
-                                model.touchControlsOpacity = newVal
-                                model.hudJoystickOpacity = newVal
-                                model.hudWeaponsOpacity = newVal
-                                model.hudJumpOpacity = newVal
-                                model.hudSkillsOpacity = newVal
-                            }
-                        ), in: 0.2...1.0, step: 0.05)
-                        .tint(.pink)
-                    }
-
-                    Toggle("Invertir eje Y (Cámara)", isOn: $model.invertsCameraY)
-
-                    Picker("Perspectiva de Cámara", selection: $model.cameraMode) {
-                        Text("1ª Persona").tag(GameCameraMode.firstPerson)
-                        Text("3ª Persona").tag(GameCameraMode.thirdPerson)
-                    }
-                    .pickerStyle(.segmented)
-
-                    if model.isDuoDevice {
-                        Picker("Modo Doble Pantalla (iPhone Duo)", selection: Binding(
-                            get: { model.duoScreenMode },
-                            set: { model.duoScreenMode = $0 }
-                        )) {
-                            ForEach(DuoScreenMode.allCases) { dMode in
-                                Text(dMode.label).tag(dMode)
-                            }
                         }
 
-                        if model.duoScreenMode == .squadCamera {
+                        Section("📱 Controles Táctiles y Cámara") {
                             Button {
-                                model.cycleSquadCameraMember()
+                                dismiss()
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                    if model.gameState != .playing {
+                                        model.gameState = .playing
+                                    }
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                        model.isEditingHUDLayout = true
+                                    }
+                                }
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "slider.horizontal.below.square.and.square.filled")
+                                        .font(.title3)
+                                        .foregroundStyle(.cyan)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Personalizar Posición y Tamaño de Botones HUD")
+                                            .font(.subheadline.bold())
+                                            .foregroundStyle(.primary)
+                                        Text("Mueve el joystick, armas, salto y habilidades táctiles")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.secondary)
+                                }
+                                .padding(.vertical, 4)
+                            }
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack {
+                                    Text("Sensibilidad de Cámara")
+                                    Spacer()
+                                    Text(String(format: "%.1fx", model.cameraSensitivity))
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.secondary)
+                                }
+                                Slider(value: $model.cameraSensitivity, in: 0.4...2.0, step: 0.1)
+                                    .tint(.cyan)
+                            }
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack {
+                                    Text("Opacidad General de Botones")
+                                    Spacer()
+                                    Text("\(Int(model.touchControlsOpacity * 100))%")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.secondary)
+                                }
+                                Slider(value: Binding<Double>(
+                                    get: { model.touchControlsOpacity },
+                                    set: { newVal in
+                                        model.touchControlsOpacity = newVal
+                                        model.hudJoystickOpacity = newVal
+                                        model.hudWeaponsOpacity = newVal
+                                        model.hudJumpOpacity = newVal
+                                        model.hudSkillsOpacity = newVal
+                                    }
+                                ), in: 0.2...1.0, step: 0.05)
+                                .tint(.pink)
+                            }
+
+                            Toggle("Invertir eje Y (Cámara)", isOn: $model.invertsCameraY)
+
+                            Picker("Perspectiva de Cámara", selection: $model.cameraMode) {
+                                Text("1ª Persona").tag(GameCameraMode.firstPerson)
+                                Text("3ª Persona").tag(GameCameraMode.thirdPerson)
+                            }
+                            .pickerStyle(.segmented)
+
+                            if model.isDuoDevice {
+                                Picker("Modo Doble Pantalla (iPhone Duo)", selection: Binding(
+                                    get: { model.duoScreenMode },
+                                    set: { model.duoScreenMode = $0 }
+                                )) {
+                                    ForEach(DuoScreenMode.allCases) { dMode in
+                                        Text(dMode.label).tag(dMode)
+                                    }
+                                }
+
+                                if model.duoScreenMode == .squadCamera {
+                                    Button {
+                                        model.cycleSquadCameraMember()
+                                    } label: {
+                                        HStack {
+                                            Label("Compañero en 2ª Pantalla", systemImage: "person.2.crop.square.stack.fill")
+                                            Spacer()
+                                            Text(model.selectedSquadCameraAgent.peerID)
+                                                .font(.caption.bold())
+                                                .foregroundStyle(.cyan)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                    case .graphics:
+                        Section("⚡ Perfiles Rápidos de Rendimiento") {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Elige según nivel de batería o fidelidad visual")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.secondary)
+                                HStack(spacing: 6) {
+                                    Button {
+                                        model.targetFPS = 30
+                                        model.renderResolution = .light
+                                        model.advancedReflectionsEnabled = true
+                                        model.isLiquidGlassUIEnabled = true
+                                    } label: {
+                                        VStack(spacing: 3) {
+                                            Image(systemName: "snowflake")
+                                            Text("Batería Fría")
+                                                .font(.caption2.bold())
+                                            Text("30 FPS • Frío")
+                                                .font(.system(size: 8, weight: .semibold))
+                                                .opacity(0.85)
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 6)
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .tint(.teal.opacity(0.85))
+
+                                    Button {
+                                        model.targetFPS = 60
+                                        model.renderResolution = .balanced
+                                        model.advancedReflectionsEnabled = true
+                                        model.isLiquidGlassUIEnabled = true
+                                    } label: {
+                                        VStack(spacing: 3) {
+                                            Image(systemName: "dial.medium.fill")
+                                            Text("Equilibrado")
+                                                .font(.caption2.bold())
+                                            Text("60 FPS • 1.0x")
+                                                .font(.system(size: 8, weight: .semibold))
+                                                .opacity(0.85)
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 6)
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .tint(.blue.opacity(0.8))
+
+                                    Button {
+                                        model.targetFPS = 60
+                                        model.renderResolution = .high
+                                        model.advancedReflectionsEnabled = true
+                                        model.isLiquidGlassUIEnabled = true
+                                    } label: {
+                                        VStack(spacing: 3) {
+                                            Image(systemName: "sparkles")
+                                            Text("Retina Pro")
+                                                .font(.caption2.bold())
+                                            Text("60 FPS • 1.5x")
+                                                .font(.system(size: 8, weight: .semibold))
+                                                .opacity(0.85)
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 6)
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .tint(.purple.opacity(0.85))
+
+                                    Button {
+                                        model.targetFPS = 60
+                                        model.renderResolution = .ultra4K
+                                        model.advancedReflectionsEnabled = true
+                                        model.isLiquidGlassUIEnabled = true
+                                    } label: {
+                                        VStack(spacing: 3) {
+                                            Image(systemName: "tv.fill")
+                                            Text("Ultra Cool")
+                                                .font(.caption2.bold())
+                                            Text("4K TV • 2.2x")
+                                                .font(.system(size: 8, weight: .semibold))
+                                                .opacity(0.85)
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 6)
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .tint(.orange.opacity(0.9))
+                                }
+
+                                Text("✨ Los reflejos Ray Tracing y el tema Vidrio Líquido se mantienen activos en todos los perfiles.")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.top, 2)
+                            }
+                            .padding(.vertical, 4)
+                        }
+
+                        Section("🖥️ Calidad Visual y Tasa de Cuadros") {
+                            Picker("Límite de Fotogramas (FPS)", selection: $model.targetFPS) {
+                                Text("30 FPS (Ahorra Batería y Calor)").tag(30)
+                                Text("60 FPS (Fluidez Máxima)").tag(60)
+                            }
+
+                            Picker("Resolución interna 3D", selection: $model.renderResolution) {
+                                ForEach(GameRenderResolution.allCases) { resolution in
+                                    Text(resolution.label).tag(resolution)
+                                }
+                            }
+
+                            Toggle("Reflejos Ray Tracing (Agua, Piso y Espejos)", isOn: $model.advancedReflectionsEnabled)
+                            Toggle("Tema Vidrio Líquido (Apple Liquid Glass)", isOn: $model.isLiquidGlassUIEnabled)
+                            Toggle("Mostrar Radar Minimapa Táctico", isOn: $model.showsMinimap)
+                            Toggle("Mostrar contador de FPS", isOn: $model.showsFPS)
+                        }
+
+                    case .audio:
+                        Section("🎵 Música y Efectos de Sonido") {
+                            Toggle("Música de fondo", isOn: $model.musicEnabled)
+                            Toggle("Efectos de sonido y pasos", isOn: $model.footstepsEnabled)
+                            Toggle("Sonido de agua", isOn: $model.waterSoundEnabled)
+                        }
+
+                    case .achievements:
+                        Section("🏆 Game Center") {
+                            NavigationLink {
+                                AchievementsView(model: model)
                             } label: {
                                 HStack {
-                                    Label("Compañero en 2ª Pantalla", systemImage: "person.2.crop.square.stack.fill")
+                                    Label("Ver Lista de Logros", systemImage: "trophy.fill")
+                                        .foregroundStyle(Color.pink)
                                     Spacer()
-                                    Text(model.selectedSquadCameraAgent.peerID)
-                                        .font(.caption.bold())
-                                        .foregroundStyle(.cyan)
+                                    let unlocked = model.gameCenter.achievements.filter { $0.isUnlocked }.count
+                                    Text("\(unlocked) / \(model.gameCenter.achievements.count)")
+                                        .font(.subheadline.bold())
+                                        .foregroundStyle(Color.cyan)
                                 }
                             }
                         }
-                    }
-                }
 
-                // 🖥️ 2. SECCIÓN GRÁFICOS, FPS Y PANTALLA
-                Section("🖥️ Gráficos, FPS y Pantalla") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Perfiles Rápidos de Energía y Gráficos")
-                            .font(.caption.bold())
-                            .foregroundStyle(.secondary)
-                        HStack(spacing: 6) {
-                            Button {
-                                model.targetFPS = 30
-                                model.renderResolution = .light
-                                model.advancedReflectionsEnabled = true
-                                model.isLiquidGlassUIEnabled = true
-                            } label: {
-                                VStack(spacing: 3) {
-                                    Image(systemName: "snowflake")
-                                    Text("Batería Fría")
-                                        .font(.caption2.bold())
-                                    Text("30 FPS • Frío")
-                                        .font(.system(size: 8, weight: .semibold))
-                                        .opacity(0.85)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 6)
+                    case .system:
+                        Section("ℹ️ Información del Sistema") {
+                            HStack {
+                                Text("Versión")
+                                Spacer()
+                                Text(GameAppVersion.formatted)
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(.secondary)
                             }
-                            .buttonStyle(.borderedProminent)
-                            .tint(.teal.opacity(0.85))
 
-                            Button {
-                                model.targetFPS = 60
-                                model.renderResolution = .balanced
-                                model.advancedReflectionsEnabled = true
-                                model.isLiquidGlassUIEnabled = true
-                            } label: {
-                                VStack(spacing: 3) {
-                                    Image(systemName: "dial.medium.fill")
-                                    Text("Equilibrado")
-                                        .font(.caption2.bold())
-                                    Text("60 FPS • 1.0x")
-                                        .font(.system(size: 8, weight: .semibold))
-                                        .opacity(0.85)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 6)
+                            HStack {
+                                Text("Motor Gráfico")
+                                Spacer()
+                                Text("Metal Hardware Ray Tracing")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.cyan)
                             }
-                            .buttonStyle(.borderedProminent)
-                            .tint(.blue.opacity(0.8))
 
-                            Button {
-                                model.targetFPS = 60
-                                model.renderResolution = .high
-                                model.advancedReflectionsEnabled = true
-                                model.isLiquidGlassUIEnabled = true
-                            } label: {
-                                VStack(spacing: 3) {
-                                    Image(systemName: "sparkles")
-                                    Text("Retina Pro")
-                                        .font(.caption2.bold())
-                                    Text("60 FPS • 1.5x")
-                                        .font(.system(size: 8, weight: .semibold))
-                                        .opacity(0.85)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 6)
+                            HStack {
+                                Text("Dispositivo")
+                                Spacer()
+                                Text("Apple Silicon GPU (A-Series)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
-                            .buttonStyle(.borderedProminent)
-                            .tint(.purple.opacity(0.85))
 
-                            Button {
-                                model.targetFPS = 60
-                                model.renderResolution = .ultra4K
-                                model.advancedReflectionsEnabled = true
-                                model.isLiquidGlassUIEnabled = true
-                            } label: {
-                                VStack(spacing: 3) {
-                                    Image(systemName: "tv.fill")
-                                    Text("Ultra Cool")
-                                        .font(.caption2.bold())
-                                    Text("4K TV • 2.2x")
-                                        .font(.system(size: 8, weight: .semibold))
-                                        .opacity(0.85)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 6)
+                            HStack {
+                                Text("Multijugador")
+                                Spacer()
+                                Text("Multipeer + Game Center")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
-                            .buttonStyle(.borderedProminent)
-                            .tint(.orange.opacity(0.9))
                         }
-
-                        Text("✨ Los reflejos Ray Tracing y el tema Vidrio Líquido se mantienen activos en todos los perfiles. El ahorro proviene de la escala de resolución y los FPS.")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                            .padding(.top, 2)
-                    }
-                    .padding(.vertical, 4)
-
-                    Picker("Límite de Fotogramas (FPS)", selection: $model.targetFPS) {
-                        Text("30 FPS (Ahorra Batería y Calor)").tag(30)
-                        Text("60 FPS (Fluidez Máxima)").tag(60)
-                    }
-
-                    Picker("Resolución interna 3D", selection: $model.renderResolution) {
-                        ForEach(GameRenderResolution.allCases) { resolution in
-                            Text(resolution.label).tag(resolution)
-                        }
-                    }
-
-                    Toggle("Reflejos Ray Tracing (Agua, Piso y Espejos)", isOn: $model.advancedReflectionsEnabled)
-                    Toggle("Tema Vidrio Líquido (Apple Liquid Glass)", isOn: $model.isLiquidGlassUIEnabled)
-                    Toggle("Mostrar Radar Minimapa Táctico", isOn: $model.showsMinimap)
-                    Toggle("Mostrar contador de FPS", isOn: $model.showsFPS)
-                }
-
-                // 🎵 3. SECCIÓN AUDIO Y SONIDO
-                Section("🎵 Audio y Sonido") {
-                    Toggle("Música de fondo", isOn: $model.musicEnabled)
-                    Toggle("Efectos de sonido y pasos", isOn: $model.footstepsEnabled)
-                    Toggle("Sonido de agua", isOn: $model.waterSoundEnabled)
-                }
-
-                // 🏆 4. SECCIÓN DESAFÍOS Y LOGROS (GAME CENTER)
-                Section("🏆 Desafíos y Logros (Game Center)") {
-                    NavigationLink {
-                        AchievementsView(model: model)
-                    } label: {
-                        HStack {
-                            Label("Ver Lista de Logros", systemImage: "trophy.fill")
-                                .foregroundStyle(Color.pink)
-                            Spacer()
-                            let unlocked = model.gameCenter.achievements.filter { $0.isUnlocked }.count
-                            Text("\(unlocked) / \(model.gameCenter.achievements.count)")
-                                .font(.subheadline.bold())
-                                .foregroundStyle(Color.cyan)
-                        }
-                    }
-                }
-
-                // ℹ️ 5. SECCIÓN INFORMACIÓN DEL SISTEMA
-                Section("ℹ️ Información del Sistema") {
-                    HStack {
-                        Text("Versión")
-                        Spacer()
-                        Text(GameAppVersion.formatted)
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
-                    }
-
-                    HStack {
-                        Text("Motor Gráfico")
-                        Spacer()
-                        Text("Metal Hardware Ray Tracing")
-                            .font(.caption.bold())
-                            .foregroundStyle(.cyan)
-                    }
-
-                    HStack {
-                        Text("Dispositivo")
-                        Spacer()
-                        Text("Apple Silicon GPU (A-Series)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    HStack {
-                        Text("Multijugador")
-                        Spacer()
-                        Text("Multipeer + Game Center")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
                     }
                 }
             }
