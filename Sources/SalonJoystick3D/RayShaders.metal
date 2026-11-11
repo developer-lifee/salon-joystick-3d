@@ -1221,12 +1221,13 @@ kernel void raytracePatio(
             float speckle = (cellHash > 0.84f) ? smoothstep(0.32f, 0.08f, length(cellUV)) : 0.0f;
             albedo = mix(albedo, float3(0.82f, 1.0f, 0.24f), speckle * 0.85f);
 
-            // Dispersión Subsuperficial (SSS) tipo gomita / slime translúcido en los bordes (Fresnel)
+            // Dispersión Subsuperficial (SSS) y translucidez gomosa / slime transparente
             float viewCos = saturate(dot(-currentRay.direction, normal));
-            float rimSSS = pow(1.0f - viewCos, 2.2f);
-            emission += albedo * float3(0.55f, 1.25f, 0.25f) * (0.28f + rimSSS * 0.85f) + float3(0.75f, 1.0f, 0.22f) * (speckle * 0.65f);
-            baseReflectivity = mix(0.14f, 0.68f, pow(1.0f - viewCos, 4.0f));
-            roughness = 0.12f;
+            float rimSSS = pow(1.0f - viewCos, 2.5f);
+            emission += albedo * float3(0.35f, 0.95f, 0.20f) * (0.15f + rimSSS * 0.75f) + float3(0.65f, 0.95f, 0.20f) * (speckle * 0.55f);
+            // Reflectividad orgánica de gelatina/vidrio (baja reflectividad frontal F0 ~ 0.035, brillo sutil en silueta rasante)
+            baseReflectivity = mix(0.035f, 0.22f, pow(1.0f - viewCos, 3.5f));
+            roughness = 0.06f;
         }
 
         // 🫠 Disolución / Derretimiento Líquido Cromático al eliminar a un enemigo
@@ -1526,13 +1527,15 @@ kernel void raytracePatio(
         }
 
 
-        if (rayBouncesEnabled && waterSurface) {
-            float3 refractedDirection = refract(currentRay.direction, normal, 1.0f / 1.333f);
+        bool isTranslucentSurface = waterSurface || jellySurface;
+        if (rayBouncesEnabled && isTranslucentSurface) {
+            float ior = jellySurface ? 1.36f : 1.333f;
+            float3 refractedDirection = refract(currentRay.direction, normal, 1.0f / ior);
             if (length_squared(refractedDirection) > 0.0001f) {
                 ray transmissionRay;
                 transmissionRay.origin = position - normal * 0.018f;
                 transmissionRay.direction = normalize(refractedDirection);
-                transmissionRay.max_distance = 14.0f;
+                transmissionRay.max_distance = jellySurface ? 6.0f : 14.0f;
                 tracer.accept_any_intersection(false);
                 auto transmissionHit = tracer.intersect(transmissionRay, accelerationStructure, 0x01);
                 if (transmissionHit.type != intersection_type::none) {
@@ -1560,15 +1563,21 @@ kernel void raytracePatio(
                         (1.0f + underwaterLightDistance * underwaterLightDistance * 0.28f);
                     float3 bottomColor = underwaterMaterial.albedoReflectivity.xyz *
                         (underwaterLight + float3(0.10f, 0.07f, 0.025f));
-                    float3 absorption = exp(
-                        -float3(0.20f, 0.075f, 0.045f) * transmissionHit.distance
-                    );
-                    float3 waterTint = puddleSurface
-                        ? float3(0.010f, 0.030f, 0.034f)
-                        : float3(0.008f, 0.055f, 0.065f);
+
+                    float3 absorption;
+                    float3 transTint;
+                    if (jellySurface) {
+                        // 🧪 Translucidez de Slime: absorbe el rojo y azul, dejando pasar la luz verde esmeralda translúcida
+                        absorption = exp(-float3(1.10f, 0.18f, 0.90f) * max(0.05f, transmissionHit.distance * 2.2f));
+                        transTint = float3(0.14f, 0.82f, 0.24f);
+                    } else {
+                        absorption = exp(-float3(0.20f, 0.075f, 0.045f) * transmissionHit.distance);
+                        transTint = puddleSurface ? float3(0.010f, 0.030f, 0.034f) : float3(0.008f, 0.055f, 0.065f);
+                    }
                     float3 transmissionColor = bottomColor * absorption +
-                        waterTint * (1.0f - absorption);
-                    direct = mix(direct, transmissionColor, puddleSurface ? 0.42f : 0.62f);
+                        transTint * (1.0f - absorption);
+                    float transBlend = jellySurface ? 0.65f : (puddleSurface ? 0.42f : 0.62f);
+                    direct = mix(direct, transmissionColor, transBlend);
                 }
             }
         }
