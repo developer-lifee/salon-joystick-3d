@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "114"
-    static let commitHash = "b114postefixminimap"
+    static let build = "115"
+    static let commitHash = "b115reflectionsalwayson"
     static let formatted = "v\(version) • Build \(build)"
 }
 
@@ -1972,6 +1972,10 @@ final class GameModel: ObservableObject {
 
     init() {
         audio.start()
+
+        // 🌟 Los reflejos Ray Tracing y el Vidrio Líquido son la identidad visual esencial del juego: siempre activos
+        advancedReflectionsEnabled = true
+        isLiquidGlassUIEnabled = true
 
         // Reenviar cambios de multiplayer y gameCenter a las vistas SwiftUI
         multiplayer.objectWillChange
@@ -6996,6 +7000,7 @@ struct GameOptionsSheet: View {
                                 model.targetFPS = 60
                                 model.renderResolution = .light
                                 model.advancedReflectionsEnabled = true
+                                model.isLiquidGlassUIEnabled = true
                             } label: {
                                 VStack(spacing: 3) {
                                     Image(systemName: "snowflake")
@@ -7015,6 +7020,7 @@ struct GameOptionsSheet: View {
                                 model.targetFPS = 60
                                 model.renderResolution = .balanced
                                 model.advancedReflectionsEnabled = true
+                                model.isLiquidGlassUIEnabled = true
                             } label: {
                                 VStack(spacing: 3) {
                                     Image(systemName: "dial.medium.fill")
@@ -7032,8 +7038,9 @@ struct GameOptionsSheet: View {
 
                             Button {
                                 model.targetFPS = 30
-                                model.renderResolution = .ultraLight
-                                model.advancedReflectionsEnabled = false
+                                model.renderResolution = .light
+                                model.advancedReflectionsEnabled = true
+                                model.isLiquidGlassUIEnabled = true
                             } label: {
                                 VStack(spacing: 3) {
                                     Image(systemName: "battery.100percent.bolt")
@@ -7053,6 +7060,7 @@ struct GameOptionsSheet: View {
                                 model.targetFPS = 60
                                 model.renderResolution = .high
                                 model.advancedReflectionsEnabled = true
+                                model.isLiquidGlassUIEnabled = true
                             } label: {
                                 VStack(spacing: 3) {
                                     Image(systemName: "sparkles")
@@ -7068,6 +7076,11 @@ struct GameOptionsSheet: View {
                             .buttonStyle(.borderedProminent)
                             .tint(.purple.opacity(0.85))
                         }
+
+                        Text("✨ Los reflejos Ray Tracing y el tema Vidrio Líquido se mantienen activos en todos los perfiles. El ahorro proviene de la escala de resolución y los FPS.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 2)
                     }
                     .padding(.vertical, 4)
 
