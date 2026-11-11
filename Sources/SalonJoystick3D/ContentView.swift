@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "112"
-    static let commitHash = "b112rainbowleakfix"
+    static let build = "113"
+    static let commitHash = "b113ultracooltv"
     static let formatted = "v\(version) • Build \(build)"
 }
 
@@ -6749,22 +6749,25 @@ struct GameOptionsSheet: View {
                         Text("Perfiles Rápidos de Energía y Gráficos")
                             .font(.caption.bold())
                             .foregroundStyle(.secondary)
-                        HStack(spacing: 8) {
+                        HStack(spacing: 6) {
                             Button {
-                                model.targetFPS = 30
-                                model.renderResolution = .ultraLight
-                                model.advancedReflectionsEnabled = false
+                                model.targetFPS = 60
+                                model.renderResolution = .light
+                                model.advancedReflectionsEnabled = true
                             } label: {
                                 VStack(spacing: 3) {
-                                    Image(systemName: "battery.100percent.bolt")
-                                    Text("Ahorro Batería")
+                                    Image(systemName: "snowflake")
+                                    Text("Ultra Cool")
                                         .font(.caption2.bold())
+                                    Text("TV / Frío 60")
+                                        .font(.system(size: 8, weight: .semibold))
+                                        .opacity(0.85)
                                 }
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 6)
                             }
                             .buttonStyle(.borderedProminent)
-                            .tint(.green.opacity(0.8))
+                            .tint(.cyan.opacity(0.85))
 
                             Button {
                                 model.targetFPS = 60
@@ -6775,6 +6778,9 @@ struct GameOptionsSheet: View {
                                     Image(systemName: "dial.medium.fill")
                                     Text("Equilibrado")
                                         .font(.caption2.bold())
+                                    Text("Nativo 60")
+                                        .font(.system(size: 8, weight: .semibold))
+                                        .opacity(0.85)
                                 }
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 6)
@@ -6783,14 +6789,36 @@ struct GameOptionsSheet: View {
                             .tint(.blue.opacity(0.8))
 
                             Button {
+                                model.targetFPS = 30
+                                model.renderResolution = .ultraLight
+                                model.advancedReflectionsEnabled = false
+                            } label: {
+                                VStack(spacing: 3) {
+                                    Image(systemName: "battery.100percent.bolt")
+                                    Text("Ahorro")
+                                        .font(.caption2.bold())
+                                    Text("30 FPS")
+                                        .font(.system(size: 8, weight: .semibold))
+                                        .opacity(0.85)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.green.opacity(0.8))
+
+                            Button {
                                 model.targetFPS = 60
                                 model.renderResolution = .high
                                 model.advancedReflectionsEnabled = true
                             } label: {
                                 VStack(spacing: 3) {
                                     Image(systemName: "sparkles")
-                                    Text("Ultra Cool")
+                                    Text("Retina")
                                         .font(.caption2.bold())
+                                    Text("1.5x Máx")
+                                        .font(.system(size: 8, weight: .semibold))
+                                        .opacity(0.85)
                                 }
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 6)
