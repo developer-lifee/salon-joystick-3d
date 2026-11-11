@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "115"
-    static let commitHash = "b115reflectionsalwayson"
+    static let build = "116"
+    static let commitHash = "b116individualhudopacity"
     static let formatted = "v\(version) • Build \(build)"
 }
 
@@ -851,7 +851,7 @@ struct ContentView: View {
                     model.joystick = vector
                 }, isLiquidGlass: model.isLiquidGlassUIEnabled)
                 .frame(width: 156, height: 156)
-                .opacity(model.touchControlsOpacity)
+                .opacity(model.hudJoystickOpacity)
                 .modifier(HUDDraggableModifier(
                     isEditing: model.isEditingHUDLayout,
                     isSelected: model.selectedHUDGroup == 0,
@@ -1109,7 +1109,7 @@ struct ContentView: View {
                         .accessibilityLabel("Sumergirse hacia el fondo del agua")
                     }
                 }
-                .opacity(model.touchControlsOpacity)
+                .opacity(model.hudSkillsOpacity)
                 .modifier(HUDDraggableModifier(
                     isEditing: model.isEditingHUDLayout,
                     isSelected: model.selectedHUDGroup == 3,
@@ -1195,6 +1195,7 @@ struct ContentView: View {
                     .padding(6)
                     .background(.black.opacity(0.55), in: Capsule())
                     .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: 1))
+                    .opacity(model.hudWeaponsOpacity)
                     .modifier(HUDDraggableModifier(
                         isEditing: model.isEditingHUDLayout,
                         isSelected: model.selectedHUDGroup == 1,
@@ -1220,6 +1221,7 @@ struct ContentView: View {
                     .contentShape(Circle())
                     .accessibilityLabel("Saltar")
                     .accessibilityIdentifier("jumpButton")
+                    .opacity(model.hudJumpOpacity)
                     .modifier(HUDDraggableModifier(
                         isEditing: model.isEditingHUDLayout,
                         isSelected: model.selectedHUDGroup == 2,
@@ -1230,7 +1232,6 @@ struct ContentView: View {
                         onSelect: { model.selectedHUDGroup = 2 }
                     ))
                 }
-                .opacity(model.touchControlsOpacity)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             .padding(.trailing, 28)
@@ -1448,6 +1449,25 @@ struct ContentView: View {
                                 }
                             )
 
+                            let currentOpacityBinding = Binding<Double>(
+                                get: {
+                                    switch model.selectedHUDGroup {
+                                    case 0: return model.hudJoystickOpacity
+                                    case 1: return model.hudWeaponsOpacity
+                                    case 2: return model.hudJumpOpacity
+                                    default: return model.hudSkillsOpacity
+                                    }
+                                },
+                                set: { newVal in
+                                    switch model.selectedHUDGroup {
+                                    case 0: model.hudJoystickOpacity = newVal
+                                    case 1: model.hudWeaponsOpacity = newVal
+                                    case 2: model.hudJumpOpacity = newVal
+                                    default: model.hudSkillsOpacity = newVal
+                                    }
+                                }
+                            )
+
                             Text("Tamaño: \(Int(currentScaleBinding.wrappedValue * 100))%")
                                 .font(.system(size: 11, weight: .bold, design: .monospaced))
                                 .foregroundStyle(.white)
@@ -1455,10 +1475,10 @@ struct ContentView: View {
                                 .tint(.cyan)
                                 .frame(width: 150)
 
-                            Text("Opacidad: \(Int(model.touchControlsOpacity * 100))%")
+                            Text("Opacidad: \(Int(currentOpacityBinding.wrappedValue * 100))%")
                                 .font(.system(size: 11, weight: .bold, design: .monospaced))
                                 .foregroundStyle(.white)
-                            Slider(value: $model.touchControlsOpacity, in: 0.25...1.0, step: 0.05)
+                            Slider(value: currentOpacityBinding, in: 0.15...1.0, step: 0.05)
                                 .tint(.yellow)
                                 .frame(width: 110)
                         }
@@ -1609,15 +1629,19 @@ final class GameModel: ObservableObject {
     @AppStorage("hudJoystickX") var hudJoystickX: Double = 0
     @AppStorage("hudJoystickY") var hudJoystickY: Double = 0
     @AppStorage("hudJoystickScale") var hudJoystickScale: Double = 1.0
+    @AppStorage("hudJoystickOpacity") var hudJoystickOpacity: Double = 0.85
     @AppStorage("hudWeaponsX") var hudWeaponsX: Double = 0
     @AppStorage("hudWeaponsY") var hudWeaponsY: Double = 0
     @AppStorage("hudWeaponsScale") var hudWeaponsScale: Double = 1.0
+    @AppStorage("hudWeaponsOpacity") var hudWeaponsOpacity: Double = 0.85
     @AppStorage("hudJumpX") var hudJumpX: Double = 0
     @AppStorage("hudJumpY") var hudJumpY: Double = 0
     @AppStorage("hudJumpScale") var hudJumpScale: Double = 1.0
+    @AppStorage("hudJumpOpacity") var hudJumpOpacity: Double = 0.85
     @AppStorage("hudSkillsX") var hudSkillsX: Double = 0
     @AppStorage("hudSkillsY") var hudSkillsY: Double = 0
     @AppStorage("hudSkillsScale") var hudSkillsScale: Double = 1.0
+    @AppStorage("hudSkillsOpacity") var hudSkillsOpacity: Double = 0.85
     @Published var isGameControllerConnected: Bool = false
     @Published var gameControllerName: String = ""
     @AppStorage("duoScreenModeRaw") var duoScreenModeRaw: Int = 0
@@ -1719,10 +1743,10 @@ final class GameModel: ObservableObject {
     }
 
     func resetHUDLayout() {
-        hudJoystickX = 0; hudJoystickY = 0; hudJoystickScale = 1.0
-        hudWeaponsX = 0; hudWeaponsY = 0; hudWeaponsScale = 1.0
-        hudJumpX = 0; hudJumpY = 0; hudJumpScale = 1.0
-        hudSkillsX = 0; hudSkillsY = 0; hudSkillsScale = 1.0
+        hudJoystickX = 0; hudJoystickY = 0; hudJoystickScale = 1.0; hudJoystickOpacity = 0.85
+        hudWeaponsX = 0; hudWeaponsY = 0; hudWeaponsScale = 1.0; hudWeaponsOpacity = 0.85
+        hudJumpX = 0; hudJumpY = 0; hudJumpScale = 1.0; hudJumpOpacity = 0.85
+        hudSkillsX = 0; hudSkillsY = 0; hudSkillsScale = 1.0; hudSkillsOpacity = 0.85
         touchControlsOpacity = 0.85
     }
 
@@ -6977,13 +7001,22 @@ struct GameOptionsSheet: View {
 
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
-                            Text("Opacidad de Botones")
+                            Text("Opacidad General de Botones")
                             Spacer()
                             Text("\(Int(model.touchControlsOpacity * 100))%")
                                 .font(.caption.bold())
                                 .foregroundStyle(.secondary)
                         }
-                        Slider(value: $model.touchControlsOpacity, in: 0.2...1.0, step: 0.05)
+                        Slider(value: Binding<Double>(
+                            get: { model.touchControlsOpacity },
+                            set: { newVal in
+                                model.touchControlsOpacity = newVal
+                                model.hudJoystickOpacity = newVal
+                                model.hudWeaponsOpacity = newVal
+                                model.hudJumpOpacity = newVal
+                                model.hudSkillsOpacity = newVal
+                            }
+                        ), in: 0.2...1.0, step: 0.05)
                     }
 
                     Toggle("Invertir eje Y (Cámara)", isOn: $model.invertsCameraY)
