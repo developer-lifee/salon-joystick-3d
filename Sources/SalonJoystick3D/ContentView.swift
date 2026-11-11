@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "118"
-    static let commitHash = "b118gamecenterachievements"
+    static let build = "119"
+    static let commitHash = "b119ultracool4kmode"
     static let formatted = "v\(version) • Build \(build)"
 }
 
@@ -171,6 +171,7 @@ enum GameRenderResolution: String, CaseIterable, Identifiable {
     case light
     case balanced
     case high
+    case ultra4K
 
     var id: Self { self }
 
@@ -180,6 +181,7 @@ enum GameRenderResolution: String, CaseIterable, Identifiable {
         case .light: 0.75
         case .balanced: 1.0
         case .high: 1.5
+        case .ultra4K: 2.2
         }
     }
 
@@ -188,7 +190,8 @@ enum GameRenderResolution: String, CaseIterable, Identifiable {
         case .ultraLight: "Ultra Ahorro (0,55x)"
         case .light: "Ligera (0,75x)"
         case .balanced: "Equilibrada (1x)"
-        case .high: "Ultra Retina (1,5x)"
+        case .high: "Retina Pro (1,5x)"
+        case .ultra4K: "Cine 4K TV / Máxima (2,2x)"
         }
     }
 }
@@ -7193,16 +7196,16 @@ struct GameOptionsSheet: View {
                             .foregroundStyle(.secondary)
                         HStack(spacing: 6) {
                             Button {
-                                model.targetFPS = 60
+                                model.targetFPS = 30
                                 model.renderResolution = .light
                                 model.advancedReflectionsEnabled = true
                                 model.isLiquidGlassUIEnabled = true
                             } label: {
                                 VStack(spacing: 3) {
                                     Image(systemName: "snowflake")
-                                    Text("Ultra Cool")
+                                    Text("Batería Fría")
                                         .font(.caption2.bold())
-                                    Text("TV / Frío 60")
+                                    Text("30 FPS • Frío")
                                         .font(.system(size: 8, weight: .semibold))
                                         .opacity(0.85)
                                 }
@@ -7210,7 +7213,7 @@ struct GameOptionsSheet: View {
                                 .padding(.vertical, 6)
                             }
                             .buttonStyle(.borderedProminent)
-                            .tint(.cyan.opacity(0.85))
+                            .tint(.teal.opacity(0.85))
 
                             Button {
                                 model.targetFPS = 60
@@ -7222,7 +7225,7 @@ struct GameOptionsSheet: View {
                                     Image(systemName: "dial.medium.fill")
                                     Text("Equilibrado")
                                         .font(.caption2.bold())
-                                    Text("Nativo 60")
+                                    Text("60 FPS • 1.0x")
                                         .font(.system(size: 8, weight: .semibold))
                                         .opacity(0.85)
                                 }
@@ -7233,26 +7236,6 @@ struct GameOptionsSheet: View {
                             .tint(.blue.opacity(0.8))
 
                             Button {
-                                model.targetFPS = 30
-                                model.renderResolution = .light
-                                model.advancedReflectionsEnabled = true
-                                model.isLiquidGlassUIEnabled = true
-                            } label: {
-                                VStack(spacing: 3) {
-                                    Image(systemName: "battery.100percent.bolt")
-                                    Text("Ahorro")
-                                        .font(.caption2.bold())
-                                    Text("30 FPS")
-                                        .font(.system(size: 8, weight: .semibold))
-                                        .opacity(0.85)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 6)
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .tint(.green.opacity(0.8))
-
-                            Button {
                                 model.targetFPS = 60
                                 model.renderResolution = .high
                                 model.advancedReflectionsEnabled = true
@@ -7260,9 +7243,9 @@ struct GameOptionsSheet: View {
                             } label: {
                                 VStack(spacing: 3) {
                                     Image(systemName: "sparkles")
-                                    Text("Retina")
+                                    Text("Retina Pro")
                                         .font(.caption2.bold())
-                                    Text("1.5x Máx")
+                                    Text("60 FPS • 1.5x")
                                         .font(.system(size: 8, weight: .semibold))
                                         .opacity(0.85)
                                 }
@@ -7271,6 +7254,26 @@ struct GameOptionsSheet: View {
                             }
                             .buttonStyle(.borderedProminent)
                             .tint(.purple.opacity(0.85))
+
+                            Button {
+                                model.targetFPS = 60
+                                model.renderResolution = .ultra4K
+                                model.advancedReflectionsEnabled = true
+                                model.isLiquidGlassUIEnabled = true
+                            } label: {
+                                VStack(spacing: 3) {
+                                    Image(systemName: "tv.fill")
+                                    Text("Ultra Cool")
+                                        .font(.caption2.bold())
+                                    Text("4K TV • 2.2x")
+                                        .font(.system(size: 8, weight: .semibold))
+                                        .opacity(0.85)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.orange.opacity(0.9))
                         }
 
                         Text("✨ Los reflejos Ray Tracing y el tema Vidrio Líquido se mantienen activos en todos los perfiles. El ahorro proviene de la escala de resolución y los FPS.")
