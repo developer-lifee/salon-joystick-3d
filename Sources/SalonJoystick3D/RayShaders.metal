@@ -626,6 +626,8 @@ struct FirstPersonHit {
     float3 normal;
     float3 albedo;
     float3 emission;
+    float reflectivity;
+    float roughness;
 };// Analytical intersection for first-person hands and swimming arms
 inline FirstPersonHit intersectFirstPersonViewModel(
     ray r,
@@ -764,10 +766,11 @@ inline FirstPersonHit intersectFirstPersonViewModel(
     } else {
         // 🧍 First person idle/holding hands on land
         float breathe = sin(time * 2.2f) * 0.008f;
-        float3 rHandCam = float3(0.24f, -0.22f + breathe, 0.44f);
+        float3 rHandCam = float3(0.22f, -0.20f + breathe, 0.45f);
         float3 rHandWorld = camPos + cRight * rHandCam.x + cUp * rHandCam.y + cFwd * rHandCam.z;
-        float handRadius = 0.060f;
 
+        // 1. Palma de Slime Verde Gelatina Bioluminiscente
+        float handRadius = 0.052f;
         float3 ocR = r.origin - rHandWorld;
         float bR = dot(ocR, r.direction);
         float cR = dot(ocR, ocR) - handRadius * handRadius;
@@ -778,24 +781,214 @@ inline FirstPersonHit intersectFirstPersonViewModel(
                 result.hit = true;
                 result.distance = tR;
                 result.normal = normalize((r.origin + r.direction * tR) - rHandWorld);
+                result.albedo = float3(0.22f, 0.90f, 0.28f);
+                result.emission = float3(0.04f, 0.22f, 0.08f);
+                result.reflectivity = 0.25f;
+                result.roughness = 0.15f;
             }
         }
 
-        // Tool body in hand (Flashlight or Laser)
-        if (toolKind > 0.5f) {
-            float3 toolCenter = rHandWorld + cFwd * 0.09f + cUp * 0.02f;
-            float3 ocT = r.origin - toolCenter;
-            float bT = dot(ocT, r.direction);
-            float cT = dot(ocT, ocT) - 0.040f * 0.040f;
-            float discT = bT * bT - cT;
-            if (discT >= 0.0f) {
-                float tT = -bT - sqrt(discT);
-                if (tT > 0.08f && tT < result.distance) {
+        // 2. Dedos translúcidos de slime sujetando la empuñadura
+        float3 finger1Pos = rHandWorld + cUp * 0.038f - cRight * 0.020f + cFwd * 0.025f; // Pulgar
+        float3 ocF1 = r.origin - finger1Pos;
+        float bF1 = dot(ocF1, r.direction);
+        float discF1 = bF1 * bF1 - (dot(ocF1, ocF1) - 0.022f * 0.022f);
+        if (discF1 >= 0.0f) {
+            float tF1 = -bF1 - sqrt(discF1);
+            if (tF1 > 0.08f && tF1 < result.distance) {
+                result.hit = true;
+                result.distance = tF1;
+                result.normal = normalize((r.origin + r.direction * tF1) - finger1Pos);
+                result.albedo = float3(0.25f, 0.92f, 0.30f);
+                result.emission = float3(0.05f, 0.24f, 0.09f);
+                result.reflectivity = 0.25f;
+                result.roughness = 0.15f;
+            }
+        }
+
+        float3 finger2Pos = rHandWorld + cRight * 0.022f + cFwd * 0.055f + cUp * 0.015f; // Dedo índice / gatillo
+        float3 ocF2 = r.origin - finger2Pos;
+        float bF2 = dot(ocF2, r.direction);
+        float discF2 = bF2 * bF2 - (dot(ocF2, ocF2) - 0.018f * 0.018f);
+        if (discF2 >= 0.0f) {
+            float tF2 = -bF2 - sqrt(discF2);
+            if (tF2 > 0.08f && tF2 < result.distance) {
+                result.hit = true;
+                result.distance = tF2;
+                result.normal = normalize((r.origin + r.direction * tF2) - finger2Pos);
+                result.albedo = float3(0.24f, 0.90f, 0.28f);
+                result.emission = float3(0.04f, 0.22f, 0.08f);
+                result.reflectivity = 0.25f;
+                result.roughness = 0.15f;
+            }
+        }
+
+        // 3. MODELOS 3D DE LAS 3 ARMAS / GADGETS EN PRIMERA PERSONA
+        if (toolKind > 0.5f && toolKind < 1.5f) {
+            // 🔦 1. LINTERNA CUÁNTICA: Cuerpo cilíndrico de titanio, bisel dorado, lente cálida y barra de energía
+            float3 bodyCenter = rHandWorld + cFwd * 0.08f + cUp * 0.02f;
+            float3 p1 = bodyCenter - cFwd * 0.06f;
+            float3 p2 = bodyCenter + cFwd * 0.06f;
+            float3 ba = p2 - p1;
+            float3 oa = r.origin - p1;
+            float bada = dot(ba, ba);
+            float bard = dot(ba, r.direction);
+            float baoa = dot(ba, oa);
+            float aC = bada - bard * bard;
+            float bC = bada * dot(r.direction, oa) - baoa * bard;
+            float cC = bada * dot(oa, oa) - baoa * baoa - 0.032f * 0.032f * bada;
+            float dC = bC * bC - aC * cC;
+            if (dC >= 0.0f && abs(aC) > 1e-6f) {
+                float tC = (-bC - sqrt(dC)) / aC;
+                if (tC > 0.08f && tC < result.distance) {
+                    float yC = baoa + tC * bard;
+                    if (yC > 0.0f && yC < bada) {
+                        result.hit = true;
+                        result.distance = tC;
+                        float3 pHit = r.origin + r.direction * tC;
+                        result.normal = normalize(pHit - (p1 + ba * (yC / bada)));
+                        result.albedo = float3(0.85f, 0.88f, 0.92f); // Titanio satinado
+                        result.emission = float3(0.0f);
+                        result.reflectivity = 0.35f;
+                        result.roughness = 0.22f;
+                    }
+                }
+            }
+
+            // Bisel Dorado Emitter
+            float3 bezelCenter = bodyCenter + cFwd * 0.075f;
+            float3 ocBz = r.origin - bezelCenter;
+            float bBz = dot(ocBz, r.direction);
+            float discBz = bBz * bBz - (dot(ocBz, ocBz) - 0.038f * 0.038f);
+            if (discBz >= 0.0f) {
+                float tBz = -bBz - sqrt(discBz);
+                if (tBz > 0.08f && tBz < result.distance) {
                     result.hit = true;
-                    result.distance = tT;
-                    result.normal = normalize((r.origin + r.direction * tT) - toolCenter);
-                    result.albedo = toolKind > 1.5f ? float3(0.95f, 0.15f, 0.15f) : float3(0.92f, 0.85f, 0.20f);
-                    result.emission = toolKind > 1.5f ? float3(0.6f, 0.05f, 0.05f) : float3(0.4f, 0.35f, 0.05f);
+                    result.distance = tBz;
+                    result.normal = normalize((r.origin + r.direction * tBz) - bezelCenter);
+                    result.albedo = float3(0.95f, 0.78f, 0.22f); // Oro brillante
+                    result.emission = float3(0.4f, 0.3f, 0.05f);
+                    result.reflectivity = 0.65f;
+                    result.roughness = 0.15f;
+                }
+            }
+
+            // Lente frontal de cristal cálido
+            float3 lensCenter = bezelCenter + cFwd * 0.015f;
+            float3 ocLens = r.origin - lensCenter;
+            float bLens = dot(ocLens, r.direction);
+            float discLens = bLens * bLens - (dot(ocLens, ocLens) - 0.028f * 0.028f);
+            if (discLens >= 0.0f) {
+                float tLens = -bLens - sqrt(discLens);
+                if (tLens > 0.08f && tLens < result.distance) {
+                    result.hit = true;
+                    result.distance = tLens;
+                    result.normal = normalize((r.origin + r.direction * tLens) - lensCenter);
+                    result.albedo = float3(1.0f, 0.95f, 0.85f);
+                    result.emission = float3(4.8f, 3.4f, 1.2f);
+                    result.reflectivity = 0.80f;
+                    result.roughness = 0.05f;
+                }
+            }
+        } else if (toolKind > 1.5f && toolKind < 2.5f) {
+            // 🔫 2. BLASTER LÁSER FOTÓNICO: Cañón cromado, Núcleo de Cristal de Rubí brillante y boca de disparo
+            float3 gunCenter = rHandWorld + cFwd * 0.09f + cUp * 0.035f;
+
+            // Cañón y armazón metálico futurista
+            float3 p1 = gunCenter - cFwd * 0.07f;
+            float3 p2 = gunCenter + cFwd * 0.12f;
+            float3 ba = p2 - p1;
+            float3 oa = r.origin - p1;
+            float bada = dot(ba, ba);
+            float bard = dot(ba, r.direction);
+            float baoa = dot(ba, oa);
+            float aC = bada - bard * bard;
+            float bC = bada * dot(r.direction, oa) - baoa * bard;
+            float cC = bada * dot(oa, oa) - baoa * baoa - 0.026f * 0.026f * bada;
+            float dC = bC * bC - aC * cC;
+            if (dC >= 0.0f && abs(aC) > 1e-6f) {
+                float tC = (-bC - sqrt(dC)) / aC;
+                if (tC > 0.08f && tC < result.distance) {
+                    float yC = baoa + tC * bard;
+                    if (yC > 0.0f && yC < bada) {
+                        result.hit = true;
+                        result.distance = tC;
+                        float3 pHit = r.origin + r.direction * tC;
+                        result.normal = normalize(pHit - (p1 + ba * (yC / bada)));
+                        result.albedo = float3(0.24f, 0.26f, 0.30f); // Gunmetal
+                        result.emission = float3(0.0f);
+                        result.reflectivity = 0.55f;
+                        result.roughness = 0.18f;
+                    }
+                }
+            }
+
+            // 💎 Núcleo de Cristal de Rubí Cuántico expuesto (brilla intensamente en rojo carmesí)
+            float3 crystalCenter = gunCenter - cFwd * 0.01f + cUp * 0.015f;
+            float3 ocCry = r.origin - crystalCenter;
+            float bCry = dot(ocCry, r.direction);
+            float discCry = bCry * bCry - (dot(ocCry, ocCry) - 0.024f * 0.024f);
+            if (discCry >= 0.0f) {
+                float tCry = -bCry - sqrt(discCry);
+                if (tCry > 0.08f && tCry < result.distance) {
+                    result.hit = true;
+                    result.distance = tCry;
+                    result.normal = normalize((r.origin + r.direction * tCry) - crystalCenter);
+                    result.albedo = float3(0.98f, 0.15f, 0.22f);
+                    result.emission = float3(6.5f, 0.25f, 0.35f);
+                    result.reflectivity = 0.70f;
+                    result.roughness = 0.08f;
+                }
+            }
+
+            // 🎯 Boca del cañón / Apertura del láser (aquí nace el rayo rojo fotónico)
+            float3 muzzleCenter = gunCenter + cFwd * 0.14f;
+            float3 ocMuz = r.origin - muzzleCenter;
+            float bMuz = dot(ocMuz, r.direction);
+            float discMuz = bMuz * bMuz - (dot(ocMuz, ocMuz) - 0.028f * 0.028f);
+            if (discMuz >= 0.0f) {
+                float tMuz = -bMuz - sqrt(discMuz);
+                if (tMuz > 0.08f && tMuz < result.distance) {
+                    result.hit = true;
+                    result.distance = tMuz;
+                    result.normal = normalize((r.origin + r.direction * tMuz) - muzzleCenter);
+                    result.albedo = float3(0.95f, 0.80f, 0.25f);
+                    result.emission = float3(5.5f, 0.40f, 0.40f);
+                    result.reflectivity = 0.45f;
+                    result.roughness = 0.12f;
+                }
+            }
+        } else if (toolKind > 2.5f) {
+            // 🛡️ 3. ESCUDO ESPEJO PRISMÁTICO: Espejo hexagonal reflectante con marco de neón cian
+            float3 shieldCenter = rHandWorld + cFwd * 0.14f + cUp * 0.01f;
+            float3 ocSh = r.origin - shieldCenter;
+            float bSh = dot(ocSh, r.direction);
+            float discSh = bSh * bSh - (dot(ocSh, ocSh) - 0.095f * 0.095f);
+            if (discSh >= 0.0f) {
+                float tSh = -bSh - sqrt(discSh);
+                if (tSh > 0.08f && tSh < result.distance) {
+                    result.hit = true;
+                    result.distance = tSh;
+                    result.normal = -cFwd; // Refleja directamente hacia adelante
+                    result.albedo = float3(0.94f, 0.96f, 0.98f);
+                    result.emission = float3(0.0f);
+                    result.reflectivity = 0.98f; // Espejo puro reflectante Ray-Traced
+                    result.roughness = 0.005f;
+                }
+            }
+
+            // Marco perimétrico de Neón Cian
+            float discRim = bSh * bSh - (dot(ocSh, ocSh) - 0.115f * 0.115f);
+            if (discRim >= 0.0f && discSh < 0.0f) {
+                float tRim = -bSh - sqrt(discRim);
+                if (tRim > 0.08f && tRim < result.distance) {
+                    result.hit = true;
+                    result.distance = tRim;
+                    result.normal = normalize((r.origin + r.direction * tRim) - shieldCenter);
+                    result.albedo = float3(0.05f, 0.85f, 0.98f);
+                    result.emission = float3(0.2f, 3.6f, 5.2f);
+                    result.reflectivity = 0.40f;
+                    result.roughness = 0.15f;
                 }
             }
         }
@@ -969,9 +1162,9 @@ kernel void raytracePatio(
                 }
                 albedo = fpHit.albedo;
                 emission = fpHit.emission;
-                kind = 0.0f;
-                baseReflectivity = 0.35f;
-                roughness = 0.22f;
+                kind = (fpHit.reflectivity > 0.90f) ? 1.0f : 0.0f;
+                baseReflectivity = fpHit.reflectivity;
+                roughness = fpHit.roughness;
             }
         }
 

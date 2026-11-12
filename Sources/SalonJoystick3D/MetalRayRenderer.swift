@@ -247,6 +247,31 @@ private struct RTMeshBuilder {
         }
     }
 
+    /// 🔫 🔦 3D Modelado Articulado del Gadget/Arma en la mano del Slime (Blaster Láser Cuántico / Linterna Táctica)
+    mutating func addHeldGadget(center: SIMD3<Float>) {
+        let titaniumChassis = RTMaterial(color: SIMD3<Float>(0.84, 0.86, 0.90), roughness: 0.28, reflectivity: 0.35)
+        let gunmetal = RTMaterial(color: SIMD3<Float>(0.16, 0.17, 0.20), roughness: 0.30, reflectivity: 0.45)
+        let goldBezel = RTMaterial(color: SIMD3<Float>(0.95, 0.78, 0.24), roughness: 0.18, reflectivity: 0.65)
+        let rubyCrystal = RTMaterial(color: SIMD3<Float>(0.98, 0.12, 0.22), roughness: 0.12, emission: SIMD3<Float>(4.8, 0.25, 0.35), reflectivity: 0.55, kind: 5.0)
+        let cyanBattery = RTMaterial(color: SIMD3<Float>(0.05, 0.85, 0.98), roughness: 0.15, emission: SIMD3<Float>(0.2, 3.4, 4.8), reflectivity: 0.30, kind: 5.0)
+        let laserTip = RTMaterial(color: SIMD3<Float>(1.0, 0.2, 0.25), roughness: 0.10, emission: SIMD3<Float>(5.8, 0.4, 0.5), reflectivity: 0.40, kind: 5.0)
+
+        // 1. Empuñadura ergonómica / grip en la mano del slime
+        addBox(center: center + SIMD3<Float>(0, -0.06, -0.04), size: SIMD3<Float>(0.08, 0.15, 0.09), material: gunmetal)
+        // 2. Chasis superior / corredera de titanio blanco-plateado
+        addBox(center: center + SIMD3<Float>(0, 0.03, 0.06), size: SIMD3<Float>(0.11, 0.12, 0.32), material: titaniumChassis)
+        // 3. Cámara de Cristal de Rubí Cuántico expuesta (núcleo de energía que brilla en rojo)
+        addSphere(center: center + SIMD3<Float>(0, 0.03, 0.04), radii: SIMD3<Float>(0.052, 0.052, 0.065), material: rubyCrystal, segments: 8, rings: 5)
+        // 4. Cañón cilíndrico frontal cromado
+        addBox(center: center + SIMD3<Float>(0, 0.04, 0.22), size: SIMD3<Float>(0.075, 0.075, 0.16), material: gunmetal)
+        // 5. Boquilla / Anillo Emitter dorado y punta de láser brillante (donde nace el rayo)
+        addBox(center: center + SIMD3<Float>(0, 0.04, 0.29), size: SIMD3<Float>(0.095, 0.095, 0.04), material: goldBezel)
+        addSphere(center: center + SIMD3<Float>(0, 0.04, 0.31), radii: SIMD3<Float>(repeating: 0.032), material: laserTip, segments: 7, rings: 4)
+        // 6. Indicador de Batería lateral Cian
+        addBox(center: center + SIMD3<Float>(0.056, 0.04, 0.06), size: SIMD3<Float>(0.012, 0.035, 0.12), material: cyanBattery)
+        addBox(center: center + SIMD3<Float>(-0.056, 0.04, 0.06), size: SIMD3<Float>(0.012, 0.035, 0.12), material: cyanBattery)
+    }
+
     mutating func addSphere(
         center: SIMD3<Float>,
         radii: SIMD3<Float>,
@@ -715,7 +740,7 @@ private struct RTMeshBuilder {
             addBox(center: origin + SIMD3<Float>(-0.16, 0.46, 0.28), size: SIMD3<Float>(0.24, 0.12, 0.14), material: suit)
             addBox(center: origin + SIMD3<Float>( 0.16, 0.46, 0.28), size: SIMD3<Float>(0.24, 0.12, 0.14), material: suit)
             if holdsTool {
-                addBox(center: origin + SIMD3<Float>(0.24, 0.46, 0.36), size: SIMD3<Float>(0.12, 0.14, 0.38), material: toolMat)
+                addHeldGadget(center: origin + SIMD3<Float>(0.24, 0.46, 0.36))
             }
 
             // 🦵 Articulación de piernas y rodillas (Fiel a SalonStudio 3D)
@@ -778,7 +803,7 @@ private struct RTMeshBuilder {
             addBox(center: origin + SIMD3<Float>(-0.42, 0.68, 0.22), size: SIMD3<Float>(0.13, 0.26, 0.16), material: suit)
             addBox(center: origin + SIMD3<Float>( 0.42, 0.68, 0.22), size: SIMD3<Float>(0.13, 0.26, 0.16), material: suit)
             if holdsTool {
-                addBox(center: origin + SIMD3<Float>(0.47, 0.68, 0.32), size: SIMD3<Float>(0.14, 0.16, 0.42), material: toolMat)
+                addHeldGadget(center: origin + SIMD3<Float>(0.47, 0.68, 0.32))
             }
 
             // Piernas en patada de aletas (Flutter Kick)
@@ -876,7 +901,7 @@ private struct RTMeshBuilder {
             addSphere(center: origin + SIMD3<Float>( 0.42, 0.82, -0.15), radii: SIMD3<Float>(repeating: 0.095), material: armor)
             addBox(center: origin + SIMD3<Float>( 0.42, 0.68, -0.22), size: SIMD3<Float>(0.13, 0.26, 0.16), material: suit)
             if holdsTool {
-                addBox(center: origin + SIMD3<Float>(0.47, 0.68, 0.12), size: SIMD3<Float>(0.14, 0.16, 0.42), material: toolMat)
+                addHeldGadget(center: origin + SIMD3<Float>(0.47, 0.68, 0.12))
             }
 
             // Pierna Izq adelante (zancada con rodilla flexionada)
@@ -991,7 +1016,7 @@ private struct RTMeshBuilder {
                 }
             }
             if holdsTool {
-                addBox(center: origin + SIMD3<Float>(0.47, 0.65, 0.28), size: SIMD3<Float>(0.14, 0.16, 0.42), material: toolMat)
+                addHeldGadget(center: origin + SIMD3<Float>(0.47, 0.65, 0.28))
             }
 
             // Piernas
@@ -4494,11 +4519,19 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let toolOrigin: SIMD3<Float>
         var toolDirection: SIMD3<Float>
         if cameraMode == .firstPerson {
-            let forwardOffset: Float = cameraPosition.y <= -4.75 ? 0.32 : 0.10
-            toolOrigin = cameraPosition + right * 0.18 - up * 0.16 + cameraForward * forwardOffset
-            toolDirection = cameraForward
+            // 🎯 Anclaje anatómico exacto en la boca del cañón del Blaster / Linterna en la mano derecha (visión FPS):
+            // La mano del slime está en (right: 0.22, down: 0.18) y el cañón proyecta la boca a 0.65m al frente
+            let toolRightOffset: Float = 0.22
+            let toolDownOffset: Float = 0.18
+            let toolForwardOffset: Float = (heldTool == .laser) ? 0.65 : 0.45
+            toolOrigin = cameraPosition + right * toolRightOffset - up * toolDownOffset + cameraForward * toolForwardOffset
+
+            // Apuntar directamente hacia el centro de la retícula para que el haz sea ultra preciso:
+            let aimPoint = cameraPosition + cameraForward * 35.0
+            let toAim = aimPoint - toolOrigin
+            toolDirection = simd_length_squared(toAim) > 0.001 ? simd_normalize(toAim) : cameraForward
         } else {
-            // 🎯 En 3ra persona: anclar el origen EXACTAMENTE en la boca del arma en la mano derecha del personaje
+            // 🎯 En 3ra persona y reflejos en espejos: anclar el origen EXACTAMENTE en la boca del cañón dorado/rubí en la mano derecha
             let isGroundedInPool = currentlyInPool && playerPosition.y >= -0.25
             let isDeepSubmerged = (currentlyInPool || isSubterraneanTarget) && playerPosition.y < -0.25
             let pPitch: Float
@@ -4516,13 +4549,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
             let toolLocalOffset: SIMD3<Float>
             if isCoverActive {
-                toolLocalOffset = SIMD3<Float>(0.28, 0.46, 0.60)
+                toolLocalOffset = SIMD3<Float>(0.28, 0.46, 0.68)
             } else if isSlidingOnToboggan {
-                toolLocalOffset = SIMD3<Float>(0.42, 0.40, 0.55)
+                toolLocalOffset = SIMD3<Float>(0.42, 0.40, 0.60)
             } else if isDeepSubmerged {
-                toolLocalOffset = SIMD3<Float>(0.47, 0.68, 0.58)
+                toolLocalOffset = SIMD3<Float>(0.47, 0.68, 0.62)
             } else {
-                toolLocalOffset = SIMD3<Float>(0.46, 0.66, 0.56)
+                toolLocalOffset = SIMD3<Float>(0.47, 0.69, 0.59)
             }
 
             let cy = cos(playerYaw), sy = sin(playerYaw)
