@@ -8302,9 +8302,14 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
     @Published var selectedLanguage: String = "es"
     @Published var displayedChars: Int = 0
     @Published var isStoryCompleted: Bool = false
+    @Published var playbackSpeed: Float = 1.0 // 1.0x, 1.5x, 2.0x
+    @Published var isSpeedingUp: Bool = false // Gesto TikTok estilo press-and-hold
+    @Published var autoAdvance: Bool = false // Apagado por defecto para evitar saltos automáticos no deseados
+    @Published var showsSubtitles: Bool = true
 
     private let synthesizer = AVSpeechSynthesizer()
     private var typewriterTimer: Timer?
+    private var isStoppingIntentionally = false
 
     static let chapters: [StoryChapter] = [
         StoryChapter(
@@ -8329,13 +8334,13 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
         ),
         StoryChapter(
             id: 2,
-            title: "Capítulo III • La Arena y los 4 Beacons",
-            subtitle: "Poste, Piscina, Sheerit y el Borde Prismático al 100%",
+            title: "Capítulo III • La Arena y las Armas de Luz",
+            subtitle: "Blaster Láser, Escudo Espejo y las 4 luminarias maestras",
             badge: "OBJETIVO TÁCTICO",
-            scriptES: "Nos confinaron en esta arena de pruebas holográfica. Drenaron el cien por ciento de las luces para debilitarnos. Tu misión es sagrada: debes reactivar las cuatro luminarias maestras: el Poste, el Neón de la Piscina, el Neón Sheerit y el Borde Prismático. Cada luz devuelve la energía al sistema.",
-            scriptEN: "They locked us inside this holographic test arena, draining one hundred percent of the lights to weaken us. Your mission is sacred: reactivate the four master light beacons: the Post, the Pool Neon, the Sheerit Neon, and the Prism Rim. Every light restores power to the system.",
-            scriptPT: "Eles nos confinaram nesta arena de testes holográfica. Drenaram cem por cento das luzes para nos enfraquecer. Sua missão é sagrada: reative as quatro luminárias mestras: o Poste, o Neon da Piscina, o Neon Sheerit e a Borda Prismática. Cada luz devolve a energia ao sistema.",
-            scriptFR: "Ils nous ont enfermés dans cette arène d'entraînement holographique, drainant cent pour cent des lumières pour nous affaiblir. Votre mission est sacrée : réactivez les quatre balises maîtresses : le Poteau, le Néon de la Piscine, le Néon Sheerit et le Bord Prismatique. Chaque lumière restaure l'énergie du système."
+            scriptES: "Nos confinaron en esta arena de pruebas holográfica. Drenaron el cien por ciento de las luces para debilitarnos. Tu misión es sagrada: empuña el Blaster Fotónico y el Escudo Espejo, y reactiva las cuatro luminarias maestras. Cada luz devuelve la energía al sistema.",
+            scriptEN: "They locked us inside this holographic test arena, draining one hundred percent of the lights to weaken us. Your mission is sacred: wield the Photonic Blaster and Mirror Shield, and reactivate the four master light beacons. Every light restores power to the system.",
+            scriptPT: "Eles nos confinaram nesta arena de testes holográfica. Drenaram cem por cento das luzes para nos enfraquecer. Sua missão é sagrada: empunhe o Blaster Fotônico e o Escudo Espelho, e reative as quatro luminárias mestras. Cada luz devolve a energia ao sistema.",
+            scriptFR: "Ils nous ont enfermés dans cette arène d'entraînement holographique, drainant cent pour cent des lumières pour nous affaiblir. Votre mission est sacrée : maniez le Blaster Photonique et le Bouclier Miroir, et réactivez les quatre balises maîtresses. Chaque lumière restaure l'énergie du système."
         ),
         StoryChapter(
             id: 3,
@@ -8370,16 +8375,47 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
         }
     }
 
+    var effectiveRate: Float {
+        let base: Float = 0.54 // Ritmo dinámico más rápido y fluido
+        if isSpeedingUp {
+            return min(0.68, base * 1.35) // ⚡ 2x Velocidad TikTok
+        } else if playbackSpeed >= 2.0 {
+            return min(0.68, base * 1.35)
+        } else if playbackSpeed >= 1.5 {
+            return min(0.62, base * 1.18)
+        } else {
+            return base
+        }
+    }
+
+    func cyclePlaybackSpeed() {
+        if playbackSpeed < 1.4 {
+            playbackSpeed = 1.5
+        } else if playbackSpeed < 1.9 {
+            playbackSpeed = 2.0
+        } else {
+            playbackSpeed = 1.0
+        }
+        playCurrentChapter()
+    }
+
+    func setSpeedingUp(_ speeding: Bool) {
+        guard isSpeedingUp != speeding else { return }
+        isSpeedingUp = speeding
+        playCurrentChapter(resumeChars: displayedChars)
+    }
+
     func startPrologue() {
         currentChapterIndex = 0
         isStoryCompleted = false
         playCurrentChapter()
     }
 
-    func playCurrentChapter() {
+    func playCurrentChapter(resumeChars: Int = 0) {
+        isStoppingIntentionally = true
         stopTypewriter()
         synthesizer.stopSpeaking(at: .immediate)
-        displayedChars = 0
+        isStoppingIntentionally = false
 
         guard currentChapterIndex < Self.chapters.count else {
             isStoryCompleted = true
@@ -8388,12 +8424,18 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
         }
 
         let chapter = Self.chapters[currentChapterIndex]
-        let text = chapter.script(for: selectedLanguage)
+        let fullText = chapter.script(for: selectedLanguage)
 
-        let charDelay = 0.035
+        if resumeChars > 0 && resumeChars < fullText.count {
+            displayedChars = resumeChars
+        } else {
+            displayedChars = 0
+        }
+
+        let charDelay: TimeInterval = (isSpeedingUp || playbackSpeed >= 2.0) ? 0.015 : ((playbackSpeed >= 1.5) ? 0.022 : 0.030)
         typewriterTimer = Timer.scheduledTimer(withTimeInterval: charDelay, repeats: true) { [weak self] timer in
             guard let self = self else { timer.invalidate(); return }
-            if self.displayedChars < text.count {
+            if self.displayedChars < fullText.count {
                 self.displayedChars += 1
             } else {
                 timer.invalidate()
@@ -8401,7 +8443,17 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
         }
 
         if !isMuted {
-            let utterance = AVSpeechUtterance(string: text)
+            let spokenText: String
+            if resumeChars > 0 && resumeChars < fullText.count {
+                let startIdx = fullText.index(fullText.startIndex, offsetBy: resumeChars)
+                spokenText = String(fullText[startIdx...])
+            } else {
+                spokenText = fullText
+            }
+
+            guard !spokenText.isEmpty else { return }
+
+            let utterance = AVSpeechUtterance(string: spokenText)
             let voiceCode: String
             switch selectedLanguage {
             case "en": voiceCode = "en-US"
@@ -8410,8 +8462,8 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
             default: voiceCode = "es-ES"
             }
             utterance.voice = AVSpeechSynthesisVoice(language: voiceCode) ?? AVSpeechSynthesisVoice(language: "en-US")
-            utterance.rate = 0.49
-            utterance.pitchMultiplier = 0.88
+            utterance.rate = effectiveRate
+            utterance.pitchMultiplier = 0.92
             utterance.volume = 1.0
             isSpeaking = true
             synthesizer.speak(utterance)
@@ -8426,7 +8478,9 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
             playCurrentChapter()
         } else {
             isStoryCompleted = true
+            isStoppingIntentionally = true
             synthesizer.stopSpeaking(at: .immediate)
+            isStoppingIntentionally = false
         }
     }
 
@@ -8440,7 +8494,9 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
     func toggleMute() {
         isMuted.toggle()
         if isMuted {
+            isStoppingIntentionally = true
             synthesizer.stopSpeaking(at: .immediate)
+            isStoppingIntentionally = false
             isSpeaking = false
         } else {
             playCurrentChapter()
@@ -8452,14 +8508,21 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
         playCurrentChapter()
     }
 
+    // 🛡️ Prevenir auto-saltos involuntarios: solo avanzar si autoAdvance está explícitamente activado
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.85) { [weak self] in
-            guard let self = self, self.isSpeaking else { return }
-            if self.currentChapterIndex + 1 < Self.chapters.count {
-                self.nextChapter()
-            } else {
-                self.isStoryCompleted = true
-                self.isSpeaking = false
+        guard !isStoppingIntentionally else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.isSpeaking = false
+            if self.autoAdvance {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+                    guard let self = self, self.autoAdvance else { return }
+                    if self.currentChapterIndex + 1 < Self.chapters.count {
+                        self.nextChapter()
+                    } else {
+                        self.isStoryCompleted = true
+                    }
+                }
             }
         }
     }
@@ -8470,8 +8533,10 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
     }
 
     func stopAll() {
+        isStoppingIntentionally = true
         stopTypewriter()
         synthesizer.stopSpeaking(at: .immediate)
+        isStoppingIntentionally = false
         isSpeaking = false
     }
 }
@@ -8480,240 +8545,328 @@ struct CinematicPrologueView: View {
     @ObservedObject var model: GameModel
     @StateObject private var prologue = StoryPrologueManager()
     @Environment(\.dismiss) private var dismiss
-    @State private var kenBurnsScale: CGFloat = 1.05
+    @State private var kenBurnsScale: CGFloat = 1.02
+
+    private func panelImageName(for index: Int) -> String {
+        switch index {
+        case 0: return "ProloguePanel1"
+        case 1: return "ProloguePanel2"
+        case 2: return "ProloguePanel3"
+        case 3: return "ProloguePanel4"
+        default: return "ProloguePanel5"
+        }
+    }
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
+            // 🖼️ Viñeta de Arte en Alta Definición por Capítulo (Completamente visible sin degradados oscuros invasivos)
             GeometryReader { geo in
-                ZStack {
-                    if let image = UIImage(named: "PrologueCover") {
-                        Image(uiImage: image)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: geo.size.width, height: geo.size.height)
-                            .scaleEffect(kenBurnsScale)
-                            .clipped()
-                    } else {
-                        LinearGradient(
-                            colors: [Color(red: 0.05, green: 0.02, blue: 0.12), Color(red: 0.02, green: 0.10, blue: 0.22), .black],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                        .ignoresSafeArea()
-                    }
-
+                let imgName = panelImageName(for: prologue.currentChapterIndex)
+                if let uiImg = UIImage(named: imgName) ?? UIImage(named: "PrologueCover") {
+                    Image(uiImage: uiImg)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .scaleEffect(kenBurnsScale)
+                        .id("prologue_panel_\(prologue.currentChapterIndex)")
+                } else {
                     LinearGradient(
-                        colors: [.black.opacity(0.35), .clear, .black.opacity(0.65), .black.opacity(0.95)],
-                        startPoint: .top,
-                        endPoint: .bottom
+                        colors: [Color(red: 0.05, green: 0.02, blue: 0.12), Color(red: 0.02, green: 0.10, blue: 0.22), .black],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
                     )
-                    .ignoresSafeArea()
                 }
             }
             .ignoresSafeArea()
-            .onAppear {
-                withAnimation(.easeInOut(duration: 24).repeatForever(autoreverses: true)) {
-                    kenBurnsScale = 1.18
+            .animation(.easeInOut(duration: 0.35), value: prologue.currentChapterIndex)
+
+            // ⚡ Gesto TikTok de Presionar y Mantener para 2X
+            Color.clear
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in
+                            if !prologue.isSpeedingUp {
+                                prologue.setSpeedingUp(true)
+                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            }
+                        }
+                        .onEnded { _ in
+                            if prologue.isSpeedingUp {
+                                prologue.setSpeedingUp(false)
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            }
+                        }
+                )
+
+            // ⚡ Indicador Flotante TikTok 2X Speed
+            if prologue.isSpeedingUp {
+                VStack {
+                    HStack(spacing: 6) {
+                        Image(systemName: "bolt.fill")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.yellow)
+                        Text("2X VELOCIDAD ACTIVA")
+                            .font(.system(size: 12, weight: .black, design: .monospaced))
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .background(Color.black.opacity(0.65), in: Capsule())
+                    .overlay(Capsule().stroke(Color.yellow, lineWidth: 1.5))
+                    .shadow(color: .yellow.opacity(0.6), radius: 10)
+                    .padding(.top, 56)
+                    Spacer()
                 }
-                prologue.startPrologue()
-            }
-            .onDisappear {
-                prologue.stopAll()
+                .transition(.opacity.combined(with: .scale(scale: 0.9)))
             }
 
             VStack(spacing: 0) {
-                HStack(spacing: 10) {
+                // Barra Superior Liquid Glass
+                HStack(spacing: 8) {
                     HStack(spacing: 6) {
                         Circle()
                             .fill(Color.red)
                             .frame(width: 8, height: 8)
                             .shadow(color: .red, radius: 4)
-                        Text("TRANSMISIÓN CUÁNTICA // FRECUENCIA LUMINA 0-7")
-                            .font(.system(size: 11, weight: .black, design: .monospaced))
+                        Text("LUMINA // REGISTRO 0-7")
+                            .font(.system(size: 10, weight: .black, design: .monospaced))
                             .foregroundStyle(.white)
                     }
-                    .padding(.horizontal, 10)
+                    .padding(.horizontal, 9)
                     .padding(.vertical, 5)
-                    .background(Color.black.opacity(0.65), in: Capsule())
-                    .overlay(Capsule().stroke(Color.red.opacity(0.7), lineWidth: 1))
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .background(Color.black.opacity(0.45), in: Capsule())
+                    .overlay(Capsule().stroke(Color.red.opacity(0.6), lineWidth: 1))
 
                     Spacer()
 
-                    HStack(spacing: 4) {
+                    // Selector de Idiomas
+                    HStack(spacing: 2) {
                         ForEach(["es", "en", "pt", "fr"], id: \.self) { lang in
                             Button {
                                 prologue.changeLanguage(lang)
                             } label: {
                                 Text(flagForLang(lang))
-                                    .font(.system(size: 12, weight: .bold))
+                                    .font(.system(size: 11, weight: .bold))
                                     .foregroundStyle(prologue.selectedLanguage == lang ? .white : .white.opacity(0.55))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 4)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 3)
                                     .background(
                                         prologue.selectedLanguage == lang ? Color.cyan.opacity(0.40) : Color.clear,
                                         in: RoundedRectangle(cornerRadius: 6)
-                                    )
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .stroke(prologue.selectedLanguage == lang ? Color.cyan : Color.clear, lineWidth: 1)
                                     )
                             }
                         }
                     }
                     .padding(3)
-                    .background(Color.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 8))
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                    .background(Color.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
 
+                    // Botón de Velocidad (1x, 1.5x, 2x)
+                    Button {
+                        prologue.cyclePlaybackSpeed()
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    } label: {
+                        HStack(spacing: 2) {
+                            Image(systemName: "bolt.fill")
+                                .font(.system(size: 10, weight: .bold))
+                            Text(String(format: "%.1fx", prologue.playbackSpeed))
+                                .font(.system(size: 11, weight: .black, design: .monospaced))
+                        }
+                        .foregroundStyle(prologue.playbackSpeed > 1.0 ? Color.yellow : Color.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .background(Color.black.opacity(0.45), in: Capsule())
+                        .overlay(Capsule().stroke(prologue.playbackSpeed > 1.0 ? Color.yellow.opacity(0.8) : Color.white.opacity(0.25), lineWidth: 1))
+                    }
+
+                    // Botón de Subtítulos (Ocultar para ver imagen completa)
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            prologue.showsSubtitles.toggle()
+                        }
+                    } label: {
+                        Image(systemName: prologue.showsSubtitles ? "captions.bubble.fill" : "captions.bubble")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(prologue.showsSubtitles ? Color.cyan : Color.white.opacity(0.5))
+                            .frame(width: 30, height: 30)
+                            .background(.ultraThinMaterial, in: Circle())
+                            .background(Color.black.opacity(0.45), in: Circle())
+                            .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 1))
+                    }
+
+                    // Botón de Silencio
                     Button {
                         prologue.toggleMute()
                     } label: {
                         Image(systemName: prologue.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                            .font(.system(size: 13, weight: .bold))
+                            .font(.system(size: 12, weight: .bold))
                             .foregroundStyle(prologue.isMuted ? Color.pink : Color.cyan)
-                            .frame(width: 32, height: 32)
-                            .background(Color.black.opacity(0.65), in: Circle())
-                            .overlay(Circle().stroke((prologue.isMuted ? Color.pink : Color.cyan).opacity(0.8), lineWidth: 1))
+                            .frame(width: 30, height: 30)
+                            .background(.ultraThinMaterial, in: Circle())
+                            .background(Color.black.opacity(0.45), in: Circle())
+                            .overlay(Circle().stroke((prologue.isMuted ? Color.pink : Color.cyan).opacity(0.6), lineWidth: 1))
                     }
 
+                    // Omitir
                     Button {
                         completeAndClose()
                     } label: {
-                        HStack(spacing: 4) {
+                        HStack(spacing: 3) {
                             Text("OMITIR")
-                                .font(.system(size: 11, weight: .black, design: .rounded))
+                                .font(.system(size: 10, weight: .black, design: .rounded))
                             Image(systemName: "forward.end.fill")
-                                .font(.system(size: 10, weight: .bold))
+                                .font(.system(size: 9, weight: .bold))
                         }
                         .foregroundStyle(.white.opacity(0.9))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Color.white.opacity(0.18), in: Capsule())
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .background(Color.white.opacity(0.12), in: Capsule())
                         .overlay(Capsule().stroke(Color.white.opacity(0.35), lineWidth: 1))
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 14)
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
 
                 Spacer()
 
+                // Barra de Progreso de Capítulos (Mini Cápsulas de Neón)
                 HStack(spacing: 6) {
                     ForEach(0..<StoryPrologueManager.chapters.count, id: \.self) { idx in
                         Capsule()
                             .fill(idx <= prologue.currentChapterIndex ? Color.cyan : Color.white.opacity(0.25))
-                            .frame(height: 3.5)
+                            .frame(height: 3)
                             .shadow(color: idx == prologue.currentChapterIndex ? Color.cyan.opacity(0.8) : Color.clear, radius: 3)
                     }
                 }
                 .padding(.horizontal, 24)
-                .padding(.bottom, 10)
+                .padding(.bottom, 6)
 
-                let currentChapter = StoryPrologueManager.chapters[min(prologue.currentChapterIndex, StoryPrologueManager.chapters.count - 1)]
-                let fullScript = currentChapter.script(for: prologue.selectedLanguage)
-                let visibleText = String(fullScript.prefix(prologue.displayedChars))
+                // 💧 Tarjeta Flotante Liquid Glass de Subtítulos (Translúcida, Compacta y que NO tapa la imagen)
+                if prologue.showsSubtitles {
+                    let currentChapter = StoryPrologueManager.chapters[min(prologue.currentChapterIndex, StoryPrologueManager.chapters.count - 1)]
+                    let fullScript = currentChapter.script(for: prologue.selectedLanguage)
+                    let visibleText = String(fullScript.prefix(prologue.displayedChars))
 
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        Text(currentChapter.badge)
-                            .font(.system(size: 9, weight: .black, design: .monospaced))
-                            .foregroundStyle(.yellow)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 3)
-                            .background(Color.yellow.opacity(0.20), in: Capsule())
-                            .overlay(Capsule().stroke(Color.yellow.opacity(0.7), lineWidth: 1))
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 8) {
+                            Text(currentChapter.badge)
+                                .font(.system(size: 8.5, weight: .black, design: .monospaced))
+                                .foregroundStyle(.yellow)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.yellow.opacity(0.18), in: Capsule())
+                                .overlay(Capsule().stroke(Color.yellow.opacity(0.6), lineWidth: 1))
 
-                        Text(currentChapter.title)
-                            .font(.system(size: 13, weight: .black, design: .rounded))
-                            .foregroundStyle(.white)
-
-                        Spacer()
-
-                        Text("PARTE \(prologue.currentChapterIndex + 1) / \(StoryPrologueManager.chapters.count)")
-                            .font(.system(size: 10, weight: .black, design: .monospaced))
-                            .foregroundStyle(Color.cyan)
-                    }
-
-                    Text(visibleText)
-                        .font(.system(size: 13.5, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.95))
-                        .lineSpacing(4)
-                        .frame(maxWidth: .infinity, minHeight: 64, alignment: .topLeading)
-
-                    HStack(spacing: 12) {
-                        Button {
-                            prologue.previousChapter()
-                        } label: {
-                            Image(systemName: "backward.fill")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(prologue.currentChapterIndex > 0 ? .white : .white.opacity(0.25))
-                                .frame(width: 34, height: 34)
-                                .background(Color.white.opacity(0.12), in: Circle())
-                        }
-                        .disabled(prologue.currentChapterIndex == 0)
-
-                        Button {
-                            prologue.playCurrentChapter()
-                        } label: {
-                            Image(systemName: "arrow.counterclockwise")
-                                .font(.system(size: 12, weight: .bold))
+                            Text(currentChapter.title)
+                                .font(.system(size: 12, weight: .black, design: .rounded))
                                 .foregroundStyle(.white)
-                                .frame(width: 34, height: 34)
-                                .background(Color.white.opacity(0.12), in: Circle())
+
+                            Spacer()
+
+                            Text("PARTE \(prologue.currentChapterIndex + 1) / \(StoryPrologueManager.chapters.count)")
+                                .font(.system(size: 9.5, weight: .black, design: .monospaced))
+                                .foregroundStyle(Color.cyan)
                         }
 
-                        Button {
-                            prologue.nextChapter()
-                        } label: {
-                            HStack(spacing: 6) {
-                                Text(prologue.currentChapterIndex < StoryPrologueManager.chapters.count - 1 ? "SIGUIENTE PARTE" : "FINALIZAR HISTORIA")
-                                    .font(.system(size: 11, weight: .black, design: .rounded))
-                                Image(systemName: "forward.fill")
-                                    .font(.system(size: 10, weight: .bold))
-                            }
-                            .foregroundStyle(.black)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(Color.cyan, in: Capsule())
-                            .shadow(color: Color.cyan.opacity(0.6), radius: 6)
-                        }
+                        Text(visibleText)
+                            .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.96))
+                            .lineSpacing(3)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .topLeading)
 
-                        Spacer()
-
-                        Button {
-                            completeAndClose()
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "play.fill")
-                                    .font(.system(size: 14, weight: .bold))
-                                Text("ENTRAR A LA ARENA")
-                                    .font(.system(size: 12, weight: .black, design: .rounded))
+                        HStack(spacing: 10) {
+                            Button {
+                                prologue.previousChapter()
+                            } label: {
+                                Image(systemName: "backward.fill")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(prologue.currentChapterIndex > 0 ? .white : .white.opacity(0.25))
+                                    .frame(width: 30, height: 30)
+                                    .background(.ultraThinMaterial, in: Circle())
+                                    .background(Color.white.opacity(0.08), in: Circle())
                             }
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 18)
-                            .padding(.vertical, 10)
-                            .background(
-                                LinearGradient(colors: [Color.cyan, Color.pink], startPoint: .leading, endPoint: .trailing),
-                                in: Capsule()
-                            )
-                            .overlay(Capsule().stroke(Color.white.opacity(0.8), lineWidth: 1.5))
-                            .shadow(color: Color.pink.opacity(0.6), radius: 10)
+                            .disabled(prologue.currentChapterIndex == 0)
+
+                            Button {
+                                prologue.playCurrentChapter()
+                            } label: {
+                                Image(systemName: "arrow.counterclockwise")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 30, height: 30)
+                                    .background(.ultraThinMaterial, in: Circle())
+                                    .background(Color.white.opacity(0.08), in: Circle())
+                            }
+
+                            Button {
+                                prologue.nextChapter()
+                            } label: {
+                                HStack(spacing: 5) {
+                                    Text(prologue.currentChapterIndex < StoryPrologueManager.chapters.count - 1 ? "SIGUIENTE PARTE" : "FINALIZAR HISTORIA")
+                                        .font(.system(size: 10.5, weight: .black, design: .rounded))
+                                    Image(systemName: "forward.fill")
+                                        .font(.system(size: 9, weight: .bold))
+                                }
+                                .foregroundStyle(.black)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.cyan, in: Capsule())
+                                .shadow(color: Color.cyan.opacity(0.6), radius: 5)
+                            }
+
+                            Spacer()
+
+                            Button {
+                                completeAndClose()
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "play.fill")
+                                        .font(.system(size: 11, weight: .bold))
+                                    Text("JUGAR")
+                                        .font(.system(size: 11, weight: .black, design: .rounded))
+                                }
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 7)
+                                .background(
+                                    LinearGradient(colors: [Color.cyan, Color.pink], startPoint: .leading, endPoint: .trailing),
+                                    in: Capsule()
+                                )
+                                .overlay(Capsule().stroke(Color.white.opacity(0.7), lineWidth: 1.2))
+                                .shadow(color: Color.pink.opacity(0.5), radius: 6)
+                            }
                         }
                     }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .background(Color.black.opacity(0.38), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(
+                                LinearGradient(colors: [Color.cyan.opacity(0.65), Color.pink.opacity(0.45)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                                lineWidth: 1.2
+                            )
+                    )
+                    .shadow(color: .black.opacity(0.4), radius: 12)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                .padding(16)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .background(Color.black.opacity(0.78), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .stroke(
-                            LinearGradient(colors: [Color.cyan.opacity(0.8), Color.pink.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing),
-                            lineWidth: 1.5
-                        )
-                )
-                .shadow(color: .black.opacity(0.7), radius: 20)
-                .padding(.horizontal, 18)
-                .padding(.bottom, 18)
             }
+        }
+        .onAppear {
+            prologue.startPrologue()
+        }
+        .onDisappear {
+            prologue.stopAll()
         }
     }
 
