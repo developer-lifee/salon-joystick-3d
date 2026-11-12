@@ -5272,7 +5272,7 @@ final class ChiptuneAudioEngine {
 
             if isUnderwater {
                 activeBuffer = self.underwaterMusicBuffer ?? self.musicBuffer
-                targetVol = self.musicEnabled ? 0.32 : 0
+                targetVol = self.musicEnabled ? 0.40 : 0
             } else if isRainbowHall {
                 activeBuffer = self.rainbowMusicBuffer ?? self.musicBuffer
                 targetVol = self.musicEnabled ? 0.28 : 0
@@ -5357,8 +5357,8 @@ final class ChiptuneAudioEngine {
             try session.setActive(true)
 
             underwaterEQ.bands[0].filterType = .lowPass
-            underwaterEQ.bands[0].frequency = 580.0
-            underwaterEQ.bands[0].bandwidth = 1.0
+            underwaterEQ.bands[0].frequency = 1850.0
+            underwaterEQ.bands[0].bandwidth = 0.85
             underwaterEQ.bands[0].bypass = true
 
             if !nodesAttached {
@@ -6318,11 +6318,11 @@ final class ChiptuneAudioEngine {
     }
 
     // 🌊 🐋 Banda Sonora Acuática Abisal Submarina (Subterranean Ocean / Mystic Water Realm)
-    // Atmósfera inmersiva inspirada en Donkey Kong Country (Aquatic Ambiance) y Super Mario 64 (Dire Dire Docks):
-    // Acordes flotantes con filtro pasabajos cálido, ondas senoidales marinas puras,
-    // campanas prismáticas líquidas y pulso sub-grave abisal envolvente.
+    // Atmósfera inmersiva profundamente emotiva inspirada en Donkey Kong Country (Aquatic Ambiance)
+    // y Super Mario 64 (Dire Dire Docks): acordes etéreos suspendidos, Rhodes cristalino,
+    // arpegios de arpa marina líquida y bajo subacuático envolvente.
     private func makeUnderwaterMusicBuffer() -> AVAudioPCMBuffer? {
-        let duration = 12.0
+        let duration = 24.0
         let frameCount = AVAudioFrameCount(format.sampleRate * duration)
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
               let channels = buffer.floatChannelData else {
@@ -6330,64 +6330,87 @@ final class ChiptuneAudioEngine {
         }
         buffer.frameLength = frameCount
 
-        // 4 Secciones Armónicas Místicas de 3 segundos cada una (Progression: Dm9 -> Bbmaj9 -> Gm11 -> Asus4):
+        // 4 Progresiones armónicas de 6 segundos de pura emoción cósmica (Ebmaj9 -> Cm9 -> Abmaj9#11 -> Bbsus4):
         let chords: [[Double]] = [
-            [146.83, 220.00, 261.63, 329.63, 392.00], // Dm9: D3, A3, C4, E4, G4
-            [116.54, 174.61, 233.08, 293.66, 349.23], // Bbmaj9: Bb2, F3, Bb3, D4, F4
-            [98.00,  146.83, 196.00, 246.94, 329.63], // Gm11: G2, D3, G3, B3, E4
-            [110.00, 164.81, 220.00, 293.66, 329.63]  // Asus4: A2, E3, A3, D4, E4
+            [77.78, 116.54, 155.56, 196.00, 293.66, 349.23, 392.00], // Ebmaj9: Eb2, Bb2, Eb3, G3, D4, F4, G4
+            [65.41, 98.00,  155.56, 196.00, 233.08, 293.66, 392.00], // Cm9: C2, G2, Eb3, G3, Bb3, D4, G4
+            [51.91, 77.78,  130.81, 196.00, 261.63, 293.66, 392.00], // Abmaj9#11: Ab1, Eb2, C3, G3, C4, D4, G4
+            [58.27, 87.31,  116.54, 155.56, 174.61, 233.08, 293.66]  // Bbsus4: Bb1, F2, Bb2, Eb3, F3, Bb3, D4
         ]
-        let subBassFrequencies: [Double] = [73.42, 58.27, 49.00, 55.00] // D2, Bb1, G1, A1
+        let subBassFrequencies: [Double] = [38.89, 32.70, 51.91, 58.27] // Eb1, C1, Ab1, Bb1
 
-        // Arpegio líquido acuático lento y meditativo:
-        let liquidMelody: [Double] = [
-            293.66, 329.63, 392.00, 440.00,
-            349.23, 293.66, 349.23, 440.00,
-            392.00, 329.63, 293.66, 261.63
+        // Melodía principal poética y flotante estilo Rhodes acuático (16 notas de 1.5s cada una):
+        let melodyNotes: [Double] = [
+            392.00, 349.23, 293.66, 233.08, // G4, F4, D4, Bb3 (Inmersión en la profundidad)
+            261.63, 311.13, 392.00, 466.16, // C4, Eb4, G4, Bb4 (Anhelo ascendente en el abismo)
+            523.25, 466.16, 392.00, 293.66, // C5, Bb4, G4, D4 (Misterio majestuoso de Lumina)
+            311.13, 349.23, 293.66, 311.13  // Eb4, F4, D4, Eb4 (Resolución cálida y pacífica)
         ]
 
         for frame in 0..<Int(frameCount) {
             let time = Double(frame) / format.sampleRate
-            let section = min(3, Int(time / 3.0))
+            let section = min(3, Int(time / 6.0))
             let chord = chords[section]
 
-            // 1. Acordes subacuáticos amortiguados (filtro cálido pasabajos):
+            // 1. Acordes etéreos flotantes (Lush Stereo Chorus Pad con swell oceánico):
             var padL = 0.0
             var padR = 0.0
+            let oceanSwell = 0.75 + 0.25 * sin(2 * Double.pi * 0.12 * time)
             for (idx, noteFreq) in chord.enumerated() {
                 let pPhase = 2 * Double.pi * noteFreq * time
-                let detune = 1.0 + Double(idx) * 0.0012
-                let pWaveL = sin(pPhase) * 0.016
-                let pWaveR = sin(pPhase * detune + 0.35) * 0.016
-                padL += pWaveL
-                padR += pWaveR
+                let detune = 1.0 + Double(idx) * 0.0016
+                let vib = sin(2 * Double.pi * 3.2 * time) * 0.002
+                let wave1 = sin(pPhase * (1.0 + vib))
+                let wave2 = sin(pPhase * detune * (1.0 - vib) + 0.40) * 0.45
+                let voiceAmp = 0.022 / Double(idx + 1) * 1.8
+                padL += (wave1 + wave2) * voiceAmp
+                padR += (wave2 + wave1) * voiceAmp
             }
+            padL *= oceanSwell
+            padR *= oceanSwell
 
-            // 2. Pulso sub-grave oceánico profundo (49 - 73 Hz) con modulación suave de mareas:
+            // 2. Melodía Rhodes / Vibraphone cristalina con dinámica humana y vibrato cálido:
+            let stepDuration = 1.50
+            let noteIdx = min(melodyNotes.count - 1, Int(time / stepDuration))
+            let noteTime = time.truncatingRemainder(dividingBy: stepDuration)
+            let mAttack = min(1.0, noteTime / 0.04)
+            let mDecay = exp(-noteTime * 1.8)
+            let mEnv = mAttack * mDecay
+            let mFreq = melodyNotes[noteIdx]
+            let mVibrato = 1.0 + (noteTime > 0.4 ? sin(2 * Double.pi * 4.5 * (noteTime - 0.4)) * 0.004 : 0.0)
+            let mPhase = 2 * Double.pi * (mFreq * mVibrato) * time
+            // Timbre de piano eléctrico acuático (fundamental puro + 2do armónico brillante suave):
+            let rhodesL = (sin(mPhase) + sin(mPhase * 2.0) * 0.22 + sin(mPhase * 3.0) * 0.06) * mEnv * 0.048
+            let rhodesR = (sin(mPhase * 1.0015 + 0.2) + sin(mPhase * 2.0) * 0.22 + sin(mPhase * 3.0) * 0.06) * mEnv * 0.048
+
+            // 3. Arpegio de arpa líquida cristalina (ripples que caen y suben cada 0.25s):
+            let arpStep = 0.25
+            let arpIdx = Int(time / arpStep) % chord.count
+            let arpTime = time.truncatingRemainder(dividingBy: arpStep)
+            let arpEnv = min(1.0, arpTime / 0.02) * exp(-arpTime * 6.5)
+            let arpHarpFreq = chord[arpIdx] * 2.0
+            let arpHarpPhase = 2 * Double.pi * arpHarpFreq * time
+            let arpPan = Double(arpIdx) / Double(chord.count - 1)
+            let arpHarp = sin(arpHarpPhase) * arpEnv * 0.016
+            let harpL = arpHarp * (1.0 - arpPan * 0.6)
+            let harpR = arpHarp * (0.4 + arpPan * 0.6)
+
+            // 4. Bajo oceánico profundo abisal (32 - 58 Hz con calidez táctil):
             let bassFreq = subBassFrequencies[section]
-            let tidalSwell = 0.85 + 0.15 * sin(2 * Double.pi * 0.25 * time)
-            let subBass = sin(2 * Double.pi * bassFreq * time) * 0.026 * tidalSwell
+            let subBass = (sin(2 * Double.pi * bassFreq * time) * 0.042 + sin(2 * Double.pi * bassFreq * 2.0 * time) * 0.016) * oceanSwell
 
-            // 3. Campana líquida cristalina (Arpegio suave con decaimiento natural y burbujas armónicas):
-            let noteIdx = min(liquidMelody.count - 1, Int(time / 1.0))
-            let noteTime = time.truncatingRemainder(dividingBy: 1.0)
-            let bellAttack = min(1.0, noteTime / 0.06)
-            let bellDecay = exp(-noteTime * 2.2)
-            let bellEnv = bellAttack * bellDecay
-            let bellFreq = liquidMelody[noteIdx]
-            let bellPhase = 2 * Double.pi * bellFreq * time
-            let bellWave = (sin(bellPhase) + sin(bellPhase * 2.0) * 0.15 + sin(bellPhase * 3.0) * 0.04) * bellEnv * 0.024
+            // 5. Mezcla estéreo inmersiva con limitador suave:
+            let mixL = padL * 0.85 + rhodesL * 1.1 + harpL * 0.9 + subBass
+            let mixR = padR * 0.85 + rhodesR * 1.1 + harpR * 0.9 + subBass
 
-            // 4. Modulación binaural acuática estéreo (onda suave de 0.2 Hz):
-            let waveL = (padL * 0.65 + bellWave * 0.85 + subBass) * (0.92 + 0.08 * sin(2 * Double.pi * 0.2 * time))
-            let waveR = (padR * 0.65 + bellWave * 0.85 + subBass) * (0.92 + 0.08 * cos(2 * Double.pi * 0.2 * time))
+            // 6. Crossfade transparente en bordes del loop para ciclo infinito continuo:
+            let loopFade = min(1.0, min(time, duration - time) / 0.15)
+            let finalL = Float(tanh(mixL * 1.2) * loopFade * 0.95)
+            let finalR = Float(tanh(mixR * 1.2) * loopFade * 0.95)
 
-            // 5. Suavizado en bordes de buffer para loop perfecto sin clicks:
-            let loopFade = min(1.0, min(time, duration - time) / 0.06)
-
-            channels[0][frame] = Float(waveL * loopFade)
+            channels[0][frame] = finalL
             if format.channelCount > 1 {
-                channels[1][frame] = Float(waveR * loopFade)
+                channels[1][frame] = finalR
             }
         }
         return buffer
