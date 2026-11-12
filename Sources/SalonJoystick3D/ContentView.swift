@@ -8742,6 +8742,24 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
         }
     }
 
+    var is2XActive: Bool {
+        isSpeedingUp || playbackSpeed >= 2.0
+    }
+
+    func toggle2X() {
+        if is2XActive {
+            playbackSpeed = 1.0
+            isSpeedingUp = false
+        } else {
+            playbackSpeed = 2.0
+        }
+        if let player = audioPlayer {
+            player.rate = isSpeedingUp ? 2.0 : playbackSpeed
+        } else {
+            playCurrentChapter(resumeChars: displayedChars)
+        }
+    }
+
     func setSpeedingUp(_ speeding: Bool) {
         guard isSpeedingUp != speeding else { return }
         isSpeedingUp = speeding
@@ -9509,7 +9527,7 @@ struct CinematicPrologueView: View {
                         .frame(maxHeight: .infinity)
 
                         // Botones de Navegación
-                        HStack(spacing: 10) {
+                        HStack(spacing: 8) {
                             Button {
                                 prologue.previousChapter()
                             } label: {
@@ -9533,20 +9551,44 @@ struct CinematicPrologueView: View {
                                     .background(Color.white.opacity(0.08), in: Circle())
                             }
 
+                            // ⚡ Botón de Velocidad 2X (Tap para alternar o Hold para TikTok 2X)
                             Button {
-                                prologue.nextChapter()
+                                prologue.toggle2X()
+                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            } label: {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "bolt.fill")
+                                        .font(.system(size: 10, weight: .bold))
+                                    Text(prologue.is2XActive ? "2X ON" : "2X")
+                                        .font(.system(size: 10.5, weight: .black, design: .monospaced))
+                                }
+                                .foregroundStyle(prologue.is2XActive ? Color.black : Color.yellow)
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 7)
+                                .background(prologue.is2XActive ? Color.yellow : Color.yellow.opacity(0.18), in: Capsule())
+                                .overlay(Capsule().stroke(Color.yellow.opacity(0.8), lineWidth: 1.2))
+                                .shadow(color: Color.yellow.opacity(prologue.is2XActive ? 0.6 : 0.2), radius: 5)
+                            }
+
+                            // ⏩ Botón SIGUIENTE que al llegar al final se convierte en FINALIZAR (y cierra la cinemática)
+                            Button {
+                                if prologue.currentChapterIndex < StoryPrologueManager.chapters.count - 1 {
+                                    prologue.nextChapter()
+                                } else {
+                                    completeAndClose()
+                                }
                             } label: {
                                 HStack(spacing: 5) {
                                     Text(prologue.currentChapterIndex < StoryPrologueManager.chapters.count - 1 ? "SIGUIENTE" : "FINALIZAR")
                                         .font(.system(size: 10.5, weight: .black, design: .rounded))
-                                    Image(systemName: "forward.fill")
+                                    Image(systemName: prologue.currentChapterIndex < StoryPrologueManager.chapters.count - 1 ? "forward.fill" : "checkmark.circle.fill")
                                         .font(.system(size: 9, weight: .bold))
                                 }
                                 .foregroundStyle(.black)
-                                .padding(.horizontal, 12)
+                                .padding(.horizontal, 11)
                                 .padding(.vertical, 7)
-                                .background(Color.cyan, in: Capsule())
-                                .shadow(color: Color.cyan.opacity(0.6), radius: 5)
+                                .background(prologue.currentChapterIndex < StoryPrologueManager.chapters.count - 1 ? Color.cyan : Color.green, in: Capsule())
+                                .shadow(color: (prologue.currentChapterIndex < StoryPrologueManager.chapters.count - 1 ? Color.cyan : Color.green).opacity(0.6), radius: 5)
                             }
 
                             Spacer()
@@ -9561,7 +9603,7 @@ struct CinematicPrologueView: View {
                                         .font(.system(size: 11, weight: .black, design: .rounded))
                                 }
                                 .foregroundStyle(.white)
-                                .padding(.horizontal, 12)
+                                .padding(.horizontal, 11)
                                 .padding(.vertical, 7)
                                 .background(
                                     LinearGradient(colors: [Color.cyan, Color.pink], startPoint: .leading, endPoint: .trailing),
