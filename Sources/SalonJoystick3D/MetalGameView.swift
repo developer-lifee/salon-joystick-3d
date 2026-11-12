@@ -192,6 +192,21 @@ struct MetalGameView: UIViewRepresentable {
                     model?.gameCenter.unlockAchievement("achievement_mirror_kill")
                 }
             }
+            renderer.onDroneDeflectionKill = { [weak model] in
+                Task { @MainActor in
+                    model?.gameCenter.unlockAchievement("achievement_drone_deflection")
+                }
+            }
+            renderer.onQuantumPuzzleSolved = { [weak model] in
+                Task { @MainActor in
+                    model?.onQuantumPuzzleSolved()
+                }
+            }
+            renderer.onCampaignVictory = { [weak model] in
+                Task { @MainActor in
+                    model?.onCampaignVictory()
+                }
+            }
             renderer.onSlideCompleted = { [weak model] in
                 Task { @MainActor in
                     model?.gameCenter.unlockAchievement("achievement_water_slide")

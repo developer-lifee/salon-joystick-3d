@@ -82,6 +82,34 @@ final class GameCenterManager: NSObject, ObservableObject {
             description: "Consigue una racha de 3 bajas con el láser antes de que la batería se agote.",
             icon: "bolt.batteryblock.fill",
             points: 20
+        ),
+        GameAchievement(
+            id: "achievement_lumina_rescued",
+            title: "Salvador de Lumina",
+            description: "Supera la Oleada 15, rescata a Lumina y completa la campaña al 100%.",
+            icon: "crown.fill",
+            points: 100
+        ),
+        GameAchievement(
+            id: "achievement_quantum_puzzle",
+            title: "Maestro de la Refracción",
+            description: "Alinea un haz continuo de fotones entre espejos para activar el receptor del Chrono-Core.",
+            icon: "clock.arrow.circlepath",
+            points: 35
+        ),
+        GameAchievement(
+            id: "achievement_drone_deflection",
+            title: "Desvío Estratosférico",
+            description: "Inclina el Escudo Espejo hacia el cielo y pulveriza a un Drone Centinela con su propio láser aéreo.",
+            icon: "airplane.departure",
+            points: 25
+        ),
+        GameAchievement(
+            id: "achievement_photonic_overcharge",
+            title: "Saturación Fotónica Suprema",
+            description: "Mantén activas las 4 luminarias del santuario al 100% durante una oleada avanzada (Oleada 10+).",
+            icon: "lightbulb.max.fill",
+            points: 30
         )
     ]
 
@@ -125,6 +153,19 @@ final class GameCenterManager: NSObject, ObservableObject {
             gk.percentComplete = 100.0
             gk.showsCompletionBanner = true
             GKAchievement.report([gk]) { _ in }
+        }
+    }
+
+    func reportProgress(id: String, percent: Double) {
+        let clamped = min(100.0, max(0.0, percent))
+        if GKLocalPlayer.local.isAuthenticated {
+            let gk = GKAchievement(identifier: id)
+            gk.percentComplete = clamped
+            gk.showsCompletionBanner = (clamped >= 100.0)
+            GKAchievement.report([gk]) { _ in }
+        }
+        if clamped >= 100.0 {
+            unlockAchievement(id)
         }
     }
 

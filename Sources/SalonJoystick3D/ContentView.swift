@@ -410,6 +410,12 @@ struct ContentView: View {
                         }
                     }
 
+                if model.showsCampaignVictoryModal {
+                    CampaignVictoryModalView(model: model)
+                        .transition(.opacity)
+                        .zIndex(100)
+                }
+
                 if model.gameState == .mainMenu {
                     MainMenuView(model: model)
                 } else {
@@ -487,7 +493,7 @@ struct ContentView: View {
                         Image(systemName: "heart.fill")
                             .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(Color.pink)
-                        ProgressView(value: Double(model.playerHealth), total: 100.0)
+                        ProgressView(value: Double(model.playerHealth), total: Double(model.maxPlayerHealth))
                             .tint(model.playerHealth > 25 ? Color.pink : Color.red)
                             .frame(width: 65)
                         Text("\(Int(model.playerHealth))")
@@ -542,6 +548,44 @@ struct ContentView: View {
 
                 // 🧟 Call of Duty Zombies-Style Wave / Round HUD Banner o Duelo Versus / Equipos
                 VStack(spacing: 4) {
+                    if model.showsChronoLockBanner {
+                        HStack(spacing: 8) {
+                            Image(systemName: "lock.shield.fill")
+                                .foregroundStyle(.cyan)
+                            Text("🔒 CHRONO-CORE DORMIDO: Alinea el haz entre espejos continuos hacia el receptor cuántico para despertar la reliquia (+50 HP y Slow-Mo).")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .background(Color.black.opacity(0.65), in: Capsule())
+                        .overlay(Capsule().stroke(Color.cyan.opacity(0.8), lineWidth: 1))
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+
+                    if model.showsChronoCoreUnlockedBanner {
+                        HStack(spacing: 8) {
+                            Image(systemName: "sparkles")
+                                .foregroundStyle(.yellow)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("✨ ¡CHRONO-CORE ACTIVADO!")
+                                    .font(.system(size: 12, weight: .black, design: .rounded))
+                                    .foregroundStyle(.yellow)
+                                Text("Refracción cuántica completada • Modo Slow-Motion disponible • +50 HP Permanente (150 Salud Máxima)")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(.white)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                        .background(Color.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 16))
+                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.yellow.opacity(0.9), lineWidth: 1.5))
+                        .shadow(color: Color.yellow.opacity(0.4), radius: 10)
+                        .transition(.scale.combined(with: .opacity))
+                    }
+
                 if model.isAnyMultiplayerConnected && model.multiplayer.mode == .lightBattle {
                     let isTeamLight = model.isLocalTeamAlpha
                     let onCount = [model.lightStates.post, model.lightStates.piscinaNeon, model.lightStates.sheeritNeon, model.lightStates.poolStrips].filter { $0 }.count
@@ -1757,7 +1801,19 @@ final class GameModel: ObservableObject {
     @Published private(set) var jumpRequestID = 0
     @Published private(set) var toolStatus = GameToolStatus()
     @Published var playerScore = 0
-    @Published var playerHealth: Float = 100.0
+    @Published var isSlowMotionUnlocked: Bool = UserDefaults.standard.bool(forKey: "isSlowMotionUnlocked") {
+        didSet { UserDefaults.standard.set(isSlowMotionUnlocked, forKey: "isSlowMotionUnlocked") }
+    }
+    @Published var isCampaignCompleted: Bool = UserDefaults.standard.bool(forKey: "isCampaignCompleted") {
+        didSet { UserDefaults.standard.set(isCampaignCompleted, forKey: "isCampaignCompleted") }
+    }
+    var maxPlayerHealth: Float {
+        isSlowMotionUnlocked ? 150.0 : 100.0
+    }
+    @Published var showsChronoLockBanner: Bool = false
+    @Published var showsChronoCoreUnlockedBanner: Bool = false
+    @Published var showsCampaignVictoryModal: Bool = false
+    @Published var playerHealth: Float = UserDefaults.standard.bool(forKey: "isSlowMotionUnlocked") ? 150.0 : 100.0
     @Published var playerShield: Float = 100.0
     private var lastDamageTime: TimeInterval = 0
     @Published var currentWave = 1
@@ -2031,13 +2087,66 @@ final class GameModel: ObservableObject {
         self.isWaveIntermission = intermission
         self.waveIntermissionTime = intermissionTime
 
+        // 🏆 Progreso de Campaña en Game Center (1 al 15 = 100%)
+        let progress = min(100.0, (Double(wave) / 15.0) * 100.0)
+        gameCenter.reportProgress(id: "achievement_lumina_rescued", percent: progress)
+        checkPhotonicOvercharge()
+
         // Si el jugador local estaba en la cámara de recuperación y la oleada se completó, auto-reanimar para el descanso
         if (justEnteredIntermission || justEndedIntermission || intermission) && isRecoveringInChamber {
             completeRecovery(wasRevivedByTeammate: true)
         }
     }
 
+    func onQuantumPuzzleSolved() {
+        guard !isSlowMotionUnlocked else { return }
+        isSlowMotionUnlocked = true
+        playerHealth = maxPlayerHealth
+        audio.playLaserIgnition()
+        audio.playLanding(intensity: 1.0)
+        let notif = UINotificationFeedbackGenerator()
+        notif.notificationOccurred(.success)
+        gameCenter.unlockAchievement("achievement_quantum_puzzle")
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
+            showsChronoCoreUnlockedBanner = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6.0) { [weak self] in
+            withAnimation {
+                self?.showsChronoCoreUnlockedBanner = false
+            }
+        }
+    }
+
+    func onCampaignVictory() {
+        isCampaignCompleted = true
+        showsCampaignVictoryModal = true
+        audio.playLaserReflectionSound()
+        gameCenter.unlockAchievement("achievement_lumina_rescued")
+        gameCenter.reportProgress(id: "achievement_lumina_rescued", percent: 100.0)
+    }
+
+    func checkPhotonicOvercharge() {
+        guard currentWave >= 10, !isDefeated else { return }
+        if lightStates.post && lightStates.piscinaNeon && lightStates.sheeritNeon && lightStates.poolStrips &&
+           lightStates.postIntensity >= 0.95 && lightStates.piscinaNeonIntensity >= 0.95 &&
+           lightStates.sheeritNeonIntensity >= 0.95 && lightStates.poolStripsIntensity >= 0.95 {
+            gameCenter.unlockAchievement("achievement_photonic_overcharge")
+        }
+    }
+
     func toggleSlowMotion(fromNetwork: Bool = false) {
+        if !fromNetwork && !isSlowMotionUnlocked {
+            showsChronoLockBanner = true
+            let notif = UINotificationFeedbackGenerator()
+            notif.notificationOccurred(.warning)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4.5) { [weak self] in
+                withAnimation {
+                    self?.showsChronoLockBanner = false
+                }
+            }
+            return
+        }
+
         isSlowMotionActive.toggle()
         audio.setSlowMotion(isSlowMotionActive)
         let impact = UIImpactFeedbackGenerator(style: isSlowMotionActive ? .heavy : .medium)
@@ -2525,7 +2634,7 @@ final class GameModel: ObservableObject {
     }
 
     func startGame(fromNetwork: Bool = false) {
-        playerHealth = 100.0
+        playerHealth = maxPlayerHealth
         playerShield = 100.0
         playerScore = 0
         remotePlayerHealth = 100.0
@@ -2538,6 +2647,7 @@ final class GameModel: ObservableObject {
         heldTool = .flashlight
         remotePlayerHeldTool = .flashlight
         isSlowMotionActive = false
+        audio.setSlowMotion(false)
         showsMultiplayerSheet = false
         isRecoveringInChamber = false
         recoveryTimeRemaining = 0
@@ -2619,7 +2729,7 @@ final class GameModel: ObservableObject {
             versusRound += 1
         }
         hasRecordedVersusRoundResult = false
-        playerHealth = 100.0
+        playerHealth = maxPlayerHealth
         playerShield = 100.0
         remotePlayerHealth = 100.0
         remotePlayerShield = 100.0
@@ -2628,6 +2738,7 @@ final class GameModel: ObservableObject {
         heldTool = .none
         remotePlayerHeldTool = .none
         isSlowMotionActive = false
+        audio.setSlowMotion(false)
         lightStates.turnOffAllLights()
         broadcastLocalState()
 
@@ -2975,13 +3086,15 @@ final class GameModel: ObservableObject {
     }
 
     func returnToMainMenu() {
-        playerHealth = 100.0
+        playerHealth = maxPlayerHealth
         playerScore = 0
         currentWave = 1
         botsRemainingInWave = 2
         totalBotsInWave = 2
         isWaveIntermission = false
         heldTool = .none
+        isSlowMotionActive = false
+        audio.setSlowMotion(false)
         resetRequestID += 1
         gameState = .mainMenu
     }
@@ -3008,13 +3121,13 @@ final class GameModel: ObservableObject {
     func takeDamage(_ damage: Float, broadcast: Bool = true) {
         lastDamageTime = Date().timeIntervalSince1970
         if damage < 0 {
-            // Curación: primero vida hasta 100, luego recarga el escudo
+            // Curación: primero vida hasta maxPlayerHealth, luego recarga el escudo
             let healAmount = -damage
-            let missingHealth = 100.0 - playerHealth
+            let missingHealth = maxPlayerHealth - playerHealth
             if healAmount <= missingHealth {
                 playerHealth += healAmount
             } else {
-                playerHealth = 100.0
+                playerHealth = maxPlayerHealth
                 playerShield = min(100.0, playerShield + (healAmount - missingHealth))
             }
         } else {
@@ -3035,6 +3148,8 @@ final class GameModel: ObservableObject {
             broadcastLocalState()
         }
         if playerHealth <= 0 && !isDefeated && !isRecoveringInChamber {
+            isSlowMotionActive = false
+            audio.setSlowMotion(false)
             if isAnyMultiplayerConnected && multiplayer.mode == .cooperative {
                 coopDeaths += 1
                 broadcastLocalState()
@@ -3072,6 +3187,8 @@ final class GameModel: ObservableObject {
 
     func enterRecoveryChamber() {
         guard !isRecoveringInChamber else { return }
+        isSlowMotionActive = false
+        audio.setSlowMotion(false)
         isRecoveringInChamber = true
         inflationPumpsCount = 0
         teammateRevivePumps = 0
@@ -3100,7 +3217,7 @@ final class GameModel: ObservableObject {
         isRecoveringInChamber = false
         inflationPumpsCount = 0
         teammateRevivePumps = 0
-        playerHealth = 100.0
+        playerHealth = maxPlayerHealth
         playerShield = 100.0
         recoveryTimeRemaining = 0
         isTeammateBoostingRecovery = false
@@ -3173,6 +3290,8 @@ final class GameModel: ObservableObject {
         isRecoveringInChamber = false
         remotePlayerIsRecovering = false
         heldTool = .none
+        isSlowMotionActive = false
+        audio.setSlowMotion(false)
         audio.playRobloxOofDefeatSound()
 
         if !fromNetwork && isAnyMultiplayerConnected {
@@ -3188,7 +3307,7 @@ final class GameModel: ObservableObject {
     }
 
     func restartCooperativeMatch(fromNetwork: Bool = false) {
-        playerHealth = 100.0
+        playerHealth = maxPlayerHealth
         playerShield = 100.0
         playerScore = 0
         remotePlayerHealth = 100.0
@@ -3207,6 +3326,7 @@ final class GameModel: ObservableObject {
         remotePlayerHeldTool = .none
         joystick = .zero
         isSlowMotionActive = false
+        audio.setSlowMotion(false)
         lightStates.turnOffAllLights()
         broadcastLocalState()
         resetRequestID &+= 1
@@ -3226,7 +3346,7 @@ final class GameModel: ObservableObject {
     }
 
     func respawnPlayer() {
-        playerHealth = 100.0
+        playerHealth = maxPlayerHealth
         playerShield = 100.0
         playerScore = 0
         isDefeated = false
@@ -3240,6 +3360,8 @@ final class GameModel: ObservableObject {
         botsRemainingInWave = 2
         totalBotsInWave = 2
         isWaveIntermission = false
+        isSlowMotionActive = false
+        audio.setSlowMotion(false)
         lightStates.turnOffAllLights()
         broadcastLocalState()
         resetRequestID &+= 1
@@ -3260,16 +3382,19 @@ final class GameModel: ObservableObject {
     func toggleNearbyLight() {
         guard let nearbyLight else { return }
         lightStates.toggle(nearbyLight)
+        checkPhotonicOvercharge()
         broadcastLocalState()
     }
 
     func toggleAllLights() {
         lightStates.toggleAllLights()
+        checkPhotonicOvercharge()
         broadcastLocalState()
     }
 
     func setLightIntensity(_ value: Float, for fixture: GameLightFixture) {
         lightStates.setIntensity(value, for: fixture)
+        checkPhotonicOvercharge()
     }
 
     func reportNearbyLight(_ fixture: GameLightFixture?) {
@@ -6779,12 +6904,15 @@ struct DuoTacticalControllerDeckView: View {
                         feedback.impactOccurred()
                         model.toggleSlowMotion()
                     } label: {
-                        Label("Slow-Mo", systemImage: "hourglass")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(model.isSlowMotionActive ? .black : .yellow)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(model.isSlowMotionActive ? Color.yellow : Color.white.opacity(0.10), in: Capsule())
+                        Label(
+                            model.isSlowMotionUnlocked ? "Slow-Mo" : "🔒 Chrono",
+                            systemImage: model.isSlowMotionUnlocked ? "hourglass" : "lock.fill"
+                        )
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(model.isSlowMotionActive ? .black : (model.isSlowMotionUnlocked ? .yellow : .cyan))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(model.isSlowMotionActive ? Color.yellow : Color.white.opacity(0.10), in: Capsule())
                     }
                     .buttonStyle(.plain)
 
@@ -8046,24 +8174,31 @@ struct SlowMoCircleButton: View {
             model.toggleSlowMotion()
         } label: {
             VStack(spacing: 1) {
-                Image(systemName: "hourglass")
-                    .font(.system(size: 16, weight: .bold))
-                Text("SLOW")
+                Image(systemName: model.isSlowMotionUnlocked ? "hourglass" : "lock.fill")
+                    .font(.system(size: 15, weight: .bold))
+                Text(model.isSlowMotionUnlocked ? "SLOW" : "CHRONO")
                     .font(.system(size: 7, weight: .black, design: .monospaced))
             }
-            .foregroundStyle(model.isSlowMotionActive ? .black : Color.pink)
+            .foregroundStyle(
+                model.isSlowMotionActive ? .black : (model.isSlowMotionUnlocked ? Color.pink : Color.cyan.opacity(0.85))
+            )
             .frame(width: 48, height: 48)
             .background(
                 model.isSlowMotionActive
                     ? AnyShapeStyle(Color.pink)
-                    : AnyShapeStyle(Color.black.opacity(0.65)),
+                    : (model.isSlowMotionUnlocked ? AnyShapeStyle(Color.black.opacity(0.65)) : AnyShapeStyle(Color.blue.opacity(0.30))),
                 in: Circle()
             )
-            .overlay(Circle().stroke(Color.pink.opacity(model.isSlowMotionActive ? 0.95 : 0.60), lineWidth: 1.5))
-            .shadow(color: Color.pink.opacity(model.isSlowMotionActive ? 0.6 : 0.15), radius: 6)
+            .overlay(
+                Circle().stroke(
+                    model.isSlowMotionActive ? Color.pink.opacity(0.95) : (model.isSlowMotionUnlocked ? Color.pink.opacity(0.60) : Color.cyan.opacity(0.55)),
+                    lineWidth: 1.5
+                )
+            )
+            .shadow(color: (model.isSlowMotionUnlocked ? Color.pink : Color.cyan).opacity(model.isSlowMotionActive ? 0.6 : 0.20), radius: 6)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Cámara Lenta Slow Motion")
+        .accessibilityLabel(model.isSlowMotionUnlocked ? "Cámara Lenta Slow Motion" : "Chrono-Core Bloqueado")
     }
 }
 
@@ -8889,6 +9024,94 @@ struct CinematicPrologueView: View {
     }
 }
 
+struct CampaignVictoryModalView: View {
+    @ObservedObject var model: GameModel
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.80)
+                .ignoresSafeArea()
+
+            VStack(spacing: 16) {
+                // Shiny Crown Icon
+                ZStack {
+                    Circle()
+                        .fill(RadialGradient(colors: [Color.yellow.opacity(0.35), Color.clear], center: .center, startRadius: 10, endRadius: 65))
+                        .frame(width: 96, height: 96)
+                    Image(systemName: "crown.fill")
+                        .font(.system(size: 48))
+                        .foregroundStyle(LinearGradient(colors: [.yellow, .orange], startPoint: .top, endPoint: .bottom))
+                        .shadow(color: .yellow.opacity(0.85), radius: 14)
+                }
+
+                Text("¡LUMINA RESCATADA AL 100%!")
+                    .font(.system(size: 24, weight: .black, design: .rounded))
+                    .foregroundStyle(LinearGradient(colors: [.white, .yellow], startPoint: .top, endPoint: .bottom))
+                    .multilineTextAlignment(.center)
+
+                Text("CAMPAÑA PRINCIPAL SUPERADA")
+                    .font(.system(size: 11, weight: .black, design: .monospaced))
+                    .foregroundStyle(Color.cyan)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
+                    .background(Color.cyan.opacity(0.18), in: Capsule())
+                    .overlay(Capsule().stroke(Color.cyan.opacity(0.7), lineWidth: 1))
+
+                Text("¡Has vencido a las 15 oleadas invasoras de Vantablack! Las 4 luminarias resplandecen y el santuario de los Slimes está purificado.")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.92))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 16)
+
+                VStack(spacing: 5) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "infinity")
+                            .foregroundStyle(.pink)
+                            .font(.system(size: 15, weight: .bold))
+                        Text("DESBLOQUEADO: MODO SUPERVIVENCIA INFINITA")
+                            .font(.system(size: 11, weight: .black))
+                            .foregroundStyle(.white)
+                    }
+                    Text("A partir de ahora, Oleada 16+ sin interrupciones del lore. Pura destreza, reflejos con el espejo y récords.")
+                        .font(.system(size: 10.5, weight: .regular))
+                        .foregroundStyle(.white.opacity(0.70))
+                        .multilineTextAlignment(.center)
+                }
+                .padding(10)
+                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+
+                Button {
+                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                    model.showsCampaignVictoryModal = false
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "flame.fill")
+                        Text("CONTINUAR A LA OLEADA 16 (SUPERVIVENCIA)")
+                            .font(.system(size: 13, weight: .black, design: .rounded))
+                    }
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 13)
+                    .background(
+                        LinearGradient(colors: [Color.yellow, Color.orange], startPoint: .leading, endPoint: .trailing),
+                        in: RoundedRectangle(cornerRadius: 14)
+                    )
+                    .shadow(color: Color.yellow.opacity(0.5), radius: 8)
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 14)
+            }
+            .padding(20)
+            .frame(maxWidth: 420)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24))
+            .background(Color.black.opacity(0.78), in: RoundedRectangle(cornerRadius: 24))
+            .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.yellow.opacity(0.7), lineWidth: 1.5))
+            .shadow(color: Color.black.opacity(0.85), radius: 24)
+            .padding(.horizontal, 20)
+        }
+    }
+}
+
 struct MainMenuView: View {
     @ObservedObject var model: GameModel
 
@@ -8925,6 +9148,20 @@ struct MainMenuView: View {
                                 .lineLimit(1)
                                 .foregroundStyle(.white.opacity(0.90))
                                 .tracking(isCompactLandscape ? 1.5 : 2.5)
+
+                            if model.isCampaignCompleted {
+                                HStack(spacing: 5) {
+                                    Image(systemName: "crown.fill")
+                                        .foregroundStyle(.yellow)
+                                    Text("🏆 CAMPAÑA COMPLETADA AL 100% • MODO SUPERVIVENCIA ACTIVO")
+                                        .font(.system(size: 8.5, weight: .black, design: .rounded))
+                                        .foregroundStyle(.yellow)
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.yellow.opacity(0.18), in: Capsule())
+                                .overlay(Capsule().stroke(Color.yellow.opacity(0.7), lineWidth: 1))
+                            }
                         }
                         .padding(.horizontal, isCompactLandscape ? 20 : 28)
                         .padding(.vertical, isCompactLandscape ? 10 : 20)

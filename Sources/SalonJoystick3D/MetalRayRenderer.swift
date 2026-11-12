@@ -1088,6 +1088,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     var onRecoveryProgressUpdate: ((Float, Bool) -> Void)?
     var onRecoveryCompleted: (() -> Void)?
     var onMirrorReflectionKill: (() -> Void)?
+    var onDroneDeflectionKill: (() -> Void)?
+    var onQuantumPuzzleSolved: (() -> Void)?
+    var onCampaignVictory: (() -> Void)?
+    var chronoSwitchSolved: Bool = false
     var onSlideCompleted: (() -> Void)?
     var onCrossedRainbowGate: (() -> Void)?
     var onColossusDefeated: (() -> Void)?
@@ -2458,6 +2462,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let activeAliveBots = npcPositions.indices.filter({ npcHealths[$0] > 0 && npcRespawnTimers[$0] <= 0 }).count
 
         if remainingQuota <= 0 && activeAliveBots == 0 {
+            // 🏆 Victoria de Campaña al superar la Oleada 15
+            if currentWave == 15 {
+                onCampaignVictory?()
+            }
             // Wave TRULY cleared! Trigger 10-second intermission rest
             isWaveIntermission = true
             intermissionTimeRemaining = 10.0
@@ -3320,6 +3328,23 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     // El rayo reflejado sale exactamente hacia la mira del espejo (shieldNormal) controlada por el jugador
                     if !isTargetingRemote {
                         let reflectedDir = shieldNormal
+
+                        // 💎 Detección de reflejo del Escudo hacia el Interruptor Cuántico del Chrono-Core
+                        let chronoSwitchPos = SIMD3<Float>(-17.55, 2.4, -6.5)
+                        let toSwitchFromShield = chronoSwitchPos - shieldCenter
+                        let alongShield = simd_dot(toSwitchFromShield, reflectedDir)
+                        if alongShield > 0.5 && alongShield < 35.0 {
+                            let closestToSwitch = shieldCenter + reflectedDir * alongShield
+                            if simd_distance(closestToSwitch, chronoSwitchPos) < 1.35 {
+                                if !chronoSwitchSolved {
+                                    chronoSwitchSolved = true
+                                    audio.playLaserReflectionSound()
+                                    audio.playLanding(intensity: 1.0)
+                                    onQuantumPuzzleSolved?()
+                                }
+                            }
+                        }
+
                         for targetIdx in npcPositions.indices where npcRespawnTimers[targetIdx] <= 0 && npcHealths[targetIdx] > 0 {
                             let scale = npcBaseScales[targetIdx]
                             let botCenter = npcPositions[targetIdx] + SIMD3<Float>(0, 0.90 * scale, 0)
@@ -3343,6 +3368,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                                             onScoreUpdate?(500)
                                             handleNPCElimination(index: targetIdx)
                                             onMirrorReflectionKill?()
+                                            if isBotFlyingDrone(index: targetIdx) {
+                                                onDroneDeflectionKill?()
+                                            }
                                         }
                                     }
                                     break
@@ -3630,6 +3658,50 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         guard mirrorPoint.x > 1.35, mirrorPoint.x < 5.65,
               mirrorPoint.y > 0.72, mirrorPoint.y < 3.38 else { return }
         let reflected = SIMD3<Float>(direction.x, direction.y, -direction.z)
+
+        // 💎 ENIGMA DEL CHRONO-CORE: Alineación de Espejos Continuos
+        let chronoSwitchPos = SIMD3<Float>(-17.55, 2.4, -6.5)
+        let eastPrismPos = SIMD3<Float>(8.5, 1.8, -6.5)
+
+        // Opción 1: Refracción continua en cadena (Espejo Norte -> Prisma Oriental -> Interruptor Occidental)
+        let toPrism = eastPrismPos - mirrorPoint
+        let alongToPrism = simd_dot(toPrism, reflected)
+        if alongToPrism > 0.5 && alongToPrism < 35.0 {
+            let closestToPrism = mirrorPoint + reflected * alongToPrism
+            if simd_distance(closestToPrism, eastPrismPos) < 1.35 {
+                // Segundo rebote en el prisma oriental orientado hacia la pared occidental (-X)
+                let prismReflectedDir = simd_normalize(SIMD3<Float>(-1.0, 0.04, 0.0))
+                let toSwitchFromPrism = chronoSwitchPos - eastPrismPos
+                let alongToSwitch = simd_dot(toSwitchFromPrism, prismReflectedDir)
+                if alongToSwitch > 0.5 {
+                    let closestToSwitch = eastPrismPos + prismReflectedDir * alongToSwitch
+                    if simd_distance(closestToSwitch, chronoSwitchPos) < 1.60 {
+                        if !chronoSwitchSolved {
+                            chronoSwitchSolved = true
+                            audio.playLaserReflectionSound()
+                            audio.playLanding(intensity: 1.0)
+                            onQuantumPuzzleSolved?()
+                        }
+                    }
+                }
+            }
+        }
+
+        // Opción 2: Rebote angular directo del Espejo Norte hacia el Interruptor Occidental
+        let toSwitchFromNorth = chronoSwitchPos - mirrorPoint
+        let alongToSwitchNorth = simd_dot(toSwitchFromNorth, reflected)
+        if alongToSwitchNorth > 0.5 && alongToSwitchNorth < 40.0 {
+            let closestToSwitchNorth = mirrorPoint + reflected * alongToSwitchNorth
+            if simd_distance(closestToSwitchNorth, chronoSwitchPos) < 1.35 {
+                if !chronoSwitchSolved {
+                    chronoSwitchSolved = true
+                    audio.playLaserReflectionSound()
+                    audio.playLanding(intensity: 1.0)
+                    onQuantumPuzzleSolved?()
+                }
+            }
+        }
+
         let playerCenter = playerPosition + SIMD3<Float>(0, 0.85, 0)
         let toPlayer = playerCenter - mirrorPoint
         let reflectedDistance = simd_dot(toPlayer, reflected)
@@ -5493,6 +5565,25 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         builder.addBox(center: SIMD3<Float>(5.76, 2.05, -17.52), size: SIMD3<Float>(0.16, 2.72, 0.16), material: metal)
         builder.addNeonPoolSign(origin: SIMD2<Float>(-7.7, 3.30), z: -17.58)
         builder.addNeonSheeritSign(origin: SIMD2<Float>(6.3, 3.28), z: 17.50)
+
+        // 💎 ENIGMA DEL CHRONO-CORE: Prisma Reflectante Oriental y Receptor Cuántico Occidental
+        let chronoGold = RTMaterial(color: SIMD3<Float>(1.0, 0.82, 0.28), roughness: 0.12, emission: SIMD3<Float>(0.8, 0.6, 0.1), reflectivity: 0.70)
+        let chronoCoreCrystal = RTMaterial(color: SIMD3<Float>(0.08, 0.92, 1.0), roughness: 0.02, emission: SIMD3<Float>(0.6, 2.5, 3.2), reflectivity: 0.95, kind: 5.0)
+        let chronoPedestal = RTMaterial(color: SIMD3<Float>(0.15, 0.18, 0.22), roughness: 0.35, reflectivity: 0.40)
+        let prismFaceMirror = RTMaterial(color: SIMD3<Float>(0.96, 0.98, 1.0), roughness: 0.005, emission: SIMD3<Float>(0.1, 0.4, 0.6), reflectivity: 0.98, kind: 1.0)
+
+        // 1. Prisma Óptico Oriental (X = 8.5, Y = 1.8, Z = -6.5)
+        // Columna de bronce y cuarzo con espejo diagonal orientador
+        builder.addBox(center: SIMD3<Float>(8.5, 0.80, -6.5), size: SIMD3<Float>(0.45, 1.60, 0.45), material: chronoPedestal)
+        builder.addBox(center: SIMD3<Float>(8.5, 1.65, -6.5), size: SIMD3<Float>(0.55, 0.12, 0.55), material: chronoGold)
+        // Cara del espejo diagonal
+        builder.addBox(center: SIMD3<Float>(8.5, 1.85, -6.5), size: SIMD3<Float>(0.60, 0.75, 0.08), material: prismFaceMirror)
+        builder.addBox(center: SIMD3<Float>(8.5, 2.30, -6.5), size: SIMD3<Float>(0.24, 0.24, 0.24), material: chronoCoreCrystal)
+
+        // 2. Interruptor / Receptor Cuántico del Chrono-Core (Pared Oeste, X = -17.55, Y = 2.4, Z = -6.5)
+        builder.addBox(center: SIMD3<Float>(-17.55, 2.40, -6.5), size: SIMD3<Float>(0.16, 1.15, 1.15), material: chronoGold)
+        builder.addBox(center: SIMD3<Float>(-17.44, 2.40, -6.5), size: SIMD3<Float>(0.14, 0.75, 0.75), material: chronoCoreCrystal)
+        builder.addBox(center: SIMD3<Float>(-17.38, 2.40, -6.5), size: SIMD3<Float>(0.08, 0.35, 0.35), material: prismFaceMirror)
 
         let lampPosition = SIMD3<Float>(-7.55, 0, 12.65)
         builder.addBox(center: lampPosition + SIMD3<Float>(0, 1.42, 0), size: SIMD3<Float>(0.13, 2.75, 0.13), material: metal)
