@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lumina Voice Studio // Karaoke Teleprompter</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="studio-container">
+    <!-- Header -->
+    <header class="studio-header">
+      <div class="brand">
+        <span class="pulse-dot"></span>
+        <span class="brand-title">LUMINA // VOICE STUDIO</span>
+        <span class="badge-quantum">ESTUDIO DE NARRACIÓN</span>
+      </div>
+
+      <div class="header-actions">
+        <button id="themeToggleBtn" class="glass-btn btn-secondary">
+          <span class="btn-icon">🎧</span>
+          <span class="btn-text">Música de fondo: <b id="themeStatus">ON</b></span>
+        </button>
+        <button id="deployBtn" class="glass-btn btn-accent">
+          <span class="btn-icon">🚀</span>
+          <span class="btn-text">Compilar e Instalar en iPhone</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="workspace">
+      <!-- Chapter Selector Tabs -->
+      <nav class="chapter-tabs" id="chapterTabs"></nav>
+
+      <!-- Center Stage: Comic Visualizer + Karaoke Prompter -->
+      <div class="stage-grid">
+        <!-- Visual Comic Panel Frame -->
+        <div class="panel-card">
+          <div class="panel-header">
+            <span class="panel-badge" id="panelBadge">ORIGEN ANCESTRAL</span>
+            <span class="panel-part" id="panelPart">PARTE 1 / 5</span>
+          </div>
+          <div class="panel-image-wrap">
+            <img id="panelImage" src="/assets/panel/0" alt="Viñeta del cómic">
+            <div class="panel-overlay"></div>
+            <!-- Audio Spectrum Overlay -->
+            <canvas id="visualizerCanvas" width="600" height="80"></canvas>
+          </div>
+        </div>
+
+        <!-- Teleprompter & Recording Controls -->
+        <div class="prompter-card">
+          <div class="prompter-top">
+            <h2 id="chapterTitle" class="chapter-title">Capítulo I • El Reino de Lumina</h2>
+            <p id="chapterSubtitle" class="chapter-subtitle">La armonía de los Slimes y el secreto cuántico de la luz</p>
+          </div>
+
+          <!-- The Karaoke Reader Text Container -->
+          <div class="karaoke-box">
+            <div class="karaoke-pacer" id="karaokePacer"></div>
+            <div class="karaoke-text" id="karaokeText">
+              <!-- Words injected dynamically for glowing karaoke highlight -->
+            </div>
+          </div>
+
+          <!-- Controls Bar -->
+          <div class="controls-area">
+            <!-- Filter Selector -->
+            <div class="filter-row">
+              <span class="filter-label">Filtro de Voz:</span>
+              <label class="radio-label">
+                <input type="radio" name="voiceFilter" value="cinematic" checked>
+                <span>🎬 Narrador de Cine (Cálido + Profundo)</span>
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="voiceFilter" value="hologram">
+                <span>📻 Comunicador Cuántico Holográfico</span>
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="voiceFilter" value="clean">
+                <span>🎙️ Limpio Original</span>
+              </label>
+            </div>
+
+            <!-- Karaoke Speed Control -->
+            <div class="speed-row">
+              <span class="filter-label">Velocidad Karaoke:</span>
+              <input type="range" id="pacerSpeed" min="0.7" max="1.5" step="0.05" value="1.0">
+              <span id="speedVal" class="speed-val">1.0x</span>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+              <button id="recordBtn" class="action-btn btn-record">
+                <span class="btn-dot"></span>
+                <span id="recordBtnText">INICIAR GRABACIÓN (Espacio)</span>
+              </button>
+
+              <button id="playTakeBtn" class="action-btn btn-play" disabled>
+                <span>▶️ Escuchar mi Toma</span>
+              </button>
+
+              <button id="saveBtn" class="action-btn btn-save" disabled>
+                <span>✨ Guardar en el Juego</span>
+              </button>
+            </div>
+
+            <div id="statusNotice" class="status-notice">
+              Presiona <b>Iniciar Grabación</b> y lee el texto con el ritmo del teleprompter.
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Hidden audio element for backing theme -->
+    <audio id="bgAudio" src="/assets/theme" loop></audio>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
+

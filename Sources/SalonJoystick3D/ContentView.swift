@@ -9659,22 +9659,23 @@ struct CinematicPrologueView: View {
                     }
                 }
                 .padding(.horizontal, 18)
-                .padding(.vertical, 11)
+                .padding(.vertical, 10)
                 .frame(maxWidth: 820)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
-                .background(Color.black.opacity(0.52), in: RoundedRectangle(cornerRadius: 20))
+                .background(.ultraThinMaterial.opacity(0.85), in: RoundedRectangle(cornerRadius: 20))
+                .background(Color.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 20))
+                .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 20))
                 .overlay(
                     RoundedRectangle(cornerRadius: 20)
                         .stroke(
                             LinearGradient(
-                                colors: [Color.cyan.opacity(0.55), Color.white.opacity(0.2), Color.purple.opacity(0.35)],
+                                colors: [Color.cyan.opacity(0.45), Color.white.opacity(0.25), Color.purple.opacity(0.25)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
-                            lineWidth: 1.2
+                            lineWidth: 1.0
                         )
                 )
-                .shadow(color: .black.opacity(0.65), radius: 18, y: 6)
+                .shadow(color: .black.opacity(0.40), radius: 14, y: 4)
                 .padding(.horizontal, 28)
                 .padding(.bottom, 12)
             }
