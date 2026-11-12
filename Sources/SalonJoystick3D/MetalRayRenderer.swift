@@ -700,62 +700,41 @@ private struct RTMeshBuilder {
         case climb
     }
 
-    /// 👹 Fase 2: Construye la cabeza, orejas puntiagudas, gafas Cat-Eye en V, boca con 4 colmillos y lengua del Diablillo de Gelatina
+    /// 🟢 Lumi: Construye la cabeza, grandes ojos expresivos, sonrisa tierna, rubor bioluminiscente y gotita superior del Slime de Lumina
     mutating func addJellyGremlinHeadAndTorso(
         bellyCenter: SIMD3<Float>,
         headCenter: SIMD3<Float>,
         jellyMat: RTMaterial
     ) {
-        let innerEarMat = RTMaterial(color: SIMD3<Float>(0.10, 0.48, 0.08), roughness: 0.25, reflectivity: 0.15, kind: 9.0)
-        let glassesFrame = RTMaterial(color: SIMD3<Float>(0.04, 0.16, 0.06), roughness: 0.10, reflectivity: 0.65)
-        let glassesLens = RTMaterial(color: SIMD3<Float>(0.05, 0.52, 0.22), roughness: 0.02, emission: SIMD3<Float>(0.02, 0.22, 0.08), reflectivity: 0.94, kind: 1.0)
-        let mouthCavity = RTMaterial(color: SIMD3<Float>(0.03, 0.11, 0.03), roughness: 0.85, reflectivity: 0.04)
-        let tongueMat = RTMaterial(color: SIMD3<Float>(0.18, 0.68, 0.26), roughness: 0.22, reflectivity: 0.25)
-        let fangMat = RTMaterial(color: SIMD3<Float>(0.96, 0.95, 0.86), roughness: 0.12, emission: SIMD3<Float>(0.12, 0.12, 0.08), reflectivity: 0.35)
+        let eyeDark = RTMaterial(color: SIMD3<Float>(0.02, 0.03, 0.02), roughness: 0.05, reflectivity: 0.90)
+        let eyeSparkle = RTMaterial(color: SIMD3<Float>(1.0, 1.0, 1.0), roughness: 0.0, emission: SIMD3<Float>(2.5, 2.5, 2.5), reflectivity: 0.98)
+        let blushMat = RTMaterial(color: SIMD3<Float>(0.35, 1.0, 0.45), roughness: 0.20, emission: SIMD3<Float>(0.4, 1.4, 0.5), reflectivity: 0.30, kind: 9.0)
+        let smileMat = RTMaterial(color: SIMD3<Float>(0.04, 0.18, 0.06), roughness: 0.65, reflectivity: 0.05)
 
-        // 1. Cuerpo aperado (Pancita ancha abajo + torso/cabeza rechoncha arriba)
-        addSphere(center: bellyCenter, radii: SIMD3<Float>(0.40, 0.44, 0.35), material: jellyMat, segments: 16, rings: 10)
-        addSphere(center: headCenter, radii: SIMD3<Float>(0.37, 0.38, 0.33), material: jellyMat, segments: 16, rings: 10)
+        // 1. Cuerpo aperado y rechoncho (Pancita ancha + cabeza redonda adorable de gelatina verde)
+        addSphere(center: bellyCenter, radii: SIMD3<Float>(0.42, 0.44, 0.38), material: jellyMat, segments: 16, rings: 10)
+        addSphere(center: headCenter, radii: SIMD3<Float>(0.38, 0.39, 0.35), material: jellyMat, segments: 16, rings: 10)
 
-        // 2. Orejas largas puntiagudas de Diablillo / Goblin (curvadas hacia arriba y afuera)
+        // 2. Gota / Cresta superior icónica del Slime
+        addSphere(center: headCenter + SIMD3<Float>(0, 0.36, -0.02), radii: SIMD3<Float>(0.13, 0.18, 0.13), material: jellyMat, segments: 10, rings: 6)
+        addSphere(center: headCenter + SIMD3<Float>(0, 0.50, -0.04), radii: SIMD3<Float>(0.07, 0.12, 0.07), material: jellyMat, segments: 8, rings: 5)
+        addSphere(center: headCenter + SIMD3<Float>(0, 0.60, -0.05), radii: SIMD3<Float>(0.035, 0.06, 0.035), material: jellyMat, segments: 6, rings: 4)
+
+        // 3. Grandes Ojos Adorables y Tiernos (Estilo Anime Slime / Lumi del Cómic)
         for side: Float in [-1.0, 1.0] {
-            addSphere(center: headCenter + SIMD3<Float>(side * 0.28, 0.24, -0.02), radii: SIMD3<Float>(0.11, 0.16, 0.08), material: jellyMat, segments: 10, rings: 6)
-            addSphere(center: headCenter + SIMD3<Float>(side * 0.36, 0.38, -0.03), radii: SIMD3<Float>(0.085, 0.15, 0.065), material: jellyMat, segments: 10, rings: 6)
-            addSphere(center: headCenter + SIMD3<Float>(side * 0.43, 0.52, -0.04), radii: SIMD3<Float>(0.055, 0.12, 0.045), material: jellyMat, segments: 8, rings: 5)
-            addSphere(center: headCenter + SIMD3<Float>(side * 0.48, 0.63, -0.05), radii: SIMD3<Float>(0.030, 0.07, 0.030), material: jellyMat, segments: 8, rings: 4)
-            // Cavidad interna de la oreja
-            addSphere(center: headCenter + SIMD3<Float>(side * 0.34, 0.36, 0.025), radii: SIMD3<Float>(0.055, 0.12, 0.035), material: innerEarMat, segments: 8, rings: 5)
+            // Ojo ovalado negro profundo
+            addSphere(center: headCenter + SIMD3<Float>(side * 0.15, 0.08, 0.32), radii: SIMD3<Float>(0.065, 0.095, 0.045), material: eyeDark, segments: 10, rings: 6)
+            // Brillo especular grande superior
+            addSphere(center: headCenter + SIMD3<Float>(side * 0.14, 0.12, 0.355), radii: SIMD3<Float>(repeating: 0.028), material: eyeSparkle, segments: 6, rings: 4)
+            // Brillo especular pequeño inferior
+            addSphere(center: headCenter + SIMD3<Float>(side * 0.165, 0.05, 0.350), radii: SIMD3<Float>(repeating: 0.016), material: eyeSparkle, segments: 6, rings: 4)
+
+            // Mejillas sonrosadas bioluminiscentes (Rubor verde lima resplandeciente)
+            addSphere(center: headCenter + SIMD3<Float>(side * 0.25, -0.02, 0.28), radii: SIMD3<Float>(0.075, 0.045, 0.035), material: blushMat, segments: 8, rings: 5)
         }
 
-        // 3. Cejas fruncidas sobre las gafas
-        addSphere(center: headCenter + SIMD3<Float>(-0.11, 0.14, 0.28), radii: SIMD3<Float>(0.11, 0.055, 0.07), material: jellyMat, segments: 8, rings: 5)
-        addSphere(center: headCenter + SIMD3<Float>( 0.11, 0.14, 0.28), radii: SIMD3<Float>(0.11, 0.055, 0.07), material: jellyMat, segments: 8, rings: 5)
-
-        // 4. Gafas Cat-Eye en "V" (Montura oscura puntiaguda + Lentes Esmeralda Reflectivos)
-        // Puente central de las gafas
-        addBox(center: headCenter + SIMD3<Float>(0, 0.04, 0.34), size: SIMD3<Float>(0.10, 0.045, 0.05), material: glassesFrame)
-        for side: Float in [-1.0, 1.0] {
-            // Escalones en V hacia las puntas exteriores Cat-Eye
-            addBox(center: headCenter + SIMD3<Float>(side * 0.12, 0.06, 0.33), size: SIMD3<Float>(0.14, 0.09, 0.05), material: glassesFrame)
-            addBox(center: headCenter + SIMD3<Float>(side * 0.22, 0.10, 0.30), size: SIMD3<Float>(0.14, 0.09, 0.05), material: glassesFrame)
-            addBox(center: headCenter + SIMD3<Float>(side * 0.31, 0.15, 0.26), size: SIMD3<Float>(0.11, 0.07, 0.045), material: glassesFrame)
-            addBox(center: headCenter + SIMD3<Float>(side * 0.37, 0.19, 0.22), size: SIMD3<Float>(0.07, 0.045, 0.04), material: glassesFrame)
-            // Lentes verdes brillantes reflectivos
-            addSphere(center: headCenter + SIMD3<Float>(side * 0.15, 0.07, 0.345), radii: SIMD3<Float>(0.10, 0.042, 0.025), material: glassesLens, segments: 8, rings: 5)
-            addSphere(center: headCenter + SIMD3<Float>(side * 0.25, 0.11, 0.315), radii: SIMD3<Float>(0.08, 0.036, 0.025), material: glassesLens, segments: 8, rings: 5)
-        }
-
-        // 5. Boca ancha abierta con lengua verde y 4 colmillos blancos afilados
-        addSphere(center: headCenter + SIMD3<Float>(0, -0.13, 0.26), radii: SIMD3<Float>(0.23, 0.12, 0.10), material: mouthCavity, segments: 12, rings: 6)
-        // Lengua
-        addSphere(center: headCenter + SIMD3<Float>(0, -0.17, 0.28), radii: SIMD3<Float>(0.11, 0.042, 0.09), material: tongueMat, segments: 8, rings: 5)
-        // Labio inferior
-        addSphere(center: headCenter + SIMD3<Float>(0, -0.24, 0.28), radii: SIMD3<Float>(0.20, 0.045, 0.08), material: jellyMat, segments: 10, rings: 5)
-        // 2 Colmillos superiores + 2 Colmillos inferiores
-        for side: Float in [-1.0, 1.0] {
-            addSphere(center: headCenter + SIMD3<Float>(side * 0.12, -0.06, 0.32), radii: SIMD3<Float>(0.026, 0.052, 0.026), material: fangMat, segments: 6, rings: 4)
-            addSphere(center: headCenter + SIMD3<Float>(side * 0.10, -0.19, 0.32), radii: SIMD3<Float>(0.024, 0.046, 0.024), material: fangMat, segments: 6, rings: 4)
-        }
+        // 4. Sonrisa feliz tierna y curva
+        addSphere(center: headCenter + SIMD3<Float>(0, -0.08, 0.33), radii: SIMD3<Float>(0.075, 0.040, 0.030), material: smileMat, segments: 8, rings: 5)
     }
 
     mutating func addCharacter(
@@ -767,17 +746,17 @@ private struct RTMeshBuilder {
         isJellyGremlin: Bool = false
     ) {
         let suit = isJellyGremlin
-            ? RTMaterial(color: SIMD3<Float>(0.24, 0.84, 0.14), roughness: 0.12, reflectivity: 0.24, kind: 9.0)
+            ? RTMaterial(color: SIMD3<Float>(0.20, 0.95, 0.28), roughness: 0.10, emission: SIMD3<Float>(0.28, 1.35, 0.38), reflectivity: 0.28, kind: 9.0)
             : RTMaterial(color: color, roughness: 0.68, reflectivity: 0.04)
         let armor = isJellyGremlin
-            ? RTMaterial(color: SIMD3<Float>(0.18, 0.72, 0.11), roughness: 0.14, reflectivity: 0.22, kind: 9.0)
+            ? RTMaterial(color: SIMD3<Float>(0.16, 0.88, 0.22), roughness: 0.12, emission: SIMD3<Float>(0.22, 1.10, 0.30), reflectivity: 0.26, kind: 9.0)
             : RTMaterial(color: SIMD3<Float>(0.08, 0.10, 0.14), roughness: 0.75, reflectivity: 0.04)
         let visor = RTMaterial(color: SIMD3<Float>(0.05, 0.85, 0.98), roughness: 0.25, emission: SIMD3<Float>(0.2, 0.65, 0.95), reflectivity: 0.08, kind: 0.0)
         let coreEmissive = RTMaterial(color: SIMD3<Float>(1.0, 0.2, 0.4), roughness: 0.35, emission: SIMD3<Float>(3.5, 0.8, 1.2), reflectivity: 0.04, kind: 5.0)
         let dark = RTMaterial(color: SIMD3<Float>(repeating: 0.012), roughness: 0.92)
         let scubaTankMat = RTMaterial(color: SIMD3<Float>(0.22, 0.24, 0.28), roughness: 0.65, reflectivity: 0.05)
         let flipperMat = isJellyGremlin
-            ? RTMaterial(color: SIMD3<Float>(0.20, 0.76, 0.12), roughness: 0.14, reflectivity: 0.22, kind: 9.0)
+            ? RTMaterial(color: SIMD3<Float>(0.18, 0.92, 0.25), roughness: 0.12, emission: SIMD3<Float>(0.18, 0.95, 0.24), reflectivity: 0.22, kind: 9.0)
             : RTMaterial(color: SIMD3<Float>(0.95, 0.45, 0.05), roughness: 0.55, reflectivity: 0.04)
         let clawMat = RTMaterial(color: SIMD3<Float>(0.92, 0.94, 0.80), roughness: 0.45, reflectivity: 0.06)
         let toolMat = RTMaterial(color: SIMD3<Float>(0.055, 0.060, 0.065), roughness: 0.55, reflectivity: 0.04)
@@ -1189,6 +1168,30 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private var smoothedRemotePos: SIMD3<Float> = SIMD3<Float>(-3.8, 0, 3.8)
     private var smoothedRemoteAgents: [String: SIMD3<Float>] = [:]
     private var netSyncTimer: Float = 0
+
+    // 🌊 Tesoros y Reliquias Subacuáticas Interactivas ("sacar muchas cosas")
+    private var openedUnderwaterChestIDs: Set<Int> = []
+    private var collectedUnderwaterRelicIDs: Set<Int> = []
+
+    private let underwaterChestsList: [(id: Int, center: SIMD3<Float>, points: Int)] = [
+        (0, SIMD3<Float>(0.2, -2.10, -1.5), 500),
+        (1, SIMD3<Float>(2.8, -11.38, -1.8), 500),
+        (2, SIMD3<Float>(0.0, -11.38, 27.0), 500),
+        (3, SIMD3<Float>(-13.5, -11.38, 50.0), 500),
+        (4, SIMD3<Float>( 13.5, -11.38, 50.0), 500),
+        (5, SIMD3<Float>(0.0, -10.90, 56.0), 1000)
+    ]
+
+    private let underwaterRelicsList: [(id: Int, center: SIMD3<Float>, points: Int)] = [
+        (0, SIMD3<Float>(-2.0, -9.5, 6.0), 150),
+        (1, SIMD3<Float>( 2.0, -9.5, 12.0), 150),
+        (2, SIMD3<Float>( 0.0, -8.5, 22.0), 150),
+        (3, SIMD3<Float>( 0.0, -8.5, 31.0), 150),
+        (4, SIMD3<Float>(-10.0, -9.0, 44.0), 150),
+        (5, SIMD3<Float>( 10.0, -9.0, 44.0), 150),
+        (6, SIMD3<Float>(-10.0, -9.0, 60.0), 150),
+        (7, SIMD3<Float>( 10.0, -9.0, 60.0), 150)
+    ]
 
     // Sincronización multijugador autoritativa de enemigos
     var isAuthorityForNPCs: Bool = true
@@ -2290,8 +2293,19 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             // maxPiesY = -4.825 - 1.58 = -6.405m.
             let maxSubCeilingY: Float = -6.40
 
-            if !isInsideShaft {
-                // Fuera del hueco central del pozo, HAY TECHO SÓLIDO HERMÉTICO
+            let inGeyser = abs(proposed.x) <= 2.2 && abs(proposed.z - 64.0) <= 2.2
+
+            if inGeyser && isRainbowGateUnlocked {
+                // 🌀 Géiser Hidroeléctrico Ascendente: propulsión de burbujas hacia la superficie del Salón Arcoíris
+                verticalVelocity = max(verticalVelocity, 8.5)
+                audio.playWaterDisturbance(intensity: 0.35)
+                if proposed.y >= -0.25 {
+                    enteredEasterEggViaToboggan = false
+                    proposed.y = 0.20
+                    audio.setAudioZone(isUnderwater: false, isRainbowHall: true)
+                }
+            } else if !isInsideShaft {
+                // Fuera del hueco central del pozo y fuera del géiser, HAY TECHO SÓLIDO HERMÉTICO
                 if proposed.y >= maxSubCeilingY {
                     proposed.y = maxSubCeilingY
                     if verticalVelocity > 0 {
@@ -2299,8 +2313,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                         audio.playWaterDisturbance(intensity: 0.35)
                     }
                 }
-                // Asistencia de orientación: si nada hacia arriba cerca del techo, guiar suavemente hacia el pozo (-1.5, -1.5)
-                if proposed.y >= -6.75 && verticalVelocity >= 0 {
+                // Asistencia de orientación: si nada hacia arriba cerca del techo en la cámara 1, guiar suavemente hacia el pozo (-1.5, -1.5)
+                if proposed.z < 16.0 && proposed.y >= -6.75 && verticalVelocity >= 0 {
                     let shaftCenter = SIMD2<Float>(-1.5, -1.5)
                     let currentXZ = SIMD2<Float>(proposed.x, proposed.z)
                     let diff = shaftCenter - currentXZ
@@ -2321,9 +2335,33 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 }
             }
 
-            // 3. Paredes perimetrales de la cámara subterránea colosal (36m x 36m)
-            proposed.x = max(-17.0, min(17.0, proposed.x))
-            proposed.z = max(-17.0, min(17.0, proposed.z))
+            // 🎁 Recolección interactiva de tesoros y reliquias subacuáticas ("sacar muchas cosas")
+            for chest in underwaterChestsList {
+                if !openedUnderwaterChestIDs.contains(chest.id) {
+                    if simd_distance(proposed, chest.center) < 1.75 {
+                        openedUnderwaterChestIDs.insert(chest.id)
+                        audio.playRecoveryCompleteSound()
+                        onScoreUpdate?(chest.points)
+                        pendingWaterImpulse = SIMD4<Float>(chest.center.x, chest.center.z, -1.8, 1)
+                    }
+                }
+            }
+            for relic in underwaterRelicsList {
+                if !collectedUnderwaterRelicIDs.contains(relic.id) {
+                    if simd_distance(proposed, relic.center) < 1.35 {
+                        collectedUnderwaterRelicIDs.insert(relic.id)
+                        audio.playLaserIgnition()
+                        onScoreUpdate?(relic.points)
+                        pendingWaterImpulse = SIMD4<Float>(relic.center.x, relic.center.z, -1.2, 1)
+                    }
+                }
+            }
+
+            // 3. Paredes perimetrales de la cámara subterránea o corredor/santuario
+            if !(isRainbowGateUnlocked && proposed.z > 17.0) {
+                proposed.x = max(-17.0, min(17.0, proposed.x))
+                proposed.z = max(-17.0, min(17.0, proposed.z))
+            }
         } else if (currentlyInPool || willBeInPool) && !willBeOnFloat {
             // 🧱 Fondo cerámico SÓLIDO: sin importar la velocidad de caída o esquinas, nunca se atraviesa
             if proposed.y <= nextGroundHeight {
@@ -2738,12 +2776,12 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
     }
 
-    // 🛸 Centinelas Aéreos / Drones Voladores con Láser (Aparecen a partir de la Oleada 7)
+    // 🛸 Centinelas Aéreos / Drones Voladores con Láser (Acompañan a los terrestres desde la Oleada 2)
     private func isBotFlyingDrone(index: Int) -> Bool {
-        guard currentWave >= 7 else { return false }
-        if currentWave == 7 {
+        guard currentWave >= 2 else { return false }
+        if currentWave == 2 {
             return index == 0
-        } else if currentWave == 8 {
+        } else if currentWave <= 4 {
             return index == 0 || index == 1
         } else {
             return index == 0 || index == 1 || index == 2
@@ -4027,27 +4065,81 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         // 🌊 Gran Cámara Acuática Subterránea Abisal (Y < -4.70, solo vía tobogán):
         if enteredEasterEggViaToboggan && position.y < -4.70 {
             let poolMargin = max(0.40, margin)
-            let minX: Float = -17.8 + poolMargin
-            let maxX: Float = 17.8 - poolMargin
-            let minZ: Float = -17.8 + poolMargin
-            let maxZ: Float = 17.8 - poolMargin
-            if position.x < minX {
-                position.x = minX
-                if velocity.x < 0 { velocity.x = 0 }
-            } else if position.x > maxX {
-                position.x = maxX
-                if velocity.x > 0 { velocity.x = 0 }
+            let isGateUnlocked = isRainbowGateUnlocked
+            let distToSubGate = simd_distance(position, SIMD3<Float>(0, position.y, 17.8))
+            if margin < 1.0 {
+                if distToSubGate < 6.0 {
+                    onRainbowGateStatusUpdate?(isGateUnlocked, playerScore, 3000)
+                }
             }
-            if position.z < minZ {
-                position.z = minZ
-                if velocity.y < 0 { velocity.y = 0 }
-            } else if position.z > maxZ {
-                position.z = maxZ
-                if velocity.y > 0 { velocity.y = 0 }
+
+            if isGateUnlocked && position.z > 17.0 {
+                // En tránsito por el Gran Acueducto Subterráneo o dentro del Santuario de los Prismas
+                if position.z <= 36.0 {
+                    // Gran Acueducto Abisal (Corredor Z: 17.8 -> 36.0, X: [-4.7, 4.7])
+                    let corrHalfWidth: Float = 4.70 - poolMargin
+                    if position.x < -corrHalfWidth {
+                        position.x = -corrHalfWidth
+                        if velocity.x < 0 { velocity.x = 0 }
+                    } else if position.x > corrHalfWidth {
+                        position.x = corrHalfWidth
+                        if velocity.x > 0 { velocity.x = 0 }
+                    }
+                    if position.z < 17.8 - poolMargin {
+                        position.z = 17.8 - poolMargin
+                        if velocity.y < 0 { velocity.y = 0 }
+                    } else if position.z > 36.0 {
+                        position.z = 36.0
+                    }
+                } else {
+                    // Santuario Submarino de los Prismas (Z: 36.0 -> 67.5, X: [-21.5, 21.5])
+                    let sanctHalfWidth: Float = 21.5 - poolMargin
+                    if position.x < -sanctHalfWidth {
+                        position.x = -sanctHalfWidth
+                        if velocity.x < 0 { velocity.x = 0 }
+                    } else if position.x > sanctHalfWidth {
+                        position.x = sanctHalfWidth
+                        if velocity.x > 0 { velocity.x = 0 }
+                    }
+                    if position.z < 36.0 {
+                        // Entrada al corredor desde el sur (X debe estar entre -4.7 y 4.7)
+                        if abs(position.x) > 4.70 - poolMargin {
+                            position.z = 36.0 + poolMargin
+                            if velocity.y < 0 { velocity.y = 0 }
+                        }
+                    } else if position.z > 67.5 - poolMargin {
+                        position.z = 67.5 - poolMargin
+                        if velocity.y > 0 { velocity.y = 0 }
+                    }
+                }
+            } else {
+                // Cámara Abisal 1 (-17.8 a 17.8)
+                let minX: Float = -17.8 + poolMargin
+                let maxX: Float = 17.8 - poolMargin
+                let minZ: Float = -17.8 + poolMargin
+                let canCrossGate = isGateUnlocked && abs(position.x) <= 4.70
+                let maxZ: Float = canCrossGate ? 67.5 - poolMargin : 17.8 - poolMargin
+
+                if position.x < minX {
+                    position.x = minX
+                    if velocity.x < 0 { velocity.x = 0 }
+                } else if position.x > maxX {
+                    position.x = maxX
+                    if velocity.x > 0 { velocity.x = 0 }
+                }
+                if position.z < minZ {
+                    position.z = minZ
+                    if velocity.y < 0 { velocity.y = 0 }
+                } else if position.z > maxZ {
+                    position.z = maxZ
+                    if velocity.y > 0 { velocity.y = 0 }
+                }
             }
-            // Techo subterráneo sólido fuera de la boca del pozo:
+
+            // Techo subterráneo sólido fuera de la boca del pozo y del géiser de ascenso:
             let underShaft = position.x >= -5.35 && position.x <= 2.35 && position.z >= -4.20 && position.z <= 1.20
-            if !underShaft && position.y > -4.95 {
+            let inGeyser = abs(position.x) <= 2.2 && abs(position.z - 64.0) <= 2.2
+            if !underShaft && !inGeyser && position.y > -4.95 {
                 position.y = -4.95
             }
             return
@@ -4489,27 +4581,56 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
         }
 
-        // 3. Gran Cofre Cuántico Abisal: (2.8, -11.38, -1.8), size: (1.35, 0.90, 0.95)
-        let chestCenter = SIMD3<Float>(2.8, -11.38, -1.8)
-        let chestHalfSize = SIMD3<Float>(0.68 + playerRadius, 0.50, 0.48 + playerRadius)
-        if position.y >= chestCenter.y - chestHalfSize.y && position.y <= chestCenter.y + chestHalfSize.y + 0.30 {
-            let dx = position.x - chestCenter.x
-            let dz = position.z - chestCenter.z
-            if abs(dx) < chestHalfSize.x && abs(dz) < chestHalfSize.z {
-                hitObstacle = true
-                let overlapX = chestHalfSize.x - abs(dx)
-                let overlapZ = chestHalfSize.z - abs(dz)
-                if overlapX < overlapZ {
-                    position.x += dx >= 0 ? overlapX : -overlapX
-                    horizontalVelocity.x *= 0.20
-                } else {
-                    position.z += dz >= 0 ? overlapZ : -overlapZ
-                    horizontalVelocity.y *= 0.20
+        // 3. Cofres Subacuáticos Sólidos (Cámara 1, Piscina, Acueducto y Santuario)
+        for c in underwaterChestsList {
+            let chestCenter = c.center
+            let chestHalfSize = SIMD3<Float>(0.72 + playerRadius, 0.52, 0.52 + playerRadius)
+            if position.y >= chestCenter.y - chestHalfSize.y && position.y <= chestCenter.y + chestHalfSize.y + 0.35 {
+                let dx = position.x - chestCenter.x
+                let dz = position.z - chestCenter.z
+                if abs(dx) < chestHalfSize.x && abs(dz) < chestHalfSize.z {
+                    hitObstacle = true
+                    let overlapX = chestHalfSize.x - abs(dx)
+                    let overlapZ = chestHalfSize.z - abs(dz)
+                    if overlapX < overlapZ {
+                        position.x += dx >= 0 ? overlapX : -overlapX
+                        horizontalVelocity.x *= 0.20
+                    } else {
+                        position.z += dz >= 0 ? overlapZ : -overlapZ
+                        horizontalVelocity.y *= 0.20
+                    }
                 }
             }
         }
 
-        // 4. Cristales y Faroles Cuánticos Sumergidos
+        // 4. Columnas Monumentales del Santuario de los Prismas
+        let sanctuaryPillars: [SIMD2<Float>] = [
+            SIMD2<Float>(-10.0, 44.0),
+            SIMD2<Float>( 10.0, 44.0),
+            SIMD2<Float>(-10.0, 60.0),
+            SIMD2<Float>( 10.0, 60.0)
+        ]
+        for p in sanctuaryPillars {
+            if position.y < -4.75 {
+                let dx = position.x - p.x
+                let dz = position.z - p.y
+                let halfP: Float = 0.85 + playerRadius
+                if abs(dx) < halfP && abs(dz) < halfP {
+                    hitObstacle = true
+                    let overlapX = halfP - abs(dx)
+                    let overlapZ = halfP - abs(dz)
+                    if overlapX < overlapZ {
+                        position.x += dx >= 0 ? overlapX : -overlapX
+                        horizontalVelocity.x *= 0.20
+                    } else {
+                        position.z += dz >= 0 ? overlapZ : -overlapZ
+                        horizontalVelocity.y *= 0.20
+                    }
+                }
+            }
+        }
+
+        // 5. Cristales y Faroles Cuánticos Sumergidos
         let subSpheres: [(center: SIMD3<Float>, radius: Float)] = [
             (SIMD3<Float>(-8.0, -7.0, -8.0), 0.70),
             (SIMD3<Float>(8.0, -7.0, -8.0), 0.70),
@@ -5365,19 +5486,19 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let isColossalGolem = (index == 4 && currentWave >= 3)
         let isFlying = isBotFlyingDrone(index: index)
         let baseScale: Float = isColossalGolem ? 1.65 : (isFlying ? npcBaseScales[index] * 0.90 : npcBaseScales[index])
-        let isFotofago = index >= 2
-        let asIndex: UInt32 = isFotofago ? 11 : 4
+        // Drones aéreos usan AS Index 4, Fotófagos terrestres acorazados usan AS Index 11
+        let asIndex: UInt32 = isFlying ? 4 : 11
         let isAlive = npcHealths[index] > 0 && npcRespawnTimers[index] <= 0 && !isWaveIntermission
         let melt = npcMeltProgress[index]
         let isMelting = !isAlive && melt > 0.005 && melt < 1.0 && !isWaveIntermission && !isVersusMode
 
         if isAlive {
             // Animación pesada de respiración, gravitación de cristales y zancada del Fotófago / Gólem Colosal / Drones Aéreos
-            let bobFreq: Float = isFlying ? 4.2 : (isColossalGolem ? 2.4 : (isFotofago ? 3.4 : 5.8))
-            let bobAmp: Float = isFlying ? 0.085 : (isColossalGolem ? 0.068 : (isFotofago ? 0.048 : 0.024))
+            let bobFreq: Float = isFlying ? 4.2 : (isColossalGolem ? 2.4 : 3.4)
+            let bobAmp: Float = isFlying ? 0.085 : (isColossalGolem ? 0.068 : 0.048)
             let strideBob = isFlying ? (sin(elapsedTime * bobFreq + Float(index) * 1.5) * bobAmp) : (abs(sin(elapsedTime * bobFreq + Float(index) * 1.4)) * bobAmp)
             let breathe = 1.0 + sin(elapsedTime * 2.6 + Float(index)) * 0.028
-            let swayPitch: Float = isFlying ? -0.18 : sin(elapsedTime * (bobFreq * 0.5) + Float(index)) * (isFotofago ? 0.042 : 0.020)
+            let swayPitch: Float = isFlying ? -0.18 : sin(elapsedTime * (bobFreq * 0.5) + Float(index)) * 0.042
             let pos = npcPositions[index] + SIMD3<Float>(0, strideBob, 0)
             let scale = SIMD3<Float>(baseScale * breathe, isFlying ? baseScale * 0.85 : baseScale, baseScale * breathe)
             return Self.makeInstanceDescriptor(
@@ -5553,7 +5674,38 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
     private static func makeNPCMesh() -> RTMeshBuilder {
         var builder = RTMeshBuilder()
-        builder.addCharacter(origin: .zero, color: SIMD3<Float>(0.92, 0.18, 0.34), holdsTool: true)
+        // 🛸 CENTINELA AÉREO FOTÓFAGO (AS Index 4): Dron aéreo de titanio Vantablack con alas repulsoras, cañón láser y núcleo de energía oscura
+        let droneArmor = RTMaterial(color: SIMD3<Float>(0.015, 0.015, 0.022), roughness: 0.70, emission: .zero, reflectivity: 0.15, kind: 10.0)
+        let titaniumWing = RTMaterial(color: SIMD3<Float>(0.35, 0.38, 0.45), roughness: 0.25, reflectivity: 0.60)
+        let droneEye = RTMaterial(color: SIMD3<Float>(1.0, 0.12, 0.25), roughness: 0.08, emission: SIMD3<Float>(6.5, 0.4, 0.6), reflectivity: 0.50, kind: 5.0)
+        let thrusterPlasma = RTMaterial(color: SIMD3<Float>(0.4, 0.1, 0.9), roughness: 0.12, emission: SIMD3<Float>(1.8, 0.4, 6.2), reflectivity: 0.40, kind: 5.0)
+        let droneCannon = RTMaterial(color: SIMD3<Float>(0.12, 0.13, 0.15), roughness: 0.30, reflectivity: 0.50)
+
+        // 1. Núcleo / Fuselaje central aerodinámico
+        builder.addSphere(center: SIMD3<Float>(0, 0.85, 0), radii: SIMD3<Float>(0.30, 0.22, 0.36), material: droneArmor, segments: 12, rings: 8)
+        // Coraza dorsal angulada
+        builder.addBox(center: SIMD3<Float>(0, 1.02, -0.04), size: SIMD3<Float>(0.34, 0.12, 0.42), material: droneArmor)
+
+        // 2. Ojo Cíclope Sensor Láser Frontal
+        builder.addSphere(center: SIMD3<Float>(0, 0.85, 0.34), radii: SIMD3<Float>(repeating: 0.12), material: droneEye, segments: 10, rings: 6)
+        // Cañón láser ventral inferior
+        builder.addBox(center: SIMD3<Float>(0, 0.64, 0.20), size: SIMD3<Float>(0.10, 0.08, 0.38), material: droneCannon)
+        builder.addSphere(center: SIMD3<Float>(0, 0.64, 0.40), radii: SIMD3<Float>(repeating: 0.045), material: droneEye, segments: 6, rings: 4)
+
+        // 3. Alas repulsoras laterales en flecha invertida
+        for side: Float in [-1.0, 1.0] {
+            // Ala principal en titanio
+            builder.addBox(center: SIMD3<Float>(side * 0.54, 0.88, -0.06), size: SIMD3<Float>(0.48, 0.045, 0.28), material: titaniumWing)
+            // Aleta estabilizadora vertical en la punta
+            builder.addBox(center: SIMD3<Float>(side * 0.76, 0.95, -0.06), size: SIMD3<Float>(0.04, 0.18, 0.22), material: droneArmor)
+            // Tira de energía de propulsión en el borde alar
+            builder.addBox(center: SIMD3<Float>(side * 0.54, 0.88, -0.21), size: SIMD3<Float>(0.42, 0.035, 0.03), material: thrusterPlasma)
+        }
+
+        // 4. Toberas de propulsión traseras dobles
+        builder.addSphere(center: SIMD3<Float>(-0.12, 0.84, -0.36), radii: SIMD3<Float>(repeating: 0.075), material: thrusterPlasma, segments: 8, rings: 5)
+        builder.addSphere(center: SIMD3<Float>( 0.12, 0.84, -0.36), radii: SIMD3<Float>(repeating: 0.075), material: thrusterPlasma, segments: 8, rings: 5)
+
         return builder
     }
 
@@ -5802,44 +5954,101 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let subFloorMat = RTMaterial(color: SIMD3<Float>(0.02, 0.06, 0.10), roughness: 0.65, reflectivity: 0.12)
         let subWallMat = RTMaterial(color: SIMD3<Float>(0.03, 0.08, 0.13), roughness: 0.45, reflectivity: 0.18)
         let subCeilingMat = RTMaterial(color: SIMD3<Float>(0.02, 0.05, 0.09), roughness: 0.70, reflectivity: 0.10)
-        let subWallNeonCyan = RTMaterial(color: SIMD3<Float>(0.0, 0.95, 1.0), roughness: 0.05, emission: SIMD3<Float>(0.6, 4.8, 7.5), reflectivity: 0.85, kind: 5)
-        let subWallNeonEmerald = RTMaterial(color: SIMD3<Float>(0.0, 1.0, 0.6), roughness: 0.05, emission: SIMD3<Float>(0.4, 6.2, 3.8), reflectivity: 0.85, kind: 5)
-        let bioCrystal = RTMaterial(color: SIMD3<Float>(0.10, 0.95, 0.85), roughness: 0.10, emission: SIMD3<Float>(0.20, 2.8, 3.8), reflectivity: 0.60)
-        let chestWood = RTMaterial(color: SIMD3<Float>(0.14, 0.09, 0.06), roughness: 0.70, reflectivity: 0.08)
-        let chestGold = RTMaterial(color: SIMD3<Float>(0.98, 0.82, 0.15), roughness: 0.18, emission: SIMD3<Float>(0.35, 0.28, 0.04), reflectivity: 0.72)
-        let chestGem = RTMaterial(color: SIMD3<Float>(0.05, 0.95, 1.0), roughness: 0.02, emission: SIMD3<Float>(0.8, 5.5, 7.5), reflectivity: 0.90, kind: 5)
-        let chestJewels = RTMaterial(color: SIMD3<Float>(1.0, 0.88, 0.25), roughness: 0.10, emission: SIMD3<Float>(1.8, 1.3, 0.3), reflectivity: 0.80, kind: 5)
+        let subWallNeonCyan = RTMaterial(color: SIMD3<Float>(0.0, 0.95, 1.0), roughness: 0.05, emission: SIMD3<Float>(1.2, 5.8, 8.5), reflectivity: 0.85, kind: 5)
+        let subWallNeonEmerald = RTMaterial(color: SIMD3<Float>(0.0, 1.0, 0.6), roughness: 0.05, emission: SIMD3<Float>(1.0, 7.2, 4.5), reflectivity: 0.85, kind: 5)
+        let bioCrystal = RTMaterial(color: SIMD3<Float>(0.10, 0.95, 0.85), roughness: 0.05, emission: SIMD3<Float>(1.5, 4.8, 6.8), reflectivity: 0.70, kind: 5)
+        let prismCrystalMat = RTMaterial(color: SIMD3<Float>(0.92, 0.25, 1.0), roughness: 0.05, emission: SIMD3<Float>(3.5, 1.2, 5.0), reflectivity: 0.88, kind: 5)
+        let chestWood = RTMaterial(color: SIMD3<Float>(0.24, 0.18, 0.14), roughness: 0.45, reflectivity: 0.18)
+        let chestGold = RTMaterial(color: SIMD3<Float>(1.0, 0.88, 0.28), roughness: 0.10, emission: SIMD3<Float>(1.2, 0.95, 0.25), reflectivity: 0.85, kind: 5)
+        let chestGem = RTMaterial(color: SIMD3<Float>(0.05, 0.95, 1.0), roughness: 0.02, emission: SIMD3<Float>(2.2, 7.5, 9.8), reflectivity: 0.92, kind: 5)
+        let chestJewels = RTMaterial(color: SIMD3<Float>(1.0, 0.90, 0.35), roughness: 0.08, emission: SIMD3<Float>(3.2, 2.6, 0.8), reflectivity: 0.85, kind: 5)
         let sunkenObeliskStone = RTMaterial(color: SIMD3<Float>(0.15, 0.20, 0.25), roughness: 0.60, reflectivity: 0.15)
-        let obeliskRuneCyan = RTMaterial(color: SIMD3<Float>(0.0, 0.95, 1.0), roughness: 0.02, emission: SIMD3<Float>(0.9, 5.5, 8.0), reflectivity: 0.90, kind: 5)
-        let obeliskTipGold = RTMaterial(color: SIMD3<Float>(0.98, 0.85, 0.20), roughness: 0.12, emission: SIMD3<Float>(1.5, 1.0, 0.25), reflectivity: 0.85, kind: 5)
+        let obeliskRuneCyan = RTMaterial(color: SIMD3<Float>(0.0, 0.95, 1.0), roughness: 0.02, emission: SIMD3<Float>(1.5, 6.5, 9.0), reflectivity: 0.90, kind: 5)
+        let obeliskTipGold = RTMaterial(color: SIMD3<Float>(0.98, 0.85, 0.20), roughness: 0.12, emission: SIMD3<Float>(1.8, 1.2, 0.35), reflectivity: 0.85, kind: 5)
         let generatorMetal = RTMaterial(color: SIMD3<Float>(0.25, 0.32, 0.38), roughness: 0.22, reflectivity: 0.70)
-        let bubbleMat = RTMaterial(color: SIMD3<Float>(0.75, 0.95, 1.0), roughness: 0.02, emission: SIMD3<Float>(0.15, 0.65, 0.95), reflectivity: 0.85, kind: 5)
+        let bubbleMat = RTMaterial(color: SIMD3<Float>(0.75, 0.95, 1.0), roughness: 0.02, emission: SIMD3<Float>(0.45, 1.25, 1.85), reflectivity: 0.85, kind: 5)
 
-        // 1. Piso Abisal Profundo (Y = -11.6m, 36m x 36m)
+        // 1. Piso Abisal Profundo Cámara 1 (Y = -11.6m, 36m x 36m)
         builder.addBox(center: SIMD3<Float>(0, -11.60, 0), size: SIMD3<Float>(36.0, 0.30, 36.0), material: subFloorMat)
 
-        // 2. Cuatro Paredes Subterráneas que cierran herméticamente el cuarto (Y = -11.5m a Y = -4.7m)
+        // 2. Paredes Subterráneas de Cámara 1 (Y = -11.5m a Y = -4.7m)
+        // Muro Norte y Muros Laterales
         builder.addBox(center: SIMD3<Float>(0, -7.85, -17.8), size: SIMD3<Float>(36.0, 6.30, 0.4), material: subWallMat)
-        builder.addBox(center: SIMD3<Float>(0, -7.85, 17.8), size: SIMD3<Float>(36.0, 6.30, 0.4), material: subWallMat)
         builder.addBox(center: SIMD3<Float>(-17.8, -7.85, 0), size: SIMD3<Float>(0.4, 6.30, 36.0), material: subWallMat)
         builder.addBox(center: SIMD3<Float>(17.8, -7.85, 0), size: SIMD3<Float>(0.4, 6.30, 36.0), material: subWallMat)
 
-        // 3. Techo Sólido Subterráneo (Y = -4.70m, debajo de la piscina ultra profunda) que sella todo excepto el acceso de la piscina
+        // 🚪 Gran Pórtico Abisal Sur (Z = 17.8) - Conexión al Gran Acueducto Subterráneo
+        builder.addBox(center: SIMD3<Float>(-11.40, -7.85, 17.8), size: SIMD3<Float>(12.8, 6.30, 0.4), material: subWallMat)
+        builder.addBox(center: SIMD3<Float>( 11.40, -7.85, 17.8), size: SIMD3<Float>(12.8, 6.30, 0.4), material: subWallMat)
+        // Pilares colosales de piedra rúnica que enmarcan el portal
+        builder.addBox(center: SIMD3<Float>(-5.00, -7.85, 17.8), size: SIMD3<Float>(0.50, 6.30, 0.65), material: sunkenObeliskStone)
+        builder.addBox(center: SIMD3<Float>( 5.00, -7.85, 17.8), size: SIMD3<Float>(0.50, 6.30, 0.65), material: sunkenObeliskStone)
+        builder.addBox(center: SIMD3<Float>(0.00, -4.95, 17.8), size: SIMD3<Float>(10.5, 0.45, 0.65), material: sunkenObeliskStone)
+        builder.addBox(center: SIMD3<Float>(-5.00, -7.85, 17.52), size: SIMD3<Float>(0.12, 5.8, 0.08), material: obeliskRuneCyan)
+        builder.addBox(center: SIMD3<Float>( 5.00, -7.85, 17.52), size: SIMD3<Float>(0.12, 5.8, 0.08), material: obeliskRuneCyan)
+        // Valla de energía cuántica traslúcida que se disuelve con 3000 puntos
+        builder.addBox(center: SIMD3<Float>(0.00, -7.85, 17.80), size: SIMD3<Float>(9.5, 5.8, 0.04), material: bioCrystal)
+
+        // 🌊 💎 GRAN ACUEDUCTO SUBTERRÁNEO (Z = 17.8 a 36.0, conexión hacia "el otro mundo")
+        builder.addBox(center: SIMD3<Float>(0.0, -11.60, 26.9), size: SIMD3<Float>(10.2, 0.30, 18.2), material: subFloorMat)
+        builder.addBox(center: SIMD3<Float>(0.0, -4.70, 26.9), size: SIMD3<Float>(10.2, 0.25, 18.2), material: subCeilingMat)
+        builder.addBox(center: SIMD3<Float>(-5.10, -7.85, 26.9), size: SIMD3<Float>(0.40, 6.30, 18.2), material: subWallMat)
+        builder.addBox(center: SIMD3<Float>( 5.10, -7.85, 26.9), size: SIMD3<Float>(0.40, 6.30, 18.2), material: subWallMat)
+        // Rieles de guía luminosa en el acueducto
+        builder.addBox(center: SIMD3<Float>(-4.85, -11.45, 26.9), size: SIMD3<Float>(0.12, 0.06, 18.0), material: subWallNeonCyan)
+        builder.addBox(center: SIMD3<Float>( 4.85, -11.45, 26.9), size: SIMD3<Float>(0.12, 0.06, 18.0), material: subWallNeonEmerald)
+        builder.addBox(center: SIMD3<Float>(-4.85, -6.50, 26.9), size: SIMD3<Float>(0.08, 0.12, 18.0), material: subWallNeonCyan)
+        builder.addBox(center: SIMD3<Float>( 4.85, -6.50, 26.9), size: SIMD3<Float>(0.08, 0.12, 18.0), material: subWallNeonEmerald)
+
+        // 🌈 🏛️ SANTUARIO SUBMARINO DE LOS PRISMAS (Z = 36.0 a 68.0, 44m x 32m, directamente bajo el Salón Arcoíris)
+        builder.addBox(center: SIMD3<Float>(0.0, -11.60, 52.0), size: SIMD3<Float>(44.0, 0.30, 32.0), material: subFloorMat)
+        builder.addBox(center: SIMD3<Float>(0.0, -4.70, 52.0), size: SIMD3<Float>(44.0, 0.25, 32.0), material: subCeilingMat)
+        builder.addBox(center: SIMD3<Float>(-13.5, -7.85, 36.0), size: SIMD3<Float>(17.0, 6.30, 0.40), material: subWallMat)
+        builder.addBox(center: SIMD3<Float>( 13.5, -7.85, 36.0), size: SIMD3<Float>(17.0, 6.30, 0.40), material: subWallMat)
+        builder.addBox(center: SIMD3<Float>(-22.0, -7.85, 52.0), size: SIMD3<Float>(0.40, 6.30, 32.0), material: subWallMat)
+        builder.addBox(center: SIMD3<Float>( 22.0, -7.85, 52.0), size: SIMD3<Float>(0.40, 6.30, 32.0), material: subWallMat)
+        builder.addBox(center: SIMD3<Float>(0.0, -7.85, 68.0), size: SIMD3<Float>(44.0, 6.30, 0.40), material: subWallMat)
+        // Frisos perimetrales de cristal prismático
+        builder.addBox(center: SIMD3<Float>(-21.78, -6.00, 52.0), size: SIMD3<Float>(0.08, 0.15, 31.5), material: prismCrystalMat)
+        builder.addBox(center: SIMD3<Float>( 21.78, -6.00, 52.0), size: SIMD3<Float>(0.08, 0.15, 31.5), material: prismCrystalMat)
+        builder.addBox(center: SIMD3<Float>(0.0, -6.00, 67.78), size: SIMD3<Float>(43.5, 0.15, 0.08), material: prismCrystalMat)
+        builder.addBox(center: SIMD3<Float>(-21.78, -9.60, 52.0), size: SIMD3<Float>(0.08, 0.15, 31.5), material: subWallNeonCyan)
+        builder.addBox(center: SIMD3<Float>( 21.78, -9.60, 52.0), size: SIMD3<Float>(0.08, 0.15, 31.5), material: subWallNeonCyan)
+        builder.addBox(center: SIMD3<Float>(0.0, -9.60, 67.78), size: SIMD3<Float>(43.5, 0.15, 0.08), material: subWallNeonCyan)
+
+        // 4 Monumentales Columnas Prismáticas en el Santuario Submarino
+        let sanctuaryPillars: [SIMD2<Float>] = [
+            SIMD2<Float>(-10.0, 44.0),
+            SIMD2<Float>( 10.0, 44.0),
+            SIMD2<Float>(-10.0, 60.0),
+            SIMD2<Float>( 10.0, 60.0)
+        ]
+        for p in sanctuaryPillars {
+            builder.addBox(center: SIMD3<Float>(p.x, -11.35, p.y), size: SIMD3<Float>(1.6, 0.50, 1.6), material: sunkenObeliskStone)
+            builder.addBox(center: SIMD3<Float>(p.x, -8.10, p.y), size: SIMD3<Float>(1.0, 6.00, 1.0), material: sunkenObeliskStone)
+            builder.addBox(center: SIMD3<Float>(p.x, -4.95, p.y), size: SIMD3<Float>(1.5, 0.40, 1.5), material: sunkenObeliskStone)
+            builder.addBox(center: SIMD3<Float>(p.x, -8.10, p.y - 0.52), size: SIMD3<Float>(0.15, 5.60, 0.06), material: prismCrystalMat)
+            builder.addBox(center: SIMD3<Float>(p.x, -8.10, p.y + 0.52), size: SIMD3<Float>(0.15, 5.60, 0.06), material: prismCrystalMat)
+        }
+
+        // 3. Techo Sólido Subterráneo de Cámara 1 (Y = -4.70m)
         builder.addBox(center: SIMD3<Float>(0, -4.70, -11.0), size: SIMD3<Float>(36.0, 0.25, 13.6), material: subCeilingMat)
         builder.addBox(center: SIMD3<Float>(0, -4.70, 9.6), size: SIMD3<Float>(36.0, 0.25, 16.8), material: subCeilingMat)
         builder.addBox(center: SIMD3<Float>(-11.6, -4.70, -1.5), size: SIMD3<Float>(12.5, 0.25, 5.4), material: subCeilingMat)
         builder.addBox(center: SIMD3<Float>(10.1, -4.70, -1.5), size: SIMD3<Float>(15.5, 0.25, 5.4), material: subCeilingMat)
 
-        // 4. Luces en las Paredes Subterráneas (Tiras Neón Cian & Esmeralda)
+        // 4. Luces en las Paredes Subterráneas de Cámara 1 (Tiras Neón Cian & Esmeralda)
         // Banda Superior Cian a Y = -6.0m
         builder.addBox(center: SIMD3<Float>(0, -6.00, -17.58), size: SIMD3<Float>(35.0, 0.15, 0.08), material: subWallNeonCyan)
-        builder.addBox(center: SIMD3<Float>(0, -6.00, 17.58), size: SIMD3<Float>(35.0, 0.15, 0.08), material: subWallNeonCyan)
+        builder.addBox(center: SIMD3<Float>(-11.40, -6.00, 17.58), size: SIMD3<Float>(12.5, 0.15, 0.08), material: subWallNeonCyan)
+        builder.addBox(center: SIMD3<Float>( 11.40, -6.00, 17.58), size: SIMD3<Float>(12.5, 0.15, 0.08), material: subWallNeonCyan)
         builder.addBox(center: SIMD3<Float>(-17.58, -6.00, 0), size: SIMD3<Float>(0.08, 0.15, 35.0), material: subWallNeonCyan)
         builder.addBox(center: SIMD3<Float>(17.58, -6.00, 0), size: SIMD3<Float>(0.08, 0.15, 35.0), material: subWallNeonCyan)
 
         // Banda Inferior Esmeralda a Y = -9.6m
         builder.addBox(center: SIMD3<Float>(0, -9.60, -17.58), size: SIMD3<Float>(35.0, 0.15, 0.08), material: subWallNeonEmerald)
-        builder.addBox(center: SIMD3<Float>(0, -9.60, 17.58), size: SIMD3<Float>(35.0, 0.15, 0.08), material: subWallNeonEmerald)
+        builder.addBox(center: SIMD3<Float>(-11.40, -9.60, 17.58), size: SIMD3<Float>(12.5, 0.15, 0.08), material: subWallNeonEmerald)
+        builder.addBox(center: SIMD3<Float>( 11.40, -9.60, 17.58), size: SIMD3<Float>(12.5, 0.15, 0.08), material: subWallNeonEmerald)
         builder.addBox(center: SIMD3<Float>(-17.58, -9.60, 0), size: SIMD3<Float>(0.08, 0.15, 35.0), material: subWallNeonEmerald)
         builder.addBox(center: SIMD3<Float>(17.58, -9.60, 0), size: SIMD3<Float>(0.08, 0.15, 35.0), material: subWallNeonEmerald)
 
@@ -5902,7 +6111,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         builder.addSphere(center: SIMD3<Float>(3.5, -9.2, 2.2), radii: SIMD3<Float>(repeating: 0.45), material: bioCrystal, segments: 8, rings: 5)
         builder.addSphere(center: SIMD3<Float>(1.8, -9.2, -4.2), radii: SIMD3<Float>(repeating: 0.40), material: bioCrystal, segments: 8, rings: 5)
 
-        // 👑 2. Gran Cofre del Tesoro Abisal (Y = -11.6m en el piso de la cámara subterránea)
+        // 👑 2. Gran Cofre del Tesoro Abisal Cámara 1 (Y = -11.6m)
         builder.addBox(center: SIMD3<Float>(2.8, -11.50, -1.8), size: SIMD3<Float>(2.0, 0.22, 1.6), material: poolTile)
         builder.addDetailedTreasureChest(
             center: SIMD3<Float>(2.8, -11.38, -1.8),
@@ -5922,7 +6131,81 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             gemMaterial: chestGem,
             jewelMaterial: chestJewels
         )
-        builder.addSphere(center: SIMD3<Float>(0.2, -1.35, -1.5), radii: SIMD3<Float>(repeating: 0.28), material: chestGem, segments: 8, rings: 5)
+        builder.addSphere(center: SIMD3<Float>(0.2, -1.35, -1.5), radii: SIMD3<Float>(repeating: 0.32), material: chestGem, segments: 8, rings: 5)
+
+        // 🏺 4. Cofre del Gran Acueducto Subterráneo (Z = 27.0m)
+        builder.addBox(center: SIMD3<Float>(0.0, -11.50, 27.0), size: SIMD3<Float>(2.0, 0.22, 1.6), material: poolTile)
+        builder.addDetailedTreasureChest(
+            center: SIMD3<Float>(0.0, -11.38, 27.0),
+            woodMaterial: chestWood,
+            goldMaterial: chestGold,
+            gemMaterial: chestGem,
+            jewelMaterial: chestJewels
+        )
+        builder.addSphere(center: SIMD3<Float>(0.0, -10.2, 27.0), radii: SIMD3<Float>(repeating: 0.35), material: prismCrystalMat, segments: 10, rings: 6)
+
+        // 🔱 5. Cofre de las Profundidades Occidentales del Santuario (X = -13.5, Z = 50.0)
+        builder.addBox(center: SIMD3<Float>(-13.5, -11.50, 50.0), size: SIMD3<Float>(2.0, 0.22, 1.6), material: poolTile)
+        builder.addDetailedTreasureChest(
+            center: SIMD3<Float>(-13.5, -11.38, 50.0),
+            woodMaterial: chestWood,
+            goldMaterial: chestGold,
+            gemMaterial: chestGem,
+            jewelMaterial: chestJewels
+        )
+        builder.addSphere(center: SIMD3<Float>(-13.5, -10.2, 50.0), radii: SIMD3<Float>(repeating: 0.35), material: chestGem, segments: 10, rings: 6)
+
+        // 🔱 6. Cofre de las Profundidades Orientales del Santuario (X = 13.5, Z = 50.0)
+        builder.addBox(center: SIMD3<Float>(13.5, -11.50, 50.0), size: SIMD3<Float>(2.0, 0.22, 1.6), material: poolTile)
+        builder.addDetailedTreasureChest(
+            center: SIMD3<Float>(13.5, -11.38, 50.0),
+            woodMaterial: chestWood,
+            goldMaterial: chestGold,
+            gemMaterial: chestGem,
+            jewelMaterial: chestJewels
+        )
+        builder.addSphere(center: SIMD3<Float>(13.5, -10.2, 50.0), radii: SIMD3<Float>(repeating: 0.35), material: chestGem, segments: 10, rings: 6)
+
+        // 👑 7. Gran Altar Central y Cofre Prismático Supremo (Z = 56.0, bajo el Gran Salón Arcoíris)
+        builder.addBox(center: SIMD3<Float>(0.0, -11.35, 56.0), size: SIMD3<Float>(4.4, 0.50, 4.4), material: sunkenObeliskStone)
+        builder.addBox(center: SIMD3<Float>(0.0, -11.05, 56.0), size: SIMD3<Float>(3.2, 0.30, 3.2), material: poolTile)
+        builder.addDetailedTreasureChest(
+            center: SIMD3<Float>(0.0, -10.90, 56.0),
+            woodMaterial: chestWood,
+            goldMaterial: chestGold,
+            gemMaterial: prismCrystalMat,
+            jewelMaterial: chestJewels
+        )
+        // Gran Cristal Cósmico Flotante sobre el Altar Supremo
+        builder.addSphere(center: SIMD3<Float>(0.0, -9.4, 56.0), radii: SIMD3<Float>(repeating: 0.65), material: prismCrystalMat, segments: 12, rings: 8)
+        builder.addSphere(center: SIMD3<Float>(0.0, -9.4, 56.0), radii: SIMD3<Float>(repeating: 0.85), material: bioCrystal, segments: 8, rings: 5)
+
+        // 🌀 8. Géiser Hidroeléctrico Ascendente / Elevador de Burbujas hacia la Superficie (Z = 64.0)
+        builder.addBox(center: SIMD3<Float>(0.0, -11.45, 64.0), size: SIMD3<Float>(4.2, 0.30, 4.2), material: generatorMetal)
+        builder.addBox(center: SIMD3<Float>(0.0, -11.25, 64.0), size: SIMD3<Float>(3.0, 0.15, 3.0), material: subWallNeonCyan)
+        let geyserBubbleHeights: [Float] = [-10.5, -9.2, -7.8, -6.4, -5.0, -3.6, -2.2, -0.8, 0.2]
+        for (gIdx, gY) in geyserBubbleHeights.enumerated() {
+            let swirlX = sin(Float(gIdx) * 1.8) * 0.75
+            let swirlZ = cos(Float(gIdx) * 1.8) * 0.75
+            let gRadius: Float = gIdx % 2 == 0 ? 0.35 : 0.48
+            builder.addSphere(center: SIMD3<Float>(swirlX, gY, 64.0 + swirlZ), radii: SIMD3<Float>(repeating: gRadius), material: bubbleMat, segments: 8, rings: 5)
+        }
+
+        // 🔮 9. Orbes de Reliquias Cuánticas Flotantes en el Santuario Submarino
+        let relicLocations: [SIMD3<Float>] = [
+            SIMD3<Float>(-2.0, -9.5, 6.0),
+            SIMD3<Float>( 2.0, -9.5, 12.0),
+            SIMD3<Float>( 0.0, -8.5, 22.0),
+            SIMD3<Float>( 0.0, -8.5, 31.0),
+            SIMD3<Float>(-10.0, -9.0, 44.0),
+            SIMD3<Float>( 10.0, -9.0, 44.0),
+            SIMD3<Float>(-10.0, -9.0, 60.0),
+            SIMD3<Float>( 10.0, -9.0, 60.0)
+        ]
+        for rLoc in relicLocations {
+            builder.addSphere(center: rLoc, radii: SIMD3<Float>(repeating: 0.32), material: bioCrystal, segments: 8, rings: 5)
+            builder.addSphere(center: rLoc, radii: SIMD3<Float>(repeating: 0.15), material: chestGem, segments: 8, rings: 5)
+        }
 
         // 🏊‍♂️ Pozo de Agua / Piscina Profunda Subterránea
         // En la superficie se comporta como un posito de 10 cm, pero conecta directamente con la piscina abisal

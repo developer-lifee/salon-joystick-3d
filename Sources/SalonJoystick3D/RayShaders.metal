@@ -1531,7 +1531,7 @@ kernel void raytracePatio(
             baseReflectivity = 0.04f;
             roughness = 0.85f;
         } else if (jellySurface) {
-            // 🧪 Diablillo de Gelatina: Textura orgánica húmeda con micro-relieve, SSS Fresnel y motas luminosas internas
+            // 🧪 Slime Bioluminiscente de Lumina: Textura orgánica húmeda, SSS Fresnel y brillo verde esmeralda puro
             float3 pCell = position * 28.0f;
             float3 bump = float3(
                 sin(pCell.x) * cos(pCell.y * 1.1f),
@@ -1545,14 +1545,14 @@ kernel void raytracePatio(
             float3 cellUV = fract(position * 34.0f) - 0.5f;
             float cellHash = fract(sin(dot(cellId, float3(12.9898f, 78.233f, 37.719f))) * 43758.5453f);
             float speckle = (cellHash > 0.84f) ? smoothstep(0.32f, 0.08f, length(cellUV)) : 0.0f;
-            albedo = mix(albedo, float3(0.82f, 1.0f, 0.24f), speckle * 0.85f);
+            albedo = mix(float3(0.20f, 0.94f, 0.28f), float3(0.82f, 1.0f, 0.24f), speckle * 0.85f);
 
-            // Dispersión Subsuperficial (SSS) y translucidez gomosa / slime transparente
+            // Dispersión Subsuperficial (SSS) y auto-iluminación bioluminiscente verde pura
             float viewCos = saturate(dot(-currentRay.direction, normal));
             float rimSSS = pow(1.0f - viewCos, 2.5f);
-            emission += albedo * float3(0.35f, 0.95f, 0.20f) * (0.15f + rimSSS * 0.75f) + float3(0.65f, 0.95f, 0.20f) * (speckle * 0.55f);
+            emission += float3(0.22f, 1.15f, 0.30f) * (0.35f + rimSSS * 0.85f) + float3(0.65f, 0.95f, 0.20f) * (speckle * 0.55f);
             // Reflectividad orgánica de gelatina/vidrio (baja reflectividad frontal F0 ~ 0.035, brillo sutil en silueta rasante)
-            baseReflectivity = mix(0.035f, 0.22f, pow(1.0f - viewCos, 3.5f));
+            baseReflectivity = mix(0.04f, 0.25f, pow(1.0f - viewCos, 3.5f));
             roughness = 0.06f;
         }
 
@@ -1585,7 +1585,10 @@ kernel void raytracePatio(
         float lightScale = clamp(totalLights / 0.8f, 0.0f, 1.0f);
 
         float emitterIntensity = 1.0f;
-        if (kind > 3.5f && kind < 4.5f) {
+        if (position.y < -4.0f) {
+            // 🌊 Reino Subacuático y Cavernas Abisales: Los cristales cuánticos, cofres dorados y runas SIEMPRE emiten al 100%
+            emitterIntensity = 1.0f;
+        } else if (kind > 3.5f && kind < 4.5f) {
             emitterIntensity = uniforms.lightStates.x;
         } else if (kind > 4.5f && kind < 5.5f) {
             // Si está en la piscina (-6 < x < 3, -5 < z < 2), responde al interruptor de borde de piscina; de lo contrario al neón sheerit
@@ -1618,6 +1621,10 @@ kernel void raytracePatio(
         float ambientBase = (0.085f * lightScale) * fotofagoDrain;
         float skyAmbient = ambientBase + ambientBase * saturate(normal.y);
         float3 direct = albedo * skyAmbient;
+        if (position.y < -4.0f) {
+            // 🌊 Radiación bioluminiscente submarina constante: luz turquesa-esmeralda para que todo el abismo sea mágico y visible
+            direct += albedo * float3(0.24f, 0.48f, 0.62f);
+        }
 
         if (uniforms.toolParameters.x > 0.5f && uniforms.toolParameters.x < 1.5f) {
             float3 fromTool = position - uniforms.toolOrigin.xyz;
@@ -1888,11 +1895,11 @@ kernel void raytracePatio(
                         underwaterNormal,
                         underwaterToLight / max(underwaterLightDistance, 1e-4f)
                     ));
-                    float underwaterLight = 0.16f + underwaterNDotL *
+                    float underwaterLight = 0.46f + underwaterNDotL *
                         uniforms.lightColor.w /
                         (1.0f + underwaterLightDistance * underwaterLightDistance * 0.28f);
                     float3 bottomColor = underwaterMaterial.albedoReflectivity.xyz *
-                        (underwaterLight + float3(0.10f, 0.07f, 0.025f));
+                        (underwaterLight + float3(0.12f, 0.10f, 0.04f));
 
                     float3 absorption;
                     float3 transTint;
@@ -1901,12 +1908,12 @@ kernel void raytracePatio(
                         absorption = exp(-float3(1.10f, 0.18f, 0.90f) * max(0.05f, transmissionHit.distance * 2.2f));
                         transTint = float3(0.14f, 0.82f, 0.24f);
                     } else {
-                        absorption = exp(-float3(0.20f, 0.075f, 0.045f) * transmissionHit.distance);
-                        transTint = puddleSurface ? float3(0.010f, 0.030f, 0.034f) : float3(0.008f, 0.055f, 0.065f);
+                        absorption = exp(-float3(0.10f, 0.038f, 0.022f) * transmissionHit.distance);
+                        transTint = puddleSurface ? float3(0.015f, 0.040f, 0.048f) : float3(0.025f, 0.12f, 0.18f);
                     }
                     float3 transmissionColor = bottomColor * absorption +
                         transTint * (1.0f - absorption);
-                    float transBlend = jellySurface ? 0.65f : (puddleSurface ? 0.42f : 0.62f);
+                    float transBlend = jellySurface ? 0.18f : (puddleSurface ? 0.42f : 0.62f);
                     direct = mix(direct, transmissionColor, transBlend);
                 }
             }
