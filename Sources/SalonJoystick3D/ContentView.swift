@@ -5250,7 +5250,7 @@ final class ChiptuneAudioEngine {
         audioQueue.async { [weak self] in
             guard let self else { return }
             self.musicEnabled = enabled
-            let vol: Float = self.isInUnderwaterZone ? 0.32 : (self.isInRainbowHallZone ? 0.28 : 0.22)
+            let vol: Float = self.isInUnderwaterZone ? 0.42 : (self.isInRainbowHallZone ? 0.35 : 0.28)
             self.musicNode.volume = enabled ? vol : 0
         }
     }
@@ -5278,11 +5278,11 @@ final class ChiptuneAudioEngine {
                 self.underwaterEQ.bands[0].bypass = true
             } else if isRainbowHall {
                 activeBuffer = self.rainbowMusicBuffer ?? self.musicBuffer
-                targetVol = self.musicEnabled ? 0.28 : 0
+                targetVol = self.musicEnabled ? 0.35 : 0
                 self.underwaterEQ.bands[0].bypass = true
             } else {
                 activeBuffer = self.musicBuffer
-                targetVol = self.musicEnabled ? 0.22 : 0
+                targetVol = self.musicEnabled ? 0.28 : 0
                 self.underwaterEQ.bands[0].bypass = true
             }
 
@@ -5396,7 +5396,7 @@ final class ChiptuneAudioEngine {
             try engine.start()
             started = true
 
-            musicNode.volume = musicEnabled ? 0.22 : 0
+            musicNode.volume = musicEnabled ? 0.28 : 0
             updateGlideVolume()
             updateWaterMovementVolume()
             splashNode.volume = waterEnabled ? 0.58 : 0
@@ -5440,7 +5440,7 @@ final class ChiptuneAudioEngine {
             guard self.started, self.waterEnabled, !self.isPaused, !self.splashBuffers.isEmpty else { return }
             let index = self.nextSplash % self.splashBuffers.count
             self.nextSplash += 1
-            self.splashNode.volume = 0.42 + max(0, min(1, intensity)) * 0.38
+            self.splashNode.volume = 0.26 + max(0, min(1, intensity)) * 0.14
             self.splashNode.rate = 1.0
             self.splashNode.scheduleBuffer(self.splashBuffers[index])
             if !self.splashNode.isPlaying {
@@ -5455,7 +5455,7 @@ final class ChiptuneAudioEngine {
             guard self.started, self.waterEnabled, !self.isPaused, !self.splashBuffers.isEmpty else { return }
             let index = self.nextSplash % self.splashBuffers.count
             self.nextSplash += 1
-            self.splashNode.volume = 0.35 + max(0, min(1, intensity)) * 0.40
+            self.splashNode.volume = 0.22 + max(0, min(1, intensity)) * 0.14
             self.splashNode.rate = 0.62 // Submerged low-frequency bubble resonance!
             self.splashNode.scheduleBuffer(self.splashBuffers[index])
             if !self.splashNode.isPlaying {
@@ -5468,7 +5468,7 @@ final class ChiptuneAudioEngine {
         audioQueue.async { [weak self] in
             guard let self, self.started, self.effectsEnabled, !self.isPaused else { return }
             if let laserPlayerHitBuffer = self.laserPlayerHitBuffer {
-                self.effectsNode.volume = 0.95
+                self.effectsNode.volume = 0.65
                 self.effectsNode.scheduleBuffer(laserPlayerHitBuffer)
                 if !self.effectsNode.isPlaying {
                     self.effectsNode.play()
@@ -5481,7 +5481,7 @@ final class ChiptuneAudioEngine {
         audioQueue.async { [weak self] in
             guard let self, self.started, self.effectsEnabled, !self.isPaused else { return }
             if let laserReflectionBuffer = self.laserReflectionBuffer {
-                self.effectsNode.volume = 0.85
+                self.effectsNode.volume = 0.60
                 self.effectsNode.scheduleBuffer(laserReflectionBuffer)
                 if !self.effectsNode.isPlaying {
                     self.effectsNode.play()
@@ -5495,7 +5495,7 @@ final class ChiptuneAudioEngine {
             guard let self, self.started, self.effectsEnabled else { return }
             if let robloxOofBuffer = self.robloxOofBuffer {
                 self.effectsNode.stop()
-                self.effectsNode.volume = 1.0
+                self.effectsNode.volume = 0.72
                 self.effectsNode.scheduleBuffer(robloxOofBuffer)
                 self.effectsNode.play()
             }
@@ -5507,7 +5507,7 @@ final class ChiptuneAudioEngine {
             guard let self, self.started, self.effectsEnabled else { return }
             if let buffer = self.lightsaberDefeatBuffer {
                 self.effectsNode.stop()
-                self.effectsNode.volume = 1.0
+                self.effectsNode.volume = 0.78
                 self.effectsNode.scheduleBuffer(buffer)
                 self.effectsNode.play()
             }
@@ -5517,7 +5517,7 @@ final class ChiptuneAudioEngine {
     func playRecoveryChamberEnterSound() {
         audioQueue.async { [weak self] in
             guard let self, self.started, self.effectsEnabled, !self.isPaused, let buffer = self.recoveryChamberEnterBuffer else { return }
-            self.effectsNode.volume = 0.95
+            self.effectsNode.volume = 0.52
             self.effectsNode.scheduleBuffer(buffer)
             if !self.effectsNode.isPlaying {
                 self.effectsNode.play()
@@ -5528,7 +5528,7 @@ final class ChiptuneAudioEngine {
     func playRecoveryCompleteSound() {
         audioQueue.async { [weak self] in
             guard let self, self.started, self.effectsEnabled, !self.isPaused, let buffer = self.recoveryCompleteBuffer else { return }
-            self.effectsNode.volume = 1.0
+            self.effectsNode.volume = 0.65
             self.effectsNode.scheduleBuffer(buffer)
             if !self.effectsNode.isPlaying {
                 self.effectsNode.play()
@@ -5539,7 +5539,7 @@ final class ChiptuneAudioEngine {
     func playTeammateRevivePulseSound() {
         audioQueue.async { [weak self] in
             guard let self, self.started, self.effectsEnabled, !self.isPaused, let buffer = self.teammateRevivePulseBuffer else { return }
-            self.effectsNode.volume = 1.0
+            self.effectsNode.volume = 0.60
             self.effectsNode.scheduleBuffer(buffer)
             if !self.effectsNode.isPlaying {
                 self.effectsNode.play()
@@ -5551,7 +5551,7 @@ final class ChiptuneAudioEngine {
         audioQueue.async { [weak self] in
             guard let self, self.started, self.effectsEnabled, let buffer = self.slimeDeflateBuffer else { return }
             self.effectsNode.stop()
-            self.effectsNode.volume = 1.0
+            self.effectsNode.volume = 0.52
             self.effectsNode.scheduleBuffer(buffer)
             self.effectsNode.play()
         }
@@ -5560,7 +5560,7 @@ final class ChiptuneAudioEngine {
     func playAirPumpStrokeSound() {
         audioQueue.async { [weak self] in
             guard let self, self.started, self.effectsEnabled, !self.isPaused, let buffer = self.airPumpStrokeBuffer else { return }
-            self.effectsNode.volume = 1.0
+            self.effectsNode.volume = 0.48
             self.effectsNode.scheduleBuffer(buffer)
             if !self.effectsNode.isPlaying {
                 self.effectsNode.play()
@@ -5571,7 +5571,7 @@ final class ChiptuneAudioEngine {
     func playBalloonBouncePopSound() {
         audioQueue.async { [weak self] in
             guard let self, self.started, self.effectsEnabled, !self.isPaused, let buffer = self.balloonBouncePopBuffer else { return }
-            self.effectsNode.volume = 1.0
+            self.effectsNode.volume = 0.58
             self.effectsNode.scheduleBuffer(buffer)
             if !self.effectsNode.isPlaying {
                 self.effectsNode.play()
@@ -5598,7 +5598,7 @@ final class ChiptuneAudioEngine {
     private func playSlowMoActivationSound() {
         guard started, effectsEnabled, let buffer = slowMoActivationBuffer else { return }
         slowMoFXNode.stop()
-        slowMoFXNode.volume = 1.0
+        slowMoFXNode.volume = 0.78
         slowMoFXNode.scheduleBuffer(buffer, at: nil)
         slowMoFXNode.play()
     }
@@ -5606,7 +5606,7 @@ final class ChiptuneAudioEngine {
     private func playSlowMoDeactivationSound() {
         guard started, effectsEnabled, let buffer = slowMoDeactivationBuffer else { return }
         slowMoFXNode.stop()
-        slowMoFXNode.volume = 0.85
+        slowMoFXNode.volume = 0.68
         slowMoFXNode.scheduleBuffer(buffer, at: nil)
         slowMoFXNode.play()
     }
@@ -5616,7 +5616,7 @@ final class ChiptuneAudioEngine {
             guard let self, self.started, self.effectsEnabled, !self.isPaused else { return }
             if let buffer = self.subterraneanPortalBuffer {
                 self.slowMoFXNode.stop()
-                self.slowMoFXNode.volume = 0.95
+                self.slowMoFXNode.volume = 0.75
                 self.slowMoFXNode.scheduleBuffer(buffer, at: nil)
                 self.slowMoFXNode.play()
             }
@@ -5642,7 +5642,8 @@ final class ChiptuneAudioEngine {
             guard self.started, self.effectsEnabled, !self.isPaused, !self.landingBuffers.isEmpty else { return }
             let index = self.nextLanding % self.landingBuffers.count
             self.nextLanding += 1
-            self.landingNode.volume = 0.62 + max(0, min(1, intensity)) * 0.34
+            // Foley de impacto de aterrizaje balanceado (-10 dB de BGM)
+            self.landingNode.volume = 0.22 + max(0, min(1, intensity)) * 0.12
             self.landingNode.scheduleBuffer(self.landingBuffers[index])
             if !self.landingNode.isPlaying {
                 self.landingNode.play()
@@ -5655,7 +5656,7 @@ final class ChiptuneAudioEngine {
             guard let self else { return }
             guard self.started, self.effectsEnabled, !self.isPaused else { return }
             if let laserIgnitionBuffer = self.laserIgnitionBuffer {
-                self.effectsNode.volume = 0.88
+                self.effectsNode.volume = 0.55
                 self.effectsNode.scheduleBuffer(laserIgnitionBuffer)
                 if !self.effectsNode.isPlaying {
                     self.effectsNode.play()
@@ -5681,7 +5682,11 @@ final class ChiptuneAudioEngine {
             let phase = 2.0 * Double.pi * baseFreq * time
             let envelope = sin(progress * Double.pi) * exp(-progress * 2.2)
             let synth = sin(phase) * 0.55 + (sin(phase * 2.0) * 0.28)
-            channels[0][frame] = Float(synth * envelope * 0.70)
+            let sample = Float(synth * envelope * 0.70)
+            channels[0][frame] = sample
+            if format.channelCount > 1 {
+                channels[1][frame] = sample * 0.95
+            }
         }
         return buffer
     }
@@ -5702,7 +5707,11 @@ final class ChiptuneAudioEngine {
             let phase = 2.0 * Double.pi * freq * t
             let envelope = sin(progress * Double.pi) * exp(-progress * 2.5)
             let synth = (sin(phase) + 0.45 * sin(phase * 1.5) + 0.25 * sin(phase * 3.0)) * envelope
-            channels[0][frame] = Float(synth * 0.80)
+            let sample = Float(synth * 0.80)
+            channels[0][frame] = sample
+            if format.channelCount > 1 {
+                channels[1][frame] = sample * 0.94
+            }
         }
         return buffer
     }
@@ -5810,7 +5819,11 @@ final class ChiptuneAudioEngine {
             let phase = 2.0 * Double.pi * freq * t
             let envelope = sin(progress * Double.pi) * exp(-progress * 1.8)
             let wave = (sin(phase) + 0.35 * sin(phase * 2.0) + 0.15 * sin(phase * 3.0)) * envelope
-            channels[0][frame] = Float(wave * 0.85)
+            let sample = Float(wave * 0.85)
+            channels[0][frame] = sample
+            if format.channelCount > 1 {
+                channels[1][frame] = sample * 0.94
+            }
         }
         return buffer
     }
@@ -5848,7 +5861,11 @@ final class ChiptuneAudioEngine {
 
             // Saturación suave para el grosor de sable
             let combined = tanh((wave + sparkNoise) * 1.5) * envelope
-            channels[0][frame] = Float(combined * 0.90)
+            let val = Float(combined * 0.90)
+            channels[0][frame] = val
+            if format.channelCount > 1 {
+                channels[1][frame] = val * 0.96
+            }
         }
         return buffer
     }
