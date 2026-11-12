@@ -15,8 +15,11 @@
     <header class="studio-header">
       <div class="brand">
         <span class="pulse-dot"></span>
-        <span class="brand-title">LUMINA // VOICE STUDIO</span>
-        <span class="badge-quantum">ESTUDIO DE NARRACIÓN</span>
+        <span class="brand-title">LUMINA // AUDIO STUDIO</span>
+        <div class="mode-switcher">
+          <button id="navVoiceBtn" class="mode-btn active">🎙️ Estudio de Voz</button>
+          <button id="navSynthBtn" class="mode-btn">🎛️ Sintetizador & Mezclador</button>
+        </div>
       </div>
 
       <div class="header-actions">
@@ -33,89 +36,254 @@
 
     <!-- Main Workspace -->
     <main class="workspace">
-      <!-- Chapter Selector Tabs -->
-      <nav class="chapter-tabs" id="chapterTabs"></nav>
+      <!-- VOICE STUDIO SECTION -->
+      <div id="voiceStudioSection">
+        <!-- Chapter Selector Tabs -->
+        <nav class="chapter-tabs" id="chapterTabs"></nav>
 
-      <!-- Center Stage: Comic Visualizer + Karaoke Prompter -->
-      <div class="stage-grid">
-        <!-- Visual Comic Panel Frame -->
-        <div class="panel-card">
-          <div class="panel-header">
-            <span class="panel-badge" id="panelBadge">ORIGEN ANCESTRAL</span>
-            <span class="panel-part" id="panelPart">PARTE 1 / 5</span>
+        <!-- Center Stage: Comic Visualizer + Karaoke Prompter -->
+        <div class="stage-grid">
+          <!-- Visual Comic Panel Frame -->
+          <div class="panel-card">
+            <div class="panel-header">
+              <span class="panel-badge" id="panelBadge">ORIGEN ANCESTRAL</span>
+              <span class="panel-part" id="panelPart">PARTE 1 / 5</span>
+            </div>
+            <div class="panel-image-wrap">
+              <img id="panelImage" src="/assets/panel/0" alt="Viñeta del cómic">
+              <div class="panel-overlay"></div>
+              <!-- Audio Spectrum Overlay -->
+              <canvas id="visualizerCanvas" width="600" height="80"></canvas>
+            </div>
           </div>
-          <div class="panel-image-wrap">
-            <img id="panelImage" src="/assets/panel/0" alt="Viñeta del cómic">
-            <div class="panel-overlay"></div>
-            <!-- Audio Spectrum Overlay -->
-            <canvas id="visualizerCanvas" width="600" height="80"></canvas>
+
+          <!-- Teleprompter & Recording Controls -->
+          <div class="prompter-card">
+            <div class="prompter-top">
+              <h2 id="chapterTitle" class="chapter-title">Capítulo I • El Reino de Lumina</h2>
+              <p id="chapterSubtitle" class="chapter-subtitle">La armonía de los Slimes y el secreto cuántico de la luz</p>
+            </div>
+
+            <!-- The Karaoke Reader Text Container -->
+            <div class="karaoke-box">
+              <div class="karaoke-pacer" id="karaokePacer"></div>
+              <div class="karaoke-text" id="karaokeText">
+                <!-- Words injected dynamically for glowing karaoke highlight -->
+              </div>
+            </div>
+
+            <!-- Controls Bar -->
+            <div class="controls-area">
+              <!-- Filter Selector -->
+              <div class="filter-row">
+                <span class="filter-label">Filtro de Voz:</span>
+                <label class="radio-label">
+                  <input type="radio" name="voiceFilter" value="cinematic" checked>
+                  <span>🎬 Narrador de Cine (Cálido + Profundo)</span>
+                </label>
+                <label class="radio-label">
+                  <input type="radio" name="voiceFilter" value="hologram">
+                  <span>📻 Comunicador Cuántico Holográfico</span>
+                </label>
+                <label class="radio-label">
+                  <input type="radio" name="voiceFilter" value="clean">
+                  <span>🎙️ Limpio Original</span>
+                </label>
+              </div>
+
+              <!-- Karaoke Speed Control -->
+              <div class="speed-row">
+                <span class="filter-label">Velocidad Karaoke:</span>
+                <input type="range" id="pacerSpeed" min="0.7" max="1.5" step="0.05" value="1.0">
+                <span id="speedVal" class="speed-val">1.0x</span>
+              </div>
+
+              <!-- Action Buttons -->
+              <div class="action-buttons">
+                <button id="recordBtn" class="action-btn btn-record">
+                  <span class="btn-dot"></span>
+                  <span id="recordBtnText">INICIAR GRABACIÓN (Espacio)</span>
+                </button>
+
+                <button id="playTakeBtn" class="action-btn btn-play" disabled>
+                  <span>▶️ Escuchar mi Toma</span>
+                </button>
+
+                <button id="saveBtn" class="action-btn btn-save" disabled>
+                  <span>✨ Guardar en el Juego</span>
+                </button>
+              </div>
+
+              <!-- Native Audio Player for Instant Preview -->
+              <audio id="takePlayer" controls style="width: 100%; border-radius: 12px; display: none; margin-top: 6px;"></audio>
+
+              <div id="statusNotice" class="status-notice">
+                Presiona <b>Iniciar Grabación</b> y lee el texto con el ritmo del teleprompter.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AUDIO SYNTH & MIXER SECTION -->
+      <div id="synthStudioSection" style="display: none;">
+        <!-- Header banner & scene simulator -->
+        <div class="synth-master-card">
+          <div class="master-header">
+            <div>
+              <h2 class="master-title">🎛️ Laboratorio de Audio y Sintetizador de Juego</h2>
+              <p class="master-desc">Ajusta el balance entre la Música Acuática, las Brazadas de Nado y el Ambiente para una inmersión perfecta sin fatiga auditiva.</p>
+            </div>
+            <button id="masterSimBtn" class="master-sim-btn">
+              <span class="sim-icon">🌊</span>
+              <span id="masterSimText">PROBAR MEZCLA EN VIVO (Música + Nado + Ambiente)</span>
+            </button>
+          </div>
+
+          <!-- Dynamic Mix Balance Meter according to Game Audio Standards -->
+          <div class="balance-meter-bar">
+            <div class="meter-info">
+              <span class="meter-label">JERARQUÍA DE MEZCLA (EBU R128 / GANG):</span>
+              <span id="balanceBadge" class="balance-badge badge-optimal">✅ BALANCE ÓPTIMO (Foley -10 dB de la Música)</span>
+            </div>
+            <div class="meter-track">
+              <div id="meterBGM" class="meter-fill bgm-fill" style="width: 42%;"></div>
+              <div id="meterSFX" class="meter-fill sfx-fill" style="width: 22%;"></div>
+            </div>
+            <div class="meter-legend">
+              <span>Música: <b id="bgmDbLabel">42% (-18 dBFS)</b></span>
+              <span>Brazada de Nado: <b id="sfxDbLabel">22% (-28 dBFS)</b></span>
+              <span id="deltaDbLabel" style="color: var(--cyan-glow); font-weight: bold;">Diferencia: -10 dB [Ideal]</span>
+            </div>
           </div>
         </div>
 
-        <!-- Teleprompter & Recording Controls -->
-        <div class="prompter-card">
-          <div class="prompter-top">
-            <h2 id="chapterTitle" class="chapter-title">Capítulo I • El Reino de Lumina</h2>
-            <p id="chapterSubtitle" class="chapter-subtitle">La armonía de los Slimes y el secreto cuántico de la luz</p>
-          </div>
-
-          <!-- The Karaoke Reader Text Container -->
-          <div class="karaoke-box">
-            <div class="karaoke-pacer" id="karaokePacer"></div>
-            <div class="karaoke-text" id="karaokeText">
-              <!-- Words injected dynamically for glowing karaoke highlight -->
-            </div>
-          </div>
-
-          <!-- Controls Bar -->
-          <div class="controls-area">
-            <!-- Filter Selector -->
-            <div class="filter-row">
-              <span class="filter-label">Filtro de Voz:</span>
-              <label class="radio-label">
-                <input type="radio" name="voiceFilter" value="cinematic" checked>
-                <span>🎬 Narrador de Cine (Cálido + Profundo)</span>
-              </label>
-              <label class="radio-label">
-                <input type="radio" name="voiceFilter" value="hologram">
-                <span>📻 Comunicador Cuántico Holográfico</span>
-              </label>
-              <label class="radio-label">
-                <input type="radio" name="voiceFilter" value="clean">
-                <span>🎙️ Limpio Original</span>
-              </label>
+        <!-- 3 Channel Strips Grid -->
+        <div class="channel-strips-grid">
+          <!-- Channel 1: BGM Underwater Symphony -->
+          <div class="strip-card">
+            <div class="strip-badge badge-bgm">CANAL 1 // BGM</div>
+            <h3 class="strip-title">🌊 Música Subacuática</h3>
+            <p class="strip-sub">Sinfonía abisal de 24s inspirada en Donkey Kong Country & Mario 64</p>
+            
+            <div class="fader-box">
+              <div class="fader-header">
+                <span>Volumen Música:</span>
+                <span id="volBgmVal" class="fader-val">42%</span>
+              </div>
+              <input type="range" id="volBgmSlider" min="0" max="100" value="42" class="strip-slider">
             </div>
 
-            <!-- Karaoke Speed Control -->
-            <div class="speed-row">
-              <span class="filter-label">Velocidad Karaoke:</span>
-              <input type="range" id="pacerSpeed" min="0.7" max="1.5" step="0.05" value="1.0">
-              <span id="speedVal" class="speed-val">1.0x</span>
+            <!-- Layer Toggles -->
+            <div class="layer-toggles">
+              <label class="layer-toggle-btn active" id="layerRhodesLabel">
+                <input type="checkbox" id="toggleRhodes" checked>
+                <span>🎹 Rhodes Acuático</span>
+              </label>
+              <label class="layer-toggle-btn active" id="layerPadLabel">
+                <input type="checkbox" id="togglePad" checked>
+                <span>🎻 Cuerdas & Pad</span>
+              </label>
+              <label class="layer-toggle-btn active" id="layerHarpLabel">
+                <input type="checkbox" id="toggleHarp" checked>
+                <span>💧 Arpa Marina</span>
+              </label>
+              <label class="layer-toggle-btn active" id="layerBassLabel">
+                <input type="checkbox" id="toggleBass" checked>
+                <span>🐋 Sub-Bajo Abisal</span>
+              </label>
             </div>
 
-            <!-- Action Buttons -->
-            <div class="action-buttons">
-              <button id="recordBtn" class="action-btn btn-record">
-                <span class="btn-dot"></span>
-                <span id="recordBtnText">INICIAR GRABACIÓN (Espacio)</span>
-              </button>
-
-              <button id="playTakeBtn" class="action-btn btn-play" disabled>
-                <span>▶️ Escuchar mi Toma</span>
-              </button>
-
-              <button id="saveBtn" class="action-btn btn-save" disabled>
-                <span>✨ Guardar en el Juego</span>
+            <div class="strip-actions">
+              <button id="playBgmBtn" class="strip-btn btn-play-strip">
+                <span>▶️ Reproducir Música</span>
               </button>
             </div>
+          </div>
 
-            <!-- Native Audio Player for Instant Preview -->
-            <audio id="takePlayer" controls style="width: 100%; border-radius: 12px; display: none; margin-top: 6px;"></audio>
+          <!-- Channel 2: Swim Stroke Foley SFX -->
+          <div class="strip-card">
+            <div class="strip-badge badge-sfx">CANAL 2 // FOLEY</div>
+            <h3 class="strip-title">🏊 Brazada de Natación</h3>
+            <p class="strip-sub">Impulso de agua repetitivo. Debe acompañar suavemente sin tapar la música.</p>
 
-            <div id="statusNotice" class="status-notice">
-              Presiona <b>Iniciar Grabación</b> y lee el texto con el ritmo del teleprompter.
+            <div class="fader-box">
+              <div class="fader-header">
+                <span>Volumen Brazada:</span>
+                <span id="volSwimVal" class="fader-val">22%</span>
+              </div>
+              <input type="range" id="volSwimSlider" min="5" max="100" value="22" class="strip-slider">
+            </div>
+
+            <div class="fader-box">
+              <div class="fader-header">
+                <span>Filtro de Desplazamiento:</span>
+                <span id="swimToneVal" class="fader-val">Suave Sedoso (180 Hz)</span>
+              </div>
+              <input type="range" id="swimToneSlider" min="100" max="320" value="180" class="strip-slider">
+            </div>
+
+            <div class="strip-actions">
+              <button id="triggerSwimBtn" class="strip-btn btn-trigger-strip">
+                <span>🏊 Lanzar Brazada (Espacio)</span>
+              </button>
+              <button id="autoSwimBtn" class="strip-btn btn-secondary-strip">
+                <span id="autoSwimText">🔁 Auto-Nado: OFF</span>
+              </button>
             </div>
           </div>
+
+          <!-- Channel 3: Ambient Water Drone -->
+          <div class="strip-card">
+            <div class="strip-badge badge-amb">CANAL 3 // AMBIENTE</div>
+            <h3 class="strip-title">🫧 Ambiente de Agua</h3>
+            <p class="strip-sub">Oleaje líquido y micro-burbujas continuas sin acordes disonantes.</p>
+
+            <div class="fader-box">
+              <div class="fader-header">
+                <span>Volumen Ambiente:</span>
+                <span id="volAmbVal" class="fader-val">18%</span>
+              </div>
+              <input type="range" id="volAmbSlider" min="0" max="100" value="18" class="strip-slider">
+            </div>
+
+            <div class="strip-actions">
+              <button id="playAmbBtn" class="strip-btn btn-play-strip">
+                <span>🫧 Reproducir Ambiente</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Industry Audio Manual & Best Practices -->
+        <div class="audio-manual-card">
+          <div class="manual-header">
+            <span class="manual-icon">📖</span>
+            <h3 class="manual-title">Manual de Audio para Videojuegos: ¿Cómo balancear música y efectos?</h3>
+          </div>
+          <div class="manual-grid">
+            <div class="manual-item">
+              <h4>1. La Regla de Oro del Foley (-8 a -14 dB)</h4>
+              <p>Los sonidos que se repiten con cada pulsación del jugador (brazadas al nadar o pasos) deben estar <b>al menos 8 a 12 dB por debajo de la música</b>. Si compiten al mismo nivel, el cerebro experimenta fatiga auditiva inmediata.</p>
+            </div>
+            <div class="manual-item">
+              <h4>2. Separación de Frecuencias (Ecualización)</h4>
+              <p>El sub-bajo de la música ocupa los 30 a 80 Hz. Las brazadas deben recortar los graves pesados y concentrarse en el desplazamiento de agua sedoso (180 Hz a 1.2 kHz) para no ensuciar la armonía.</p>
+            </div>
+            <div class="manual-item">
+              <h4>3. Por qué antes se sentía incómodo</h4>
+              <p>Antes la brazada estaba a <b>0.88 de volumen</b> mientras la música estaba a <b>0.40</b> (+15 dB por encima de la música). Con el nuevo ajuste balanceado (Música 42% y Brazada 22%), la música lidera la atmósfera y la brazada añade satisfacción táctil.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action bar -->
+        <div class="synth-bottom-bar">
+          <button id="applyMixBtn" class="glass-btn btn-accent btn-large">
+            <span class="btn-icon">🚀</span>
+            <span class="btn-text">Aplicar Ajustes en Xcode y Compilar en iPhone</span>
+          </button>
+          <span id="synthNotice" class="synth-notice">Escucha la mezcla en vivo arriba y calibra los faders a tu gusto en tiempo real.</span>
         </div>
       </div>
     </main>

@@ -133,6 +133,19 @@ class StudioHandler(http.server.SimpleHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
 
+        if path == "/api/synth/get-levels":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                "volBgm": 42,
+                "volSwim": 22,
+                "volAmb": 18,
+                "swimTone": 180
+            }).encode("utf-8"))
+            return
+
         if path == "/api/chapters":
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -261,6 +274,60 @@ class StudioHandler(http.server.SimpleHTTPRequestHandler):
 
             except Exception as e:
                 print(f"Error handling upload: {e}")
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode("utf-8"))
+                return
+
+        if path == "/api/synth/apply-levels":
+            try:
+                content_length = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(content_length)
+                data = json.loads(body.decode("utf-8"))
+
+                vol_bgm = float(data.get("volBgm", 42)) / 100.0
+                vol_swim = float(data.get("volSwim", 22)) / 100.0
+                vol_amb = float(data.get("volAmb", 18)) / 100.0
+                swim_tone = float(data.get("swimTone", 180))
+
+                # Update ContentView.swift
+                cv_path = os.path.join(PROJECT_DIR, "Sources", "SalonJoystick3D", "ContentView.swift")
+                with open(cv_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+
+                # Replace targetVol for underwater
+                import re
+                content = re.sub(
+                    r'if isUnderwater \{\s*activeBuffer = self\.underwaterMusicBuffer \?\? self\.musicBuffer\s*targetVol = self\.musicEnabled \? \d+\.\d+ : 0',
+                    f'if isUnderwater {{\n                activeBuffer = self.underwaterMusicBuffer ?? self.musicBuffer\n                targetVol = self.musicEnabled ? {vol_bgm:.2f} : 0',
+                    content
+                )
+
+                # Replace splashNode.volume for swim stroke
+                content = re.sub(
+                    r'self\.splashNode\.volume = \d+\.\d+ \+ max\(0, min\(1, intensity\)\) \* \d+\.\d+',
+                    f'self.splashNode.volume = {vol_swim:.2f} + max(0, min(1, intensity)) * 0.10',
+                    content
+                )
+
+                with open(cv_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+
+                # Compile and install
+                cmd = f"cd '{PROJECT_DIR}' && xcodebuild -scheme SalonJoystick3D -destination 'id=00008130-00040D8C3489001C' build && xcrun devicectl device install app --device 00008130-00040D8C3489001C /Users/estebanavila/Library/Developer/Xcode/DerivedData/SalonJoystick3D-afpqtvjivuqgwmapvnkigdvmgdya/Build/Products/Debug-iphoneos/SalonJoystick3D.app"
+                p = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "success": p.returncode == 0,
+                    "message": f"Niveles guardados (Música: {int(vol_bgm*100)}%, Nado: {int(vol_swim*100)}%) e instalados en iPhone.",
+                    "output": p.stdout[-600:] if p.returncode == 0 else p.stderr[-600:]
+                }).encode("utf-8"))
+                return
+            except Exception as e:
                 self.send_response(500)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()

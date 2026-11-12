@@ -5272,13 +5272,18 @@ final class ChiptuneAudioEngine {
 
             if isUnderwater {
                 activeBuffer = self.underwaterMusicBuffer ?? self.musicBuffer
-                targetVol = self.musicEnabled ? 0.40 : 0
+                targetVol = self.musicEnabled ? 0.42 : 0
+                // La música subacuática ya tiene arreglo y ecualización abisal de alta definición;
+                // bypass en el low-pass para evitar resonancias o amortiguación innecesaria.
+                self.underwaterEQ.bands[0].bypass = true
             } else if isRainbowHall {
                 activeBuffer = self.rainbowMusicBuffer ?? self.musicBuffer
                 targetVol = self.musicEnabled ? 0.28 : 0
+                self.underwaterEQ.bands[0].bypass = true
             } else {
                 activeBuffer = self.musicBuffer
                 targetVol = self.musicEnabled ? 0.22 : 0
+                self.underwaterEQ.bands[0].bypass = true
             }
 
             if let activeBuffer {
@@ -5623,7 +5628,8 @@ final class ChiptuneAudioEngine {
             guard let self, self.started, self.waterEnabled, !self.isPaused else { return }
             if let buffer = self.swimStrokeBuffer {
                 self.splashNode.stop()
-                self.splashNode.volume = 0.42 + max(0, min(1, intensity)) * 0.46
+                // Estándar de audio para videojuegos: Foley de movimiento a -10 dB de la música (0.18 - 0.28)
+                self.splashNode.volume = 0.18 + max(0, min(1, intensity)) * 0.10
                 self.splashNode.scheduleBuffer(buffer, at: nil)
                 self.splashNode.play()
             }
@@ -6000,9 +6006,9 @@ final class ChiptuneAudioEngine {
         return buffer
     }
 
-    // 🏊‍♂️ Brazada Acuática Mario 64: Impulso alegre con burbuja profunda ("BLU-OOSH!")
+    // 🏊‍♂️ Brazada Acuática Mario 64: Impulso fluido, suave y gratificante (Foley balanceado a -10 dB de la música)
     private func makeSwimStrokeBuffer() -> AVAudioPCMBuffer? {
-        let duration = 0.42
+        let duration = 0.36
         let frameCount = AVAudioFrameCount(format.sampleRate * duration)
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
               let channels = buffer.floatChannelData else {
@@ -6014,18 +6020,20 @@ final class ChiptuneAudioEngine {
         for frame in 0..<Int(frameCount) {
             let t = Double(frame) / format.sampleRate
             let progress = t / duration
-            let env = sin(progress * .pi) * exp(-progress * 1.6)
+            let env = sin(progress * .pi) * exp(-progress * 2.2)
             let raw = Double.random(in: -1.0...1.0)
-            lowPass = lowPass * 0.85 + raw * 0.15
+            lowPass = lowPass * 0.82 + raw * 0.18
 
-            // Subida de frecuencia tipo Mario ("scoop" ascendente de 135Hz a 280Hz)
-            let sweepFreq = 135.0 + 145.0 * sin(progress * .pi * 0.85)
-            let body = sin(2.0 * .pi * sweepFreq * t) * 0.62
-            let bubble = sin(2.0 * .pi * (380.0 + 120.0 * sin(t * 38.0)) * t) * exp(-t * 6.5) * 0.22
-            let sample = Float(tanh((lowPass * 1.15 + body + bubble) * env * 1.35) * 0.90)
+            // Desplazamiento de agua suave (barrido de 120Hz a 240Hz sin graves saturados)
+            let sweepFreq = 120.0 + 120.0 * sin(progress * .pi * 0.80)
+            let body = sin(2.0 * .pi * sweepFreq * t) * 0.38
+            let bubble = sin(2.0 * .pi * (340.0 + 90.0 * sin(t * 32.0)) * t) * exp(-t * 8.0) * 0.14
+            let sample = Float(tanh((lowPass * 0.45 + body + bubble) * env) * 0.48)
 
             channels[0][frame] = sample
-            channels[1][frame] = sample * 0.95
+            if format.channelCount > 1 {
+                channels[1][frame] = sample * 0.92
+            }
         }
         return buffer
     }
@@ -6352,16 +6360,16 @@ final class ChiptuneAudioEngine {
             let section = min(3, Int(time / 6.0))
             let chord = chords[section]
 
-            // 1. Acordes etéreos flotantes (Lush Stereo Chorus Pad con swell oceánico):
+            // 1. Acordes etéreos flotantes (Lush Stereo Chorus Pad con swell oceánico y fase estable sin distorsión):
             var padL = 0.0
             var padR = 0.0
             let oceanSwell = 0.75 + 0.25 * sin(2 * Double.pi * 0.12 * time)
             for (idx, noteFreq) in chord.enumerated() {
                 let pPhase = 2 * Double.pi * noteFreq * time
-                let detune = 1.0 + Double(idx) * 0.0016
-                let vib = sin(2 * Double.pi * 3.2 * time) * 0.002
-                let wave1 = sin(pPhase * (1.0 + vib))
-                let wave2 = sin(pPhase * detune * (1.0 - vib) + 0.40) * 0.45
+                let vibPhase = sin(2 * Double.pi * 3.2 * time + Double(idx)) * 0.24
+                let detunePhase = 2 * Double.pi * (noteFreq * (1.0 + Double(idx) * 0.0012)) * time
+                let wave1 = sin(pPhase + vibPhase)
+                let wave2 = sin(detunePhase - vibPhase + 0.5) * 0.45
                 let voiceAmp = 0.022 / Double(idx + 1) * 1.8
                 padL += (wave1 + wave2) * voiceAmp
                 padR += (wave2 + wave1) * voiceAmp
@@ -6369,7 +6377,7 @@ final class ChiptuneAudioEngine {
             padL *= oceanSwell
             padR *= oceanSwell
 
-            // 2. Melodía Rhodes / Vibraphone cristalina con dinámica humana y vibrato cálido:
+            // 2. Melodía Rhodes cristalina (fase independiente de time para evitar modulación explosiva o distorsión):
             let stepDuration = 1.50
             let noteIdx = min(melodyNotes.count - 1, Int(time / stepDuration))
             let noteTime = time.truncatingRemainder(dividingBy: stepDuration)
@@ -6377,11 +6385,11 @@ final class ChiptuneAudioEngine {
             let mDecay = exp(-noteTime * 1.8)
             let mEnv = mAttack * mDecay
             let mFreq = melodyNotes[noteIdx]
-            let mVibrato = 1.0 + (noteTime > 0.4 ? sin(2 * Double.pi * 4.5 * (noteTime - 0.4)) * 0.004 : 0.0)
-            let mPhase = 2 * Double.pi * (mFreq * mVibrato) * time
-            // Timbre de piano eléctrico acuático (fundamental puro + 2do armónico brillante suave):
-            let rhodesL = (sin(mPhase) + sin(mPhase * 2.0) * 0.22 + sin(mPhase * 3.0) * 0.06) * mEnv * 0.048
-            let rhodesR = (sin(mPhase * 1.0015 + 0.2) + sin(mPhase * 2.0) * 0.22 + sin(mPhase * 3.0) * 0.06) * mEnv * 0.048
+            let vibOffset = (noteTime > 0.35 ? sin(2 * Double.pi * 4.5 * (noteTime - 0.35)) * 0.22 : 0.0)
+            let mPhase = 2 * Double.pi * mFreq * time + vibOffset
+            // Timbre de piano eléctrico acuático (fundamental puro + armónicos sutiles cálidos):
+            let rhodesL = (sin(mPhase) + sin(mPhase * 2.0) * 0.18 + sin(mPhase * 3.0) * 0.04) * mEnv * 0.052
+            let rhodesR = (sin(mPhase + 0.15) + sin((mPhase + 0.15) * 2.0) * 0.18 + sin((mPhase + 0.15) * 3.0) * 0.04) * mEnv * 0.052
 
             // 3. Arpegio de arpa líquida cristalina (ripples que caen y suben cada 0.25s):
             let arpStep = 0.25
@@ -6397,16 +6405,16 @@ final class ChiptuneAudioEngine {
 
             // 4. Bajo oceánico profundo abisal (32 - 58 Hz con calidez táctil):
             let bassFreq = subBassFrequencies[section]
-            let subBass = (sin(2 * Double.pi * bassFreq * time) * 0.042 + sin(2 * Double.pi * bassFreq * 2.0 * time) * 0.016) * oceanSwell
+            let subBass = (sin(2 * Double.pi * bassFreq * time) * 0.038 + sin(2 * Double.pi * bassFreq * 2.0 * time) * 0.012) * oceanSwell
 
-            // 5. Mezcla estéreo inmersiva con limitador suave:
-            let mixL = padL * 0.85 + rhodesL * 1.1 + harpL * 0.9 + subBass
-            let mixR = padR * 0.85 + rhodesR * 1.1 + harpR * 0.9 + subBass
+            // 5. Mezcla estéreo inmersiva con limitador suave y margen dinámico (headroom):
+            let mixL = padL * 0.78 + rhodesL * 1.15 + harpL * 0.85 + subBass
+            let mixR = padR * 0.78 + rhodesR * 1.15 + harpR * 0.85 + subBass
 
             // 6. Crossfade transparente en bordes del loop para ciclo infinito continuo:
-            let loopFade = min(1.0, min(time, duration - time) / 0.15)
-            let finalL = Float(tanh(mixL * 1.2) * loopFade * 0.95)
-            let finalR = Float(tanh(mixR * 1.2) * loopFade * 0.95)
+            let loopFade = min(1.0, min(time, duration - time) / 0.18)
+            let finalL = Float(tanh(mixL * 1.05) * loopFade * 0.88)
+            let finalR = Float(tanh(mixR * 1.05) * loopFade * 0.88)
 
             channels[0][frame] = finalL
             if format.channelCount > 1 {
@@ -6416,9 +6424,9 @@ final class ChiptuneAudioEngine {
         return buffer
     }
 
-    // 🌊 Sonido Acuático Estilo Super Mario 64 (Dire Dire Docks / Jolly Roger Bay):
-    // Resonancia armónica subacuática en quintas puras, burbujas procedurales saltarinas ("glug-blup")
-    // y ondulación suave de fluido que hace emocionante y reconfortante nadar
+    // 🌊 Sonido Acuático Fluido:
+    // Textura envolvente de agua líquida y burbujas procedurales orgánicas sin acordes tonales fijos
+    // para armonizar a la perfección con la banda sonora sin provocar disonancias.
     private func makeWaterBuffer() -> AVAudioPCMBuffer? {
         let duration = 10.0
         let frameCount = AVAudioFrameCount(format.sampleRate * duration)
@@ -6441,35 +6449,27 @@ final class ChiptuneAudioEngine {
             let time = Double(frame) / format.sampleRate
             let edgeFade = min(1.0, min(time, duration - time) / 0.12)
 
-            // 1. Resonancia Armónica Acuática Mario 64 (Acorde Mayor abierto: D3 146.8Hz, A3 220Hz, D4 293.7Hz, F#4 370Hz)
-            let aquaticPhase = sin(2.0 * .pi * 0.22 * time) * 0.35
-            let aquaticTone1 = sin(2.0 * .pi * (146.83 + aquaticPhase * 2.0) * time) * 0.024
-            let aquaticTone2 = sin(2.0 * .pi * (220.00 + aquaticPhase * 1.5) * time) * 0.018
-            let aquaticTone3 = sin(2.0 * .pi * (293.66 + aquaticPhase * 3.0) * time) * 0.015
-            let aquaticTone4 = sin(2.0 * .pi * (369.99 + aquaticPhase * 1.0) * time) * 0.010
-            let marioHarmonics = aquaticTone1 + aquaticTone2 + aquaticTone3 + aquaticTone4
-
-            // 2. Oleaje de agua cristalina envolvente
+            // 1. Oleaje de agua cristalina envolvente (Flujo líquido puro sin acordes tonales fijos)
             let surge = 0.85 +
                 sin(2 * Double.pi * 0.35 * time) * 0.12 +
                 sin(2 * Double.pi * 0.58 * time + 1.2) * 0.08
-            let flowingWater = (middleNoise - lowNoise) * 0.26 + lowNoise * 0.44
+            let flowingWater = (middleNoise - lowNoise) * 0.18 + lowNoise * 0.28
 
-            // 3. Burbujas saltarinas rítmicas de Mario 64 ("blup... gloop... blup-blup")
+            // 2. Burbujas saltarinas rítmicas orgánicas ("blup... gloop... blup-blup")
             let bPeriod1 = time.truncatingRemainder(dividingBy: 0.95)
-            let bubble1 = (bPeriod1 < 0.08) ? (sin(2.0 * .pi * (320.0 + bPeriod1 * 950.0) * bPeriod1) * exp(-bPeriod1 * 55.0) * 0.038) : 0.0
+            let bubble1 = (bPeriod1 < 0.08) ? (sin(2.0 * .pi * (320.0 + bPeriod1 * 950.0) * bPeriod1) * exp(-bPeriod1 * 55.0) * 0.024) : 0.0
 
             let bPeriod2 = (time + 0.45).truncatingRemainder(dividingBy: 1.35)
-            let bubble2 = (bPeriod2 < 0.07) ? (sin(2.0 * .pi * (280.0 + bPeriod2 * 820.0) * bPeriod2) * exp(-bPeriod2 * 60.0) * 0.032) : 0.0
+            let bubble2 = (bPeriod2 < 0.07) ? (sin(2.0 * .pi * (280.0 + bPeriod2 * 820.0) * bPeriod2) * exp(-bPeriod2 * 60.0) * 0.020) : 0.0
 
             let bPeriod3 = (time + 0.80).truncatingRemainder(dividingBy: 1.80)
-            let bubble3 = (bPeriod3 < 0.06) ? (sin(2.0 * .pi * (410.0 + bPeriod3 * 1100.0) * bPeriod3) * exp(-bPeriod3 * 65.0) * 0.028) : 0.0
+            let bubble3 = (bPeriod3 < 0.06) ? (sin(2.0 * .pi * (410.0 + bPeriod3 * 1100.0) * bPeriod3) * exp(-bPeriod3 * 65.0) * 0.018) : 0.0
 
             let bubbleGurgles = bubble1 + bubble2 + bubble3
 
-            // 4. Muestra final estéreo
-            let sampleL = Float((flowingWater * surge + marioHarmonics + bubbleGurgles) * edgeFade)
-            let sampleR = Float((flowingWater * surge * 0.95 + marioHarmonics * 0.92 - bubble1 * 0.5 + bubble2 * 0.8 + bubble3 * 0.6) * edgeFade)
+            // 3. Muestra final estéreo de textura acuática
+            let sampleL = Float((flowingWater * surge + bubbleGurgles) * edgeFade)
+            let sampleR = Float((flowingWater * surge * 0.95 - bubble1 * 0.4 + bubble2 * 0.7 + bubble3 * 0.5) * edgeFade)
 
             channels[0][frame] = sampleL
             if format.channelCount > 1 {

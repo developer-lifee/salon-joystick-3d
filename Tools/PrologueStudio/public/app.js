@@ -422,5 +422,520 @@ deployBtn.onclick = async () => {
   }
 };
 
+/* ==========================================================================
+   🎛️ GAME AUDIO SYNTHESIZER & REAL-TIME MIXING CONSOLE
+   ========================================================================== */
+
+// Navigation Mode Switcher
+const navVoiceBtn = document.getElementById('navVoiceBtn');
+const navSynthBtn = document.getElementById('navSynthBtn');
+const voiceStudioSection = document.getElementById('voiceStudioSection');
+const synthStudioSection = document.getElementById('synthStudioSection');
+
+navVoiceBtn.onclick = () => {
+  navVoiceBtn.classList.add('active');
+  navSynthBtn.classList.remove('active');
+  voiceStudioSection.style.display = 'block';
+  synthStudioSection.style.display = 'none';
+};
+
+navSynthBtn.onclick = () => {
+  navSynthBtn.classList.add('active');
+  navVoiceBtn.classList.remove('active');
+  voiceStudioSection.style.display = 'none';
+  synthStudioSection.style.display = 'block';
+  initSynthStudio();
+};
+
+// Synth Audio Context and Nodes
+let synthAudioCtx = null;
+let bgmGainNode = null;
+let sfxGainNode = null;
+let ambGainNode = null;
+let bgmSourceNode = null;
+let ambSourceNode = null;
+
+let isBgmPlaying = false;
+let isAmbPlaying = false;
+let isMasterSimActive = false;
+let autoSwimInterval = null;
+
+// Controls
+const masterSimBtn = document.getElementById('masterSimBtn');
+const masterSimText = document.getElementById('masterSimText');
+const balanceBadge = document.getElementById('balanceBadge');
+const meterBGM = document.getElementById('meterBGM');
+const meterSFX = document.getElementById('meterSFX');
+const bgmDbLabel = document.getElementById('bgmDbLabel');
+const sfxDbLabel = document.getElementById('sfxDbLabel');
+const deltaDbLabel = document.getElementById('deltaDbLabel');
+
+const volBgmSlider = document.getElementById('volBgmSlider');
+const volBgmVal = document.getElementById('volBgmVal');
+const playBgmBtn = document.getElementById('playBgmBtn');
+
+const toggleRhodes = document.getElementById('toggleRhodes');
+const togglePad = document.getElementById('togglePad');
+const toggleHarp = document.getElementById('toggleHarp');
+const toggleBass = document.getElementById('toggleBass');
+
+const volSwimSlider = document.getElementById('volSwimSlider');
+const volSwimVal = document.getElementById('volSwimVal');
+const swimToneSlider = document.getElementById('swimToneSlider');
+const swimToneVal = document.getElementById('swimToneVal');
+const triggerSwimBtn = document.getElementById('triggerSwimBtn');
+const autoSwimBtn = document.getElementById('autoSwimBtn');
+const autoSwimText = document.getElementById('autoSwimText');
+
+const volAmbSlider = document.getElementById('volAmbSlider');
+const volAmbVal = document.getElementById('volAmbVal');
+const playAmbBtn = document.getElementById('playAmbBtn');
+
+const applyMixBtn = document.getElementById('applyMixBtn');
+const synthNotice = document.getElementById('synthNotice');
+
+function getSynthAudioContext() {
+  if (!synthAudioCtx) {
+    synthAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
+  }
+  if (synthAudioCtx.state === 'suspended') {
+    synthAudioCtx.resume();
+  }
+  return synthAudioCtx;
+}
+
+// 1. Synthesize Pure Distortion-Free Underwater Symphony Buffer (24.0s)
+function buildUnderwaterMusicBuffer(ctx) {
+  const duration = 24.0;
+  const sampleRate = ctx.sampleRate;
+  const frameCount = sampleRate * duration;
+  const buffer = ctx.createBuffer(2, frameCount, sampleRate);
+  const left = buffer.getChannelData(0);
+  const right = buffer.getChannelData(1);
+
+  const chords = [
+    [77.78, 116.54, 155.56, 196.00, 293.66, 349.23, 392.00], // Ebmaj9
+    [65.41, 98.00,  155.56, 196.00, 233.08, 293.66, 392.00], // Cm9
+    [51.91, 77.78,  130.81, 196.00, 261.63, 293.66, 392.00], // Abmaj9#11
+    [58.27, 87.31,  116.54, 155.56, 174.61, 233.08, 293.66]  // Bbsus4
+  ];
+  const subBassFrequencies = [38.89, 32.70, 51.91, 58.27];
+  const melodyNotes = [
+    392.00, 349.23, 293.66, 233.08,
+    261.63, 311.13, 392.00, 466.16,
+    523.25, 466.16, 392.00, 293.66,
+    311.13, 349.23, 293.66, 311.13
+  ];
+
+  const enableRhodes = toggleRhodes.checked;
+  const enablePad = togglePad.checked;
+  const enableHarp = toggleHarp.checked;
+  const enableBass = toggleBass.checked;
+
+  for (let frame = 0; frame < frameCount; frame++) {
+    const time = frame / sampleRate;
+    const section = Math.min(3, Math.floor(time / 6.0));
+    const chord = chords[section];
+
+    // 1. Lush Chorus Pad with Bounded Vibrato (zero distortion)
+    let padL = 0;
+    let padR = 0;
+    const oceanSwell = 0.75 + 0.25 * Math.sin(2 * Math.PI * 0.12 * time);
+
+    if (enablePad) {
+      for (let idx = 0; idx < chord.length; idx++) {
+        const noteFreq = chord[idx];
+        const pPhase = 2 * Math.PI * noteFreq * time;
+        const vibPhase = Math.sin(2 * Math.PI * 3.2 * time + idx) * 0.24;
+        const detunePhase = 2 * Math.PI * (noteFreq * (1.0 + idx * 0.0012)) * time;
+        const wave1 = Math.sin(pPhase + vibPhase);
+        const wave2 = Math.sin(detunePhase - vibPhase + 0.5) * 0.45;
+        const voiceAmp = (0.022 / (idx + 1)) * 1.8;
+        padL += (wave1 + wave2) * voiceAmp;
+        padR += (wave2 + wave1) * voiceAmp;
+      }
+      padL *= oceanSwell;
+      padR *= oceanSwell;
+    }
+
+    // 2. Crystal Rhodes Electric Piano with Independent Phase
+    let rhodesL = 0;
+    let rhodesR = 0;
+    if (enableRhodes) {
+      const stepDuration = 1.50;
+      const noteIdx = Math.min(melodyNotes.length - 1, Math.floor(time / stepDuration));
+      const noteTime = time % stepDuration;
+      const mAttack = Math.min(1.0, noteTime / 0.04);
+      const mDecay = Math.exp(-noteTime * 1.8);
+      const mEnv = mAttack * mDecay;
+      const mFreq = melodyNotes[noteIdx];
+      const vibOffset = (noteTime > 0.35 ? Math.sin(2 * Math.PI * 4.5 * (noteTime - 0.35)) * 0.22 : 0.0);
+      const mPhase = 2 * Math.PI * mFreq * time + vibOffset;
+      rhodesL = (Math.sin(mPhase) + Math.sin(mPhase * 2.0) * 0.18 + Math.sin(mPhase * 3.0) * 0.04) * mEnv * 0.052;
+      rhodesR = (Math.sin(mPhase + 0.15) + Math.sin((mPhase + 0.15) * 2.0) * 0.18 + Math.sin((mPhase + 0.15) * 3.0) * 0.04) * mEnv * 0.052;
+    }
+
+    // 3. Liquid Harp Arpeggio
+    let harpL = 0;
+    let harpR = 0;
+    if (enableHarp) {
+      const arpStep = 0.25;
+      const arpIdx = Math.floor(time / arpStep) % chord.length;
+      const arpTime = time % arpStep;
+      const arpEnv = Math.min(1.0, arpTime / 0.02) * Math.exp(-arpTime * 6.5);
+      const arpHarpFreq = chord[arpIdx] * 2.0;
+      const arpHarpPhase = 2 * Math.PI * arpHarpFreq * time;
+      const arpPan = arpIdx / (chord.length - 1);
+      const arpHarp = Math.sin(arpHarpPhase) * arpEnv * 0.016;
+      harpL = arpHarp * (1.0 - arpPan * 0.6);
+      harpR = arpHarp * (0.4 + arpPan * 0.6);
+    }
+
+    // 4. Sub-Bass
+    let subBass = 0;
+    if (enableBass) {
+      const bassFreq = subBassFrequencies[section];
+      subBass = (Math.sin(2 * Math.PI * bassFreq * time) * 0.038 + Math.sin(2 * Math.PI * bassFreq * 2.0 * time) * 0.012) * oceanSwell;
+    }
+
+    // Mix with Soft Limiting
+    const mixL = padL * 0.78 + rhodesL * 1.15 + harpL * 0.85 + subBass;
+    const mixR = padR * 0.78 + rhodesR * 1.15 + harpR * 0.85 + subBass;
+    const loopFade = Math.min(1.0, Math.min(time, duration - time) / 0.18);
+
+    left[frame] = Math.tanh(mixL * 1.05) * loopFade * 0.88;
+    right[frame] = Math.tanh(mixR * 1.05) * loopFade * 0.88;
+  }
+
+  return buffer;
+}
+
+// 2. Synthesize Smooth Swim Stroke SFX Buffer (0.36s)
+function buildSwimStrokeBuffer(ctx, baseFreq = 180) {
+  const duration = 0.36;
+  const sampleRate = ctx.sampleRate;
+  const frameCount = sampleRate * duration;
+  const buffer = ctx.createBuffer(2, frameCount, sampleRate);
+  const left = buffer.getChannelData(0);
+  const right = buffer.getChannelData(1);
+
+  let lowPass = 0.0;
+  for (let frame = 0; frame < frameCount; frame++) {
+    const t = frame / sampleRate;
+    const progress = t / duration;
+    const env = Math.sin(progress * Math.PI) * Math.exp(-progress * 2.2);
+    const raw = Math.random() * 2.0 - 1.0;
+    lowPass = lowPass * 0.82 + raw * 0.18;
+
+    const sweepFreq = (baseFreq * 0.66) + (baseFreq * 0.66) * Math.sin(progress * Math.PI * 0.80);
+    const body = Math.sin(2.0 * Math.PI * sweepFreq * t) * 0.38;
+    const bubble = Math.sin(2.0 * Math.PI * (340.0 + 90.0 * Math.sin(t * 32.0)) * t) * Math.exp(-t * 8.0) * 0.14;
+    const sample = Math.tanh((lowPass * 0.45 + body + bubble) * env) * 0.48;
+
+    left[frame] = sample;
+    right[frame] = sample * 0.92;
+  }
+  return buffer;
+}
+
+// 3. Synthesize Ambient Flowing Water Loop Buffer (10.0s)
+function buildWaterAmbianceBuffer(ctx) {
+  const duration = 10.0;
+  const sampleRate = ctx.sampleRate;
+  const frameCount = sampleRate * duration;
+  const buffer = ctx.createBuffer(2, frameCount, sampleRate);
+  const left = buffer.getChannelData(0);
+  const right = buffer.getChannelData(1);
+
+  let seed = 0x72a491c3;
+  let middleNoise = 0;
+  let lowNoise = 0;
+
+  for (let frame = 0; frame < frameCount; frame++) {
+    seed = (seed * 1664525 + 1013904223) | 0;
+    const noise = ((seed & 0xffff) / 32767.5) - 1.0;
+    middleNoise = middleNoise * 0.88 + noise * 0.12;
+    lowNoise = lowNoise * 0.985 + noise * 0.015;
+
+    const time = frame / sampleRate;
+    const edgeFade = Math.min(1.0, Math.min(time, duration - time) / 0.12);
+
+    const surge = 0.85 + Math.sin(2 * Math.PI * 0.35 * time) * 0.12 + Math.sin(2 * Math.PI * 0.58 * time + 1.2) * 0.08;
+    const flowingWater = (middleNoise - lowNoise) * 0.18 + lowNoise * 0.28;
+
+    const bPeriod1 = time % 0.95;
+    const bubble1 = (bPeriod1 < 0.08) ? (Math.sin(2.0 * Math.PI * (320.0 + bPeriod1 * 950.0) * bPeriod1) * Math.exp(-bPeriod1 * 55.0) * 0.024) : 0;
+    const bPeriod2 = (time + 0.45) % 1.35;
+    const bubble2 = (bPeriod2 < 0.07) ? (Math.sin(2.0 * Math.PI * (280.0 + bPeriod2 * 820.0) * bPeriod2) * Math.exp(-bPeriod2 * 60.0) * 0.020) : 0;
+    const bPeriod3 = (time + 0.80) % 1.80;
+    const bubble3 = (bPeriod3 < 0.06) ? (Math.sin(2.0 * Math.PI * (410.0 + bPeriod3 * 1100.0) * bPeriod3) * Math.exp(-bPeriod3 * 65.0) * 0.018) : 0;
+    const bubbles = bubble1 + bubble2 + bubble3;
+
+    left[frame] = (flowingWater * surge + bubbles) * edgeFade * 0.65;
+    right[frame] = (flowingWater * surge * 0.95 - bubble1 * 0.4 + bubble2 * 0.7 + bubble3 * 0.5) * edgeFade * 0.65;
+  }
+  return buffer;
+}
+
+// 4. Playback Actions
+function startBgm() {
+  const ctx = getSynthAudioContext();
+  if (bgmSourceNode) {
+    try { bgmSourceNode.stop(); } catch (e) {}
+  }
+  const buf = buildUnderwaterMusicBuffer(ctx);
+  bgmSourceNode = ctx.createBufferSource();
+  bgmSourceNode.buffer = buf;
+  bgmSourceNode.loop = true;
+
+  if (!bgmGainNode) {
+    bgmGainNode = ctx.createGain();
+    bgmGainNode.connect(ctx.destination);
+  }
+  bgmGainNode.gain.setValueAtTime(parseFloat(volBgmSlider.value) / 100, ctx.currentTime);
+
+  bgmSourceNode.connect(bgmGainNode);
+  bgmSourceNode.start();
+  isBgmPlaying = true;
+  playBgmBtn.classList.add('active');
+  playBgmBtn.innerHTML = '<span>⏸️ Pausar Música</span>';
+}
+
+function stopBgm() {
+  if (bgmSourceNode) {
+    try { bgmSourceNode.stop(); } catch (e) {}
+    bgmSourceNode = null;
+  }
+  isBgmPlaying = false;
+  playBgmBtn.classList.remove('active');
+  playBgmBtn.innerHTML = '<span>▶️ Reproducir Música</span>';
+}
+
+function startAmb() {
+  const ctx = getSynthAudioContext();
+  if (ambSourceNode) {
+    try { ambSourceNode.stop(); } catch (e) {}
+  }
+  const buf = buildWaterAmbianceBuffer(ctx);
+  ambSourceNode = ctx.createBufferSource();
+  ambSourceNode.buffer = buf;
+  ambSourceNode.loop = true;
+
+  if (!ambGainNode) {
+    ambGainNode = ctx.createGain();
+    ambGainNode.connect(ctx.destination);
+  }
+  ambGainNode.gain.setValueAtTime(parseFloat(volAmbSlider.value) / 100, ctx.currentTime);
+
+  ambSourceNode.connect(ambGainNode);
+  ambSourceNode.start();
+  isAmbPlaying = true;
+  playAmbBtn.classList.add('active');
+  playAmbBtn.innerHTML = '<span>⏸️ Pausar Ambiente</span>';
+}
+
+function stopAmb() {
+  if (ambSourceNode) {
+    try { ambSourceNode.stop(); } catch (e) {}
+    ambSourceNode = null;
+  }
+  isAmbPlaying = false;
+  playAmbBtn.classList.remove('active');
+  playAmbBtn.innerHTML = '<span>🫧 Reproducir Ambiente</span>';
+}
+
+function triggerSwimStroke() {
+  const ctx = getSynthAudioContext();
+  const freq = parseFloat(swimToneSlider.value);
+  const buf = buildSwimStrokeBuffer(ctx, freq);
+  const strokeSource = ctx.createBufferSource();
+  strokeSource.buffer = buf;
+
+  if (!sfxGainNode) {
+    sfxGainNode = ctx.createGain();
+    sfxGainNode.connect(ctx.destination);
+  }
+  sfxGainNode.gain.setValueAtTime(parseFloat(volSwimSlider.value) / 100, ctx.currentTime);
+
+  strokeSource.connect(sfxGainNode);
+  strokeSource.start();
+
+  // Visual pulse on button
+  triggerSwimBtn.style.transform = 'scale(0.96)';
+  setTimeout(() => { triggerSwimBtn.style.transform = ''; }, 120);
+}
+
+// 5. Volume Sliders and Dynamic Mix Meter
+function updateMixBalance() {
+  const volBgm = parseFloat(volBgmSlider.value);
+  const volSwim = parseFloat(volSwimSlider.value);
+  const volAmb = parseFloat(volAmbSlider.value);
+
+  volBgmVal.innerText = `${volBgm}%`;
+  volSwimVal.innerText = `${volSwim}%`;
+  volAmbVal.innerText = `${volAmb}%`;
+
+  if (bgmGainNode && synthAudioCtx) {
+    bgmGainNode.gain.setValueAtTime(volBgm / 100, synthAudioCtx.currentTime);
+  }
+  if (sfxGainNode && synthAudioCtx) {
+    sfxGainNode.gain.setValueAtTime(volSwim / 100, synthAudioCtx.currentTime);
+  }
+  if (ambGainNode && synthAudioCtx) {
+    ambGainNode.gain.setValueAtTime(volAmb / 100, synthAudioCtx.currentTime);
+  }
+
+  // Calculate dB relative
+  const bgmDb = Math.round(20 * Math.log10(Math.max(0.01, volBgm / 100)));
+  const sfxDb = Math.round(20 * Math.log10(Math.max(0.01, volSwim / 100)));
+  const diffDb = sfxDb - bgmDb;
+
+  bgmDbLabel.innerText = `${volBgm}% (${bgmDb} dBFS)`;
+  sfxDbLabel.innerText = `${volSwim}% (${sfxDb} dBFS)`;
+  meterBGM.style.width = `${volBgm}%`;
+  meterSFX.style.width = `${volSwim}%`;
+
+  if (diffDb > -6) {
+    balanceBadge.className = 'balance-badge badge-warning';
+    balanceBadge.innerText = `⚠️ FATIGA AUDITIVA: La brazada supera el estándar (+${diffDb} dB vs música)`;
+    deltaDbLabel.style.color = '#ff4e50';
+    deltaDbLabel.innerText = `Diferencia: ${diffDb > 0 ? '+' : ''}${diffDb} dB [Muy Fuerte]`;
+  } else if (diffDb <= -6 && diffDb >= -15) {
+    balanceBadge.className = 'balance-badge badge-optimal';
+    balanceBadge.innerText = `✅ BALANCE ÓPTIMO (Foley ${diffDb} dB por debajo de la música)`;
+    deltaDbLabel.style.color = '#38ef7d';
+    deltaDbLabel.innerText = `Diferencia: ${diffDb} dB [Estándar de Oro]`;
+  } else {
+    balanceBadge.className = 'balance-badge';
+    balanceBadge.innerText = `ℹ️ Brazada Tenue (${diffDb} dB por debajo)`;
+    deltaDbLabel.style.color = '#c084fc';
+    deltaDbLabel.innerText = `Diferencia: ${diffDb} dB [Muy Suave]`;
+  }
+}
+
+volBgmSlider.oninput = updateMixBalance;
+volSwimSlider.oninput = updateMixBalance;
+volAmbSlider.oninput = updateMixBalance;
+
+swimToneSlider.oninput = () => {
+  const val = swimToneSlider.value;
+  swimToneVal.innerText = `${val < 160 ? 'Grave Suave' : (val < 220 ? 'Sedoso Natural' : 'Brillante')} (${val} Hz)`;
+};
+
+// Layer toggle handlers (re-renders buffer on the fly if playing)
+[toggleRhodes, togglePad, toggleHarp, toggleBass].forEach(cb => {
+  cb.onchange = (e) => {
+    e.target.closest('.layer-toggle-btn').classList.toggle('active', e.target.checked);
+    if (isBgmPlaying) startBgm();
+  };
+});
+
+// Single play buttons
+playBgmBtn.onclick = () => {
+  if (isBgmPlaying) stopBgm();
+  else startBgm();
+};
+
+playAmbBtn.onclick = () => {
+  if (isAmbPlaying) stopAmb();
+  else startAmb();
+};
+
+triggerSwimBtn.onclick = triggerSwimStroke;
+
+autoSwimBtn.onclick = () => {
+  if (autoSwimInterval) {
+    clearInterval(autoSwimInterval);
+    autoSwimInterval = null;
+    autoSwimBtn.classList.remove('active');
+    autoSwimText.innerText = '🔁 Auto-Nado: OFF';
+  } else {
+    autoSwimInterval = setInterval(triggerSwimStroke, 550);
+    autoSwimBtn.classList.add('active');
+    autoSwimText.innerText = '🟢 Auto-Nado: ACTIVO (0.55s)';
+    triggerSwimStroke();
+  }
+};
+
+// Master Scene Simulator: All 3 simultaneously
+masterSimBtn.onclick = () => {
+  if (isMasterSimActive) {
+    // Stop all
+    stopBgm();
+    stopAmb();
+    if (autoSwimInterval) {
+      clearInterval(autoSwimInterval);
+      autoSwimInterval = null;
+      autoSwimBtn.classList.remove('active');
+      autoSwimText.innerText = '🔁 Auto-Nado: OFF';
+    }
+    isMasterSimActive = false;
+    masterSimBtn.classList.remove('active');
+    masterSimText.innerText = 'PROBAR MEZCLA EN VIVO (Música + Nado + Ambiente)';
+  } else {
+    // Start all
+    startBgm();
+    startAmb();
+    if (!autoSwimInterval) {
+      autoSwimInterval = setInterval(triggerSwimStroke, 550);
+      autoSwimBtn.classList.add('active');
+      autoSwimText.innerText = '🟢 Auto-Nado: ACTIVO (0.55s)';
+      triggerSwimStroke();
+    }
+    isMasterSimActive = true;
+    masterSimBtn.classList.add('active');
+    masterSimText.innerText = '⏹️ DETENER SIMULACIÓN EN VIVO';
+  }
+};
+
+// Apply and Deploy to iPhone
+applyMixBtn.onclick = async () => {
+  applyMixBtn.disabled = true;
+  applyMixBtn.innerHTML = '<span class="btn-icon">⏳</span><span class="btn-text">Guardando en Xcode y Compilando...</span>';
+  synthNotice.innerText = 'Guardando niveles y compilando para tu iPhone 15 Pro Max...';
+
+  try {
+    const payload = {
+      volBgm: parseFloat(volBgmSlider.value),
+      volSwim: parseFloat(volSwimSlider.value),
+      volAmb: parseFloat(volAmbSlider.value),
+      swimTone: parseFloat(swimToneSlider.value)
+    };
+
+    const res = await fetch('/api/synth/apply-levels', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await res.json();
+    if (result.success) {
+      synthNotice.innerHTML = `🟢 <b>${result.message}</b>`;
+      alert('🚀 ¡Mezcla balanceada aplicada con éxito en tu iPhone 15 Pro Max!');
+    } else {
+      synthNotice.innerHTML = `<span style="color:#ff4e50">Error al compilar: ${result.error || result.output}</span>`;
+      alert('Error en compilación: ' + (result.error || result.output));
+    }
+  } catch (err) {
+    synthNotice.innerHTML = `<span style="color:#ff4e50">Error de conexión: ${err}</span>`;
+    alert('Error conectando con el servidor: ' + err);
+  } finally {
+    applyMixBtn.disabled = false;
+    applyMixBtn.innerHTML = '<span class="btn-icon">🚀</span><span class="btn-text">Aplicar Ajustes en Xcode y Compilar en iPhone</span>';
+  }
+};
+
+// Spacebar trigger when in synth studio
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' && synthStudioSection.style.display !== 'none') {
+    e.preventDefault();
+    triggerSwimStroke();
+  }
+});
+
+function initSynthStudio() {
+  updateMixBalance();
+}
+
 // Init
 loadChapters();
