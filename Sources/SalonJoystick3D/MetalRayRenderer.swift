@@ -4425,7 +4425,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let fieldOfView: Float
 
         let isDeflatedOrDead = isPlayerDead || isRecoveringInChamber
-        let effectiveCameraMode: GameCameraMode = isDeflatedOrDead ? .thirdPerson : cameraMode
+        // 🔒 1ª Persona FPS Fija: Se mantiene siempre en primera persona (la 3ª persona se conserva en el código pero archivada/inactiva)
+        let effectiveCameraMode: GameCameraMode = cameraMode
 
         if effectiveCameraMode == .firstPerson {
             let pitchCosine = cos(firstPersonPitch)
@@ -4670,7 +4671,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
     private func writeInstanceDescriptors() {
         let isDeflatedOrDead = isPlayerDead || isRecoveringInChamber
-        let effectiveCameraMode: GameCameraMode = isDeflatedOrDead ? .thirdPerson : cameraMode
+        // 🔒 1ª Persona FPS Fija: Se mantiene siempre en primera persona (la 3ª persona se conserva en el código pero archivada/inactiva)
+        let effectiveCameraMode: GameCameraMode = cameraMode
         let currentlyInPool = isInsidePoolXZ(playerPosition) && playerPosition.y <= 0.35
         let isSubterraneanTarget = playerPosition.y <= -4.75
         let isGroundedInPool = currentlyInPool && playerPosition.y >= -0.25

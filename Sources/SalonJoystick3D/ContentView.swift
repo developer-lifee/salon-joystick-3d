@@ -1696,7 +1696,11 @@ final class GameModel: ObservableObject {
     }
 
     @Published var cameraMode = GameCameraMode.firstPerson {
-        didSet { }
+        didSet {
+            if cameraMode != .firstPerson {
+                cameraMode = .firstPerson
+            }
+        }
     }
     @Published var renderResolution = GameRenderResolution.balanced
     @Published var heldTool = GameHeldTool.flashlight {
@@ -7490,11 +7494,19 @@ struct GameOptionsSheet: View {
 
                             Toggle("Invertir eje Y (Cámara)", isOn: $model.invertsCameraY)
 
-                            Picker("Perspectiva de Cámara", selection: $model.cameraMode) {
-                                Text("1ª Persona").tag(GameCameraMode.firstPerson)
-                                Text("3ª Persona").tag(GameCameraMode.thirdPerson)
+                            HStack {
+                                Label("Perspectiva de Cámara", systemImage: "eye.fill")
+                                Spacer()
+                                Text("1ª Persona FPS")
+                                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.cyan)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 4)
+                                    .background(Capsule().fill(Color.cyan.opacity(0.18)))
                             }
-                            .pickerStyle(.segmented)
+                            Text("Modo FPS activo con armas y manos 3D. La 3ª persona queda preservada en el motor para el futuro.")
+                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.55))
 
                             if model.isDuoDevice {
                                 Picker("Modo Doble Pantalla (iPhone Duo)", selection: Binding(
