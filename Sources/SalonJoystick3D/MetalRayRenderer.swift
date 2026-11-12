@@ -1085,6 +1085,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     var remotePlayerIsRecovering: Bool = false
     var recoveryTimeRemaining: Float = 0.0
     var onNearRecoveryConsoleUpdate: ((Bool) -> Void)?
+    var onNearFuseTerminalUpdate: ((Bool) -> Void)?
+    private var lastNearFuseTerminalState: Bool = false
     var onRecoveryProgressUpdate: ((Float, Bool) -> Void)?
     var onRecoveryCompleted: (() -> Void)?
     var onMirrorReflectionKill: (() -> Void)?
@@ -1850,6 +1852,15 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             let distToFallenTeammate = simd_distance(playerPosition, smoothedRemotePos)
             let isNearFallen = isRemotePlayerConnected && remotePlayerIsRecovering && distToFallenTeammate < 2.5
             onNearRecoveryConsoleUpdate?(isNearFallen)
+
+            // Proximidad al pedestal o interruptor del circuito cuántico
+            let distToPedestal = simd_distance(SIMD2<Float>(playerPosition.x, playerPosition.z), SIMD2<Float>(8.5, -6.5))
+            let distToSwitch = simd_distance(SIMD2<Float>(playerPosition.x, playerPosition.z), SIMD2<Float>(-17.55, -6.5))
+            let isNearFuse = (distToPedestal < 2.8 || distToSwitch < 2.8)
+            if isNearFuse != lastNearFuseTerminalState {
+                lastNearFuseTerminalState = isNearFuse
+                onNearFuseTerminalUpdate?(isNearFuse)
+            }
         }
 
         let inputX = max(-1.0, min(1.0, Float(joystick.dx)))

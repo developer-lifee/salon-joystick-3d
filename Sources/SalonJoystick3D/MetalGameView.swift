@@ -177,6 +177,11 @@ struct MetalGameView: UIViewRepresentable {
                     model?.isNearRecoveryConsole = isNear
                 }
             }
+            renderer.onNearFuseTerminalUpdate = { [weak model] isNear in
+                Task { @MainActor in
+                    model?.isNearFuseTerminal = isNear
+                }
+            }
             renderer.onRecoveryProgressUpdate = { [weak model] remaining, isBoosting in
                 Task { @MainActor in
                     model?.updateRecoveryProgress(remaining: remaining, isBoosting: isBoosting)

@@ -769,10 +769,10 @@ inline FirstPersonHit intersectFirstPersonViewModel(
         float3 rHandCam = float3(0.22f, -0.20f + breathe, 0.45f);
         float3 rHandWorld = camPos + cRight * rHandCam.x + cUp * rHandCam.y + cFwd * rHandCam.z;
 
-        // 🪞 Si el rayo viene de frente (reflejo en el espejo hacia el jugador), dibujar el cuerpo y rostro del slime
+        // 🪞 Si el rayo viene de frente (reflejo en el espejo hacia el jugador), dibujar el cuerpo y rostro del personaje blanco cuántico
         bool isReflectedFromMirror = dot(r.direction, cFwd) < -0.10f;
         if (isReflectedFromMirror) {
-            // 🟢 Torso / Cuerpo de Slime Gelatinoso Bioluminiscente
+            // ⚪ Torso / Traje Cibernético Blanco Perlado con Núcleo Cian
             float3 slimeTorso = camPos - cUp * 0.48f - cFwd * 0.05f;
             float3 ocTorso = r.origin - slimeTorso;
             float bTorso = dot(ocTorso, r.direction);
@@ -783,14 +783,32 @@ inline FirstPersonHit intersectFirstPersonViewModel(
                     result.hit = true;
                     result.distance = tTorso;
                     result.normal = normalize((r.origin + r.direction * tTorso) - slimeTorso);
-                    result.albedo = float3(0.24f, 0.92f, 0.30f);
-                    result.emission = float3(0.05f, 0.25f, 0.10f);
-                    result.reflectivity = 0.28f;
-                    result.roughness = 0.14f;
+                    result.albedo = float3(0.92f, 0.94f, 0.97f);
+                    result.emission = float3(0.04f, 0.12f, 0.22f);
+                    result.reflectivity = 0.35f;
+                    result.roughness = 0.15f;
                 }
             }
 
-            // 👀 Ojos negros brillantes con reflejo especular
+            // 🔷 Núcleo Reactor de Energía Cian en el Pecho
+            float3 chestCore = camPos - cUp * 0.38f + cFwd * 0.18f;
+            float3 ocCore = r.origin - chestCore;
+            float bCore = dot(ocCore, r.direction);
+            float discCore = bCore * bCore - (dot(ocCore, ocCore) - 0.065f * 0.065f);
+            if (discCore >= 0.0f) {
+                float tCore = -bCore - sqrt(discCore);
+                if (tCore > 0.08f && tCore < result.distance) {
+                    result.hit = true;
+                    result.distance = tCore;
+                    result.normal = normalize((r.origin + r.direction * tCore) - chestCore);
+                    result.albedo = float3(0.10f, 0.90f, 1.0f);
+                    result.emission = float3(0.40f, 2.50f, 3.20f);
+                    result.reflectivity = 0.85f;
+                    result.roughness = 0.05f;
+                }
+            }
+
+            // 👀 Ojos negros brillantes / Visor con reflejo especular
             float3 eyeL = camPos - cUp * 0.22f + cRight * 0.075f + cFwd * 0.16f;
             float3 ocEL = r.origin - eyeL;
             float bEL = dot(ocEL, r.direction);
@@ -825,7 +843,7 @@ inline FirstPersonHit intersectFirstPersonViewModel(
                 }
             }
 
-            // ✋ Mano izquierda en reposo/balanceo en el reflejo
+            // ✋ Mano izquierda blanca en reposo en el reflejo
             float3 lHandCam = float3(-0.24f, -0.22f - breathe * 0.6f, 0.38f);
             float3 lHandWorld = camPos + cRight * lHandCam.x + cUp * lHandCam.y + cFwd * lHandCam.z;
             float3 ocLH = r.origin - lHandWorld;
@@ -837,15 +855,15 @@ inline FirstPersonHit intersectFirstPersonViewModel(
                     result.hit = true;
                     result.distance = tLH;
                     result.normal = normalize((r.origin + r.direction * tLH) - lHandWorld);
-                    result.albedo = float3(0.24f, 0.90f, 0.28f);
-                    result.emission = float3(0.04f, 0.22f, 0.08f);
-                    result.reflectivity = 0.25f;
-                    result.roughness = 0.15f;
+                    result.albedo = float3(0.92f, 0.94f, 0.97f);
+                    result.emission = float3(0.02f, 0.08f, 0.14f);
+                    result.reflectivity = 0.30f;
+                    result.roughness = 0.18f;
                 }
             }
         }
 
-        // Antebrazo derecho conectando la mano al cuerpo
+        // Antebrazo derecho blanco conectando la mano al cuerpo
         float3 rElbowWorld = camPos + cRight * 0.26f - cUp * 0.38f + cFwd * 0.05f;
         float3 baArm = rHandWorld - rElbowWorld;
         float3 oaArm = r.origin - rElbowWorld;
@@ -865,15 +883,15 @@ inline FirstPersonHit intersectFirstPersonViewModel(
                     result.distance = tArm;
                     float3 pHit = r.origin + r.direction * tArm;
                     result.normal = normalize(pHit - (rElbowWorld + baArm * (yArm / badaArm)));
-                    result.albedo = float3(0.24f, 0.90f, 0.28f);
-                    result.emission = float3(0.04f, 0.22f, 0.08f);
-                    result.reflectivity = 0.25f;
-                    result.roughness = 0.15f;
+                    result.albedo = float3(0.92f, 0.94f, 0.97f);
+                    result.emission = float3(0.02f, 0.08f, 0.14f);
+                    result.reflectivity = 0.30f;
+                    result.roughness = 0.18f;
                 }
             }
         }
 
-        // 1. Palma de Slime Verde Gelatina Bioluminiscente
+        // 1. Palma de Guante Blanco con Acentos Cian
         float handRadius = 0.052f;
         float3 ocR = r.origin - rHandWorld;
         float bR = dot(ocR, r.direction);
@@ -885,10 +903,10 @@ inline FirstPersonHit intersectFirstPersonViewModel(
                 result.hit = true;
                 result.distance = tR;
                 result.normal = normalize((r.origin + r.direction * tR) - rHandWorld);
-                result.albedo = float3(0.22f, 0.90f, 0.28f);
-                result.emission = float3(0.04f, 0.22f, 0.08f);
-                result.reflectivity = 0.25f;
-                result.roughness = 0.15f;
+                result.albedo = float3(0.92f, 0.94f, 0.97f);
+                result.emission = float3(0.02f, 0.08f, 0.14f);
+                result.reflectivity = 0.30f;
+                result.roughness = 0.18f;
             }
         }
 
@@ -1137,7 +1155,7 @@ kernel void raytracePatio(
                                      uniforms.cameraForward.xyz);
 
     bool isSplitScreen = uniforms.toolParameters.w > 0.5f;
-    bool isMirrorSplit = (uniforms.toolParameters.x > 2.5f);
+    bool isMirrorSplit = false;
     bool isMirrorViewport = false;
     float2 mirrorLocalUV = float2(0.0f);
 

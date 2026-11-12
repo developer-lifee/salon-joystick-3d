@@ -312,6 +312,9 @@ struct ContentView: View {
             .fullScreenCover(isPresented: $model.showsPrologueScreen) {
                 CinematicPrologueView(model: model)
             }
+            .fullScreenCover(isPresented: $model.showsQuantumFuseBox) {
+                QuantumFuseBoxView(model: model)
+            }
         } else {
             ZStack(alignment: .bottomLeading) {
                 MetalGameView(model: model)
@@ -578,9 +581,23 @@ struct ContentView: View {
                         HStack(spacing: 8) {
                             Image(systemName: "lock.shield.fill")
                                 .foregroundStyle(.cyan)
-                            Text("🔒 CHRONO-CORE DORMIDO: Alinea el haz entre espejos continuos hacia el receptor cuántico para despertar la reliquia (+50 HP y Slow-Mo).")
+                            Text("🔒 CHRONO-CORE DORMIDO: Conecta los fusibles cuánticos para activar el Modo Slow-Mo y +50 HP.")
                                 .font(.system(size: 11, weight: .bold))
                                 .foregroundStyle(.white)
+                            Button {
+                                model.showsQuantumFuseBox = true
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "wrench.and.screwdriver.fill")
+                                    Text("REPARAR FUSIBLES")
+                                }
+                                .font(.system(size: 10, weight: .black, design: .monospaced))
+                                .foregroundStyle(.black)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(Color.yellow, in: Capsule())
+                                .shadow(color: Color.yellow.opacity(0.6), radius: 5)
+                            }
                         }
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
@@ -588,6 +605,36 @@ struct ContentView: View {
                         .background(Color.black.opacity(0.65), in: Capsule())
                         .overlay(Capsule().stroke(Color.cyan.opacity(0.8), lineWidth: 1))
                         .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+
+                    if model.isNearFuseTerminal && !model.isSlowMotionUnlocked {
+                        Button {
+                            model.showsQuantumFuseBox = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "bolt.badge.automatic.fill")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundStyle(.yellow)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("⚡ CAJA DE FUSIBLES CUÁNTICA")
+                                        .font(.system(size: 11, weight: .black, design: .monospaced))
+                                        .foregroundStyle(.white)
+                                    Text("Toca para reconectar cables y activar Slow-Mo")
+                                        .font(.system(size: 9.5, weight: .semibold))
+                                        .foregroundStyle(.white.opacity(0.8))
+                                }
+                                Image(systemName: "chevron.right.circle.fill")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundStyle(.yellow)
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(.ultraThinMaterial, in: Capsule())
+                            .background(Color.black.opacity(0.7), in: Capsule())
+                            .overlay(Capsule().stroke(Color.yellow.opacity(0.85), lineWidth: 1.5))
+                            .shadow(color: Color.yellow.opacity(0.5), radius: 8)
+                        }
+                        .transition(.scale.combined(with: .opacity))
                     }
 
                     if model.showsChronoCoreUnlockedBanner {
@@ -1742,8 +1789,8 @@ struct ContentView: View {
             .fullScreenCover(isPresented: $model.showsPrologueScreen) {
                 CinematicPrologueView(model: model)
             }
-            .fullScreenCover(isPresented: $model.showsPrologueScreen) {
-                CinematicPrologueView(model: model)
+            .fullScreenCover(isPresented: $model.showsQuantumFuseBox) {
+                QuantumFuseBoxView(model: model)
             }
             .onAppear {
                 UIApplication.shared.isIdleTimerDisabled = true
@@ -1840,6 +1887,10 @@ final class GameModel: ObservableObject {
     @Published var showsChronoCoreUnlockedBanner: Bool = false
     @Published var showsFlashlightGuideBanner: Bool = false
     @Published var showsCampaignVictoryModal: Bool = false
+    @Published var showsQuantumFuseBox: Bool = false {
+        didSet { updateAudioPauseState() }
+    }
+    @Published var isNearFuseTerminal: Bool = false
     @Published var playerHealth: Float = UserDefaults.standard.bool(forKey: "isSlowMotionUnlocked") ? 150.0 : 100.0
     @Published var playerShield: Float = 100.0
     private var lastDamageTime: TimeInterval = 0
@@ -8473,7 +8524,7 @@ struct StoryChapter: Identifiable {
     }
 }
 
-final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
+final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDelegate {
     @Published var currentChapterIndex: Int = 0
     @Published var isSpeaking: Bool = false
     @Published var isMuted: Bool = false
@@ -8482,10 +8533,11 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
     @Published var isStoryCompleted: Bool = false
     @Published var playbackSpeed: Float = 1.0 // 1.0x, 1.5x, 2.0x
     @Published var isSpeedingUp: Bool = false // Gesto TikTok estilo press-and-hold
-    @Published var autoAdvance: Bool = false // Apagado por defecto para evitar saltos automáticos no deseados
+    @Published var autoAdvance: Bool = false
     @Published var showsSubtitles: Bool = true
 
     private let synthesizer = AVSpeechSynthesizer()
+    private var audioPlayer: AVAudioPlayer?
     private var typewriterTimer: Timer?
     private var isStoppingIntentionally = false
 
@@ -8554,11 +8606,9 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
     }
 
     var effectiveRate: Float {
-        let base: Float = 0.54 // Ritmo dinámico más rápido y fluido
-        if isSpeedingUp {
-            return min(0.68, base * 1.35) // ⚡ 2x Velocidad TikTok
-        } else if playbackSpeed >= 2.0 {
-            return min(0.68, base * 1.35)
+        let base: Float = 0.54
+        if isSpeedingUp || playbackSpeed >= 2.0 {
+            return min(0.70, base * 1.35)
         } else if playbackSpeed >= 1.5 {
             return min(0.62, base * 1.18)
         } else {
@@ -8574,13 +8624,21 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
         } else {
             playbackSpeed = 1.0
         }
-        playCurrentChapter()
+        if let player = audioPlayer {
+            player.rate = playbackSpeed
+        } else {
+            playCurrentChapter(resumeChars: displayedChars)
+        }
     }
 
     func setSpeedingUp(_ speeding: Bool) {
         guard isSpeedingUp != speeding else { return }
         isSpeedingUp = speeding
-        playCurrentChapter(resumeChars: displayedChars)
+        if let player = audioPlayer {
+            player.rate = speeding ? 2.0 : playbackSpeed
+        } else {
+            playCurrentChapter(resumeChars: displayedChars)
+        }
     }
 
     func startPrologue() {
@@ -8593,6 +8651,8 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
         isStoppingIntentionally = true
         stopTypewriter()
         synthesizer.stopSpeaking(at: .immediate)
+        audioPlayer?.stop()
+        audioPlayer = nil
         isStoppingIntentionally = false
 
         guard currentChapterIndex < Self.chapters.count else {
@@ -8631,20 +8691,37 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
 
             guard !spokenText.isEmpty else { return }
 
-            let utterance = AVSpeechUtterance(string: spokenText)
-            let voiceCode: String
-            switch selectedLanguage {
-            case "en": voiceCode = "en-US"
-            case "pt": voiceCode = "pt-BR"
-            case "fr": voiceCode = "fr-FR"
-            default: voiceCode = "es-ES"
+            // 🎙️ 1. Audio Neuronal de Estudio Ultra-Natural (edge-tts / 0 ms latencia)
+            let assetName = "PrologueAudio\(currentChapterIndex)_\(selectedLanguage)"
+            if let dataAsset = NSDataAsset(name: assetName),
+               let player = try? AVAudioPlayer(data: dataAsset.data) {
+                player.delegate = self
+                player.enableRate = true
+                player.rate = (isSpeedingUp || playbackSpeed >= 2.0) ? 2.0 : (playbackSpeed >= 1.5 ? 1.5 : 1.0)
+                if resumeChars > 0 && fullText.count > 0 {
+                    let progress = Double(resumeChars) / Double(fullText.count)
+                    player.currentTime = player.duration * progress
+                }
+                player.play()
+                self.audioPlayer = player
+                self.isSpeaking = true
+            } else {
+                // Fallback: Sintetizador nativo
+                let utterance = AVSpeechUtterance(string: spokenText)
+                let voiceCode: String
+                switch selectedLanguage {
+                case "en": voiceCode = "en-US"
+                case "pt": voiceCode = "pt-BR"
+                case "fr": voiceCode = "fr-FR"
+                default: voiceCode = "es-ES"
+                }
+                utterance.voice = AVSpeechSynthesisVoice(language: voiceCode) ?? AVSpeechSynthesisVoice(language: "en-US")
+                utterance.rate = effectiveRate
+                utterance.pitchMultiplier = 0.92
+                utterance.volume = 1.0
+                isSpeaking = true
+                synthesizer.speak(utterance)
             }
-            utterance.voice = AVSpeechSynthesisVoice(language: voiceCode) ?? AVSpeechSynthesisVoice(language: "en-US")
-            utterance.rate = effectiveRate
-            utterance.pitchMultiplier = 0.92
-            utterance.volume = 1.0
-            isSpeaking = true
-            synthesizer.speak(utterance)
         } else {
             isSpeaking = false
         }
@@ -8656,9 +8733,7 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
             playCurrentChapter()
         } else {
             isStoryCompleted = true
-            isStoppingIntentionally = true
-            synthesizer.stopSpeaking(at: .immediate)
-            isStoppingIntentionally = false
+            stopAll()
         }
     }
 
@@ -8674,6 +8749,8 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
         if isMuted {
             isStoppingIntentionally = true
             synthesizer.stopSpeaking(at: .immediate)
+            audioPlayer?.stop()
+            audioPlayer = nil
             isStoppingIntentionally = false
             isSpeaking = false
         } else {
@@ -8686,7 +8763,24 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
         playCurrentChapter()
     }
 
-    // 🛡️ Prevenir auto-saltos involuntarios: solo avanzar si autoAdvance está explícitamente activado
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        guard !isStoppingIntentionally else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.isSpeaking = false
+            if self.autoAdvance {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+                    guard let self = self, self.autoAdvance else { return }
+                    if self.currentChapterIndex + 1 < Self.chapters.count {
+                        self.nextChapter()
+                    } else {
+                        self.isStoryCompleted = true
+                    }
+                }
+            }
+        }
+    }
+
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         guard !isStoppingIntentionally else { return }
         DispatchQueue.main.async { [weak self] in
@@ -8714,11 +8808,375 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
         isStoppingIntentionally = true
         stopTypewriter()
         synthesizer.stopSpeaking(at: .immediate)
+        audioPlayer?.stop()
+        audioPlayer = nil
         isStoppingIntentionally = false
         isSpeaking = false
     }
 }
 
+// MARK: - ⚡ Minijuego: Caja de Fusibles Cuántica (Estilo Wiring de Among Us)
+struct QuantumFuseWire: Identifiable, Equatable {
+    let id: Int
+    let color: Color
+    let glowColor: Color
+    let name: String
+    var isConnected: Bool = false
+}
+
+struct QuantumFuseBoxView: View {
+    @ObservedObject var model: GameModel
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var wires: [QuantumFuseWire] = [
+        QuantumFuseWire(id: 0, color: Color(red: 1.0, green: 0.18, blue: 0.35), glowColor: .red, name: "RUBÍ"),
+        QuantumFuseWire(id: 1, color: Color(red: 0.0, green: 0.95, blue: 1.0), glowColor: .cyan, name: "CIAN"),
+        QuantumFuseWire(id: 2, color: Color(red: 1.0, green: 0.82, blue: 0.20), glowColor: .yellow, name: "ÁMBAR"),
+        QuantumFuseWire(id: 3, color: Color(red: 0.78, green: 0.25, blue: 1.0), glowColor: .purple, name: "PLASMA")
+    ]
+
+    @State private var rightOrder: [Int] = [2, 0, 3, 1]
+    @State private var activeDragWireId: Int? = nil
+    @State private var currentDragPoint: CGPoint = .zero
+    @State private var leftAnchors: [CGPoint] = Array(repeating: .zero, count: 4)
+    @State private var rightAnchors: [CGPoint] = Array(repeating: .zero, count: 4)
+    @State private var isCompleted: Bool = false
+    @State private var powerPercentage: Int = 0
+
+    private var allConnected: Bool {
+        wires.allSatisfy { $0.isConnected }
+    }
+
+    var body: some View {
+        ZStack {
+            Color(red: 0.06, green: 0.07, blue: 0.10).ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                // Header Caja de Fusibles
+                HStack(spacing: 12) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "bolt.fill")
+                            .font(.system(size: 14, weight: .black))
+                            .foregroundStyle(isCompleted ? .green : .yellow)
+                        Text("CIRCUITO CHRONO-CORE // CAJA DE FUSIBLES")
+                            .font(.system(size: 12, weight: .black, design: .monospaced))
+                            .foregroundStyle(.white)
+                    }
+
+                    Spacer()
+
+                    HStack(spacing: 6) {
+                        Text("POTENCIA:")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.6))
+                        Text("\(powerPercentage)%")
+                            .font(.system(size: 13, weight: .black, design: .monospaced))
+                            .foregroundStyle(isCompleted ? .green : (powerPercentage > 50 ? .yellow : .cyan))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Color.black.opacity(0.5), in: Capsule())
+                    .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 1))
+
+                    Button {
+                        dismiss()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "xmark.circle.fill")
+                            Text("SALIR")
+                        }
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 1))
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 14)
+                .padding(.bottom, 6)
+
+                // Franja de Advertencia
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: [.yellow, .black, .yellow, .black, .yellow],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(height: 3)
+                    .opacity(0.8)
+
+                Text(isCompleted ? "✨ ¡CIRCUITO RESTAURADO CON ÉXITO!" : "Conecta cada cable láser a la terminal de su mismo color")
+                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(isCompleted ? Color.green : Color.white.opacity(0.75))
+                    .padding(.vertical, 4)
+
+                // Panel de Cableado
+                GeometryReader { boardGeo in
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 18)
+                            .fill(Color(red: 0.10, green: 0.12, blue: 0.16))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 18)
+                                    .stroke(Color.cyan.opacity(0.35), lineWidth: 1.5)
+                            )
+                            .shadow(color: .black.opacity(0.6), radius: 12)
+
+                        // Cables Conectados
+                        ForEach(wires) { wire in
+                            if wire.isConnected, let targetSlot = rightOrder.firstIndex(of: wire.id) {
+                                let start = leftAnchors[wire.id]
+                                let end = rightAnchors[targetSlot]
+                                if start != .zero && end != .zero {
+                                    Path { p in
+                                        p.move(to: start)
+                                        let midX = (start.x + end.x) * 0.5
+                                        p.addCurve(to: end, control1: CGPoint(x: midX, y: start.y), control2: CGPoint(x: midX, y: end.y))
+                                    }
+                                    .stroke(
+                                        wire.color,
+                                        style: StrokeStyle(lineWidth: 7, lineCap: .round, lineJoin: .round)
+                                    )
+                                    .shadow(color: wire.glowColor.opacity(0.9), radius: 8)
+
+                                    Path { p in
+                                        p.move(to: start)
+                                        let midX = (start.x + end.x) * 0.5
+                                        p.addCurve(to: end, control1: CGPoint(x: midX, y: start.y), control2: CGPoint(x: midX, y: end.y))
+                                    }
+                                    .stroke(
+                                        Color.white.opacity(0.85),
+                                        style: StrokeStyle(lineWidth: 2, lineCap: .round)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Cable en Arrastre Activo
+                        if let dragId = activeDragWireId, dragId < wires.count {
+                            let wire = wires[dragId]
+                            let start = leftAnchors[dragId]
+                            Path { p in
+                                p.move(to: start)
+                                let midX = (start.x + currentDragPoint.x) * 0.5
+                                p.addCurve(to: currentDragPoint, control1: CGPoint(x: midX, y: start.y), control2: CGPoint(x: midX, y: currentDragPoint.y))
+                            }
+                            .stroke(
+                                wire.color,
+                                style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round)
+                            )
+                            .shadow(color: wire.glowColor.opacity(0.9), radius: 10)
+
+                            Circle()
+                                .fill(Color.white)
+                                .frame(width: 14, height: 14)
+                                .shadow(color: wire.glowColor, radius: 8)
+                                .position(currentDragPoint)
+                        }
+
+                        // Columnas Izquierda y Derecha
+                        HStack {
+                            // Izquierda
+                            VStack(spacing: 20) {
+                                ForEach(0..<4, id: \.self) { idx in
+                                    let wire = wires[idx]
+                                    HStack(spacing: 8) {
+                                        ZStack {
+                                            Circle()
+                                                .fill(Color(red: 0.16, green: 0.18, blue: 0.22))
+                                                .frame(width: 38, height: 38)
+                                                .overlay(Circle().stroke(wire.color, lineWidth: 2.5))
+                                                .shadow(color: wire.glowColor.opacity(0.6), radius: 6)
+
+                                            Circle()
+                                                .fill(wire.color)
+                                                .frame(width: 18, height: 18)
+
+                                            if wire.isConnected {
+                                                Image(systemName: "checkmark")
+                                                    .font(.system(size: 10, weight: .bold))
+                                                    .foregroundStyle(.black)
+                                            }
+                                        }
+                                        .background(
+                                            GeometryReader { cGeo in
+                                                Color.clear.onAppear {
+                                                    let frame = cGeo.frame(in: .named("fuse_board"))
+                                                    leftAnchors[idx] = CGPoint(x: frame.maxX, y: frame.midY)
+                                                }
+                                                .onChange(of: cGeo.frame(in: .named("fuse_board"))) { newFrame in
+                                                    leftAnchors[idx] = CGPoint(x: newFrame.maxX, y: newFrame.midY)
+                                                }
+                                            }
+                                        )
+
+                                        Text(wire.name)
+                                            .font(.system(size: 11, weight: .black, design: .monospaced))
+                                            .foregroundStyle(wire.color)
+
+                                        Spacer()
+                                    }
+                                    .contentShape(Rectangle())
+                                    .gesture(
+                                        DragGesture(minimumDistance: 0, coordinateSpace: .named("fuse_board"))
+                                            .onChanged { val in
+                                                guard !wire.isConnected && !isCompleted else { return }
+                                                if activeDragWireId == nil {
+                                                    activeDragWireId = idx
+                                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                                }
+                                                currentDragPoint = val.location
+                                            }
+                                            .onEnded { val in
+                                                guard activeDragWireId == idx else { return }
+                                                handleDrop(for: idx, at: val.location)
+                                                activeDragWireId = nil
+                                            }
+                                    )
+                                }
+                            }
+                            .frame(width: 140)
+                            .padding(.leading, 24)
+
+                            Spacer()
+
+                            // Derecha
+                            VStack(spacing: 20) {
+                                ForEach(0..<4, id: \.self) { slotIdx in
+                                    let targetColorId = rightOrder[slotIdx]
+                                    let targetWire = wires[targetColorId]
+                                    let isPlugged = targetWire.isConnected
+
+                                    HStack(spacing: 8) {
+                                        Spacer()
+
+                                        Text(targetWire.name)
+                                            .font(.system(size: 11, weight: .black, design: .monospaced))
+                                            .foregroundStyle(targetWire.color)
+
+                                        ZStack {
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .fill(Color(red: 0.16, green: 0.18, blue: 0.22))
+                                                .frame(width: 38, height: 38)
+                                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(targetWire.color, lineWidth: 2.5))
+                                                .shadow(color: targetWire.glowColor.opacity(isPlugged ? 0.9 : 0.3), radius: isPlugged ? 10 : 3)
+
+                                            if isPlugged {
+                                                Circle()
+                                                    .fill(Color.green)
+                                                    .frame(width: 14, height: 14)
+                                                    .shadow(color: .green, radius: 6)
+                                            } else {
+                                                Circle()
+                                                    .stroke(targetWire.color.opacity(0.6), lineWidth: 2)
+                                                    .frame(width: 12, height: 12)
+                                            }
+                                        }
+                                        .background(
+                                            GeometryReader { cGeo in
+                                                Color.clear.onAppear {
+                                                    let frame = cGeo.frame(in: .named("fuse_board"))
+                                                    rightAnchors[slotIdx] = CGPoint(x: frame.minX, y: frame.midY)
+                                                }
+                                                .onChange(of: cGeo.frame(in: .named("fuse_board"))) { newFrame in
+                                                    rightAnchors[slotIdx] = CGPoint(x: newFrame.minX, y: newFrame.midY)
+                                                }
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                            .frame(width: 140)
+                            .padding(.trailing, 24)
+                        }
+                    }
+                    .coordinateSpace(name: "fuse_board")
+                }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 8)
+
+                if isCompleted {
+                    HStack(spacing: 12) {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(.green)
+
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("¡SOBRECARGA ACTIVADA // CHRONO-CORE DESPIERTO!")
+                                .font(.system(size: 11.5, weight: .black, design: .rounded))
+                                .foregroundStyle(.white)
+                            Text("+50 SALUD • MODO SLOW-MOTION DESBLOQUEADO • LINTERNA AL 100%")
+                                .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                                .foregroundStyle(.yellow)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 7)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+                    .background(Color.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 14))
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.green.opacity(0.8), lineWidth: 1.5))
+                    .padding(.bottom, 10)
+                }
+            }
+        }
+        .onAppear {
+            setupBoard()
+        }
+    }
+
+    private func setupBoard() {
+        rightOrder.shuffle()
+        powerPercentage = 0
+    }
+
+    private func handleDrop(for wireId: Int, at point: CGPoint) {
+        for slotIdx in 0..<4 {
+            let target = rightAnchors[slotIdx]
+            let dist = hypot(point.x - target.x, point.y - target.y)
+            if dist < 42.0 {
+                let targetColorId = rightOrder[slotIdx]
+                if targetColorId == wireId {
+                    wires[wireId].isConnected = true
+                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                    model.audio.playLaserReflectionSound()
+                    powerPercentage = min(100, wires.filter { $0.isConnected }.count * 25)
+
+                    if allConnected {
+                        triggerVictory()
+                    }
+                    return
+                } else {
+                    UINotificationFeedbackGenerator().notificationOccurred(.error)
+                    return
+                }
+            }
+        }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
+    private func triggerVictory() {
+        isCompleted = true
+        powerPercentage = 100
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        model.audio.playLaserIgnition()
+        model.audio.playLanding(intensity: 1.0)
+        
+        model.onQuantumPuzzleSolved()
+        model.playerHealth = min(model.maxPlayerHealth, model.playerHealth + 50)
+        model.flashlightBattery = 1.0
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                dismiss()
+            }
+        }
+    }
+}
+
+// MARK: - 🎬 Prólogo Cinematográfico con Viñetas Separadas y Audio Natural
 struct CinematicPrologueView: View {
     @ObservedObject var model: GameModel
     @StateObject private var prologue = StoryPrologueManager()
@@ -8739,70 +9197,18 @@ struct CinematicPrologueView: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            // 🖼️ Viñeta de Arte en Alta Definición por Capítulo (Completamente visible sin degradados oscuros invasivos)
-            GeometryReader { geo in
-                let imgName = panelImageName(for: prologue.currentChapterIndex)
-                if let uiImg = UIImage(named: imgName) ?? UIImage(named: "PrologueCover") {
-                    Image(uiImage: uiImg)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .scaleEffect(kenBurnsScale)
-                        .id("prologue_panel_\(prologue.currentChapterIndex)")
-                } else {
-                    LinearGradient(
-                        colors: [Color(red: 0.05, green: 0.02, blue: 0.12), Color(red: 0.02, green: 0.10, blue: 0.22), .black],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                }
-            }
-            .ignoresSafeArea()
-            .animation(.easeInOut(duration: 0.35), value: prologue.currentChapterIndex)
-
-            // ⚡ Gesto TikTok de Presionar y Mantener para 2X
-            Color.clear
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { _ in
-                            if !prologue.isSpeedingUp {
-                                prologue.setSpeedingUp(true)
-                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                            }
-                        }
-                        .onEnded { _ in
-                            if prologue.isSpeedingUp {
-                                prologue.setSpeedingUp(false)
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            }
-                        }
-                )
-
-            // ⚡ Indicador Flotante TikTok 2X Speed
-            if prologue.isSpeedingUp {
-                VStack {
-                    HStack(spacing: 6) {
-                        Image(systemName: "bolt.fill")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(.yellow)
-                        Text("2X VELOCIDAD ACTIVA")
-                            .font(.system(size: 12, weight: .black, design: .monospaced))
-                            .foregroundStyle(.white)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .background(Color.black.opacity(0.65), in: Capsule())
-                    .overlay(Capsule().stroke(Color.yellow, lineWidth: 1.5))
-                    .shadow(color: .yellow.opacity(0.6), radius: 10)
-                    .padding(.top, 56)
-                    Spacer()
-                }
-                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            // Fondo difuminado ambiental de la viñeta activa
+            let imgName = panelImageName(for: prologue.currentChapterIndex)
+            if let uiImg = UIImage(named: imgName) ?? UIImage(named: "PrologueCover") {
+                Image(uiImage: uiImg)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .blur(radius: 30)
+                    .opacity(0.30)
+                    .ignoresSafeArea()
             }
 
-            VStack(spacing: 0) {
+            VStack(spacing: 8) {
                 // Barra Superior Liquid Glass
                 HStack(spacing: 8) {
                     HStack(spacing: 6) {
@@ -8844,7 +9250,7 @@ struct CinematicPrologueView: View {
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
                     .background(Color.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
 
-                    // Botón de Velocidad (1x, 1.5x, 2x)
+                    // Botón de Velocidad
                     Button {
                         prologue.cyclePlaybackSpeed()
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -8861,21 +9267,6 @@ struct CinematicPrologueView: View {
                         .background(.ultraThinMaterial, in: Capsule())
                         .background(Color.black.opacity(0.45), in: Capsule())
                         .overlay(Capsule().stroke(prologue.playbackSpeed > 1.0 ? Color.yellow.opacity(0.8) : Color.white.opacity(0.25), lineWidth: 1))
-                    }
-
-                    // Botón de Subtítulos (Ocultar para ver imagen completa)
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.25)) {
-                            prologue.showsSubtitles.toggle()
-                        }
-                    } label: {
-                        Image(systemName: prologue.showsSubtitles ? "captions.bubble.fill" : "captions.bubble")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(prologue.showsSubtitles ? Color.cyan : Color.white.opacity(0.5))
-                            .frame(width: 30, height: 30)
-                            .background(.ultraThinMaterial, in: Circle())
-                            .background(Color.black.opacity(0.45), in: Circle())
-                            .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 1))
                     }
 
                     // Botón de Silencio
@@ -8910,29 +9301,45 @@ struct CinematicPrologueView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 12)
+                .padding(.top, 10)
 
-                Spacer()
+                // Layout en Modo Paisaje: Viñeta Completa a la Izquierda | Subtítulos y Controles a la Derecha
+                HStack(spacing: 16) {
+                    // 🖼️ Panel Izquierdo: Viñeta Limpia y Completa sin Cortes ni Texto Encima
+                    GeometryReader { geo in
+                        if let uiImg = UIImage(named: imgName) ?? UIImage(named: "PrologueCover") {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(Color.black.opacity(0.65))
 
-                // Barra de Progreso de Capítulos (Mini Cápsulas de Neón)
-                HStack(spacing: 6) {
-                    ForEach(0..<StoryPrologueManager.chapters.count, id: \.self) { idx in
-                        Capsule()
-                            .fill(idx <= prologue.currentChapterIndex ? Color.cyan : Color.white.opacity(0.25))
-                            .frame(height: 3)
-                            .shadow(color: idx == prologue.currentChapterIndex ? Color.cyan.opacity(0.8) : Color.clear, radius: 3)
+                                Image(uiImage: uiImg)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(maxWidth: geo.size.width - 6, maxHeight: geo.size.height - 6)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    .scaleEffect(kenBurnsScale)
+                                    .id("prologue_panel_\(prologue.currentChapterIndex)")
+                            }
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(
+                                        LinearGradient(colors: [Color.cyan.opacity(0.7), Color.blue.opacity(0.3), Color.cyan.opacity(0.7)],
+                                                       startPoint: .topLeading, endPoint: .bottomTrailing),
+                                        lineWidth: 1.5
+                                    )
+                            )
+                            .shadow(color: Color.cyan.opacity(0.25), radius: 10)
+                        }
                     }
-                }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 6)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .animation(.easeInOut(duration: 0.35), value: prologue.currentChapterIndex)
 
-                // 💧 Tarjeta Flotante Liquid Glass de Subtítulos (Translúcida, Compacta y que NO tapa la imagen)
-                if prologue.showsSubtitles {
+                    // 💧 Panel Derecho: Tarjeta Liquid Glass con Lore y Controles
                     let currentChapter = StoryPrologueManager.chapters[min(prologue.currentChapterIndex, StoryPrologueManager.chapters.count - 1)]
                     let fullScript = currentChapter.script(for: prologue.selectedLanguage)
                     let visibleText = String(fullScript.prefix(prologue.displayedChars))
 
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 8) {
                         HStack(spacing: 8) {
                             Text(currentChapter.badge)
                                 .font(.system(size: 8.5, weight: .black, design: .monospaced))
@@ -8942,10 +9349,6 @@ struct CinematicPrologueView: View {
                                 .background(Color.yellow.opacity(0.18), in: Capsule())
                                 .overlay(Capsule().stroke(Color.yellow.opacity(0.6), lineWidth: 1))
 
-                            Text(currentChapter.title)
-                                .font(.system(size: 12, weight: .black, design: .rounded))
-                                .foregroundStyle(.white)
-
                             Spacer()
 
                             Text("PARTE \(prologue.currentChapterIndex + 1) / \(StoryPrologueManager.chapters.count)")
@@ -8953,12 +9356,32 @@ struct CinematicPrologueView: View {
                                 .foregroundStyle(Color.cyan)
                         }
 
-                        Text(visibleText)
-                            .font(.system(size: 12.5, weight: .medium, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.96))
-                            .lineSpacing(3)
-                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .topLeading)
+                        Text(currentChapter.title)
+                            .font(.system(size: 13, weight: .black, design: .rounded))
+                            .foregroundStyle(.white)
 
+                        // Barra de Progreso de Capítulos
+                        HStack(spacing: 5) {
+                            ForEach(0..<StoryPrologueManager.chapters.count, id: \.self) { idx in
+                                Capsule()
+                                    .fill(idx <= prologue.currentChapterIndex ? Color.cyan : Color.white.opacity(0.25))
+                                    .frame(height: 3)
+                                    .shadow(color: idx == prologue.currentChapterIndex ? Color.cyan.opacity(0.8) : Color.clear, radius: 3)
+                            }
+                        }
+                        .padding(.vertical, 2)
+
+                        // Texto con Typewriter y Scroll
+                        ScrollView(.vertical, showsIndicators: false) {
+                            Text(visibleText)
+                                .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.96))
+                                .lineSpacing(3)
+                                .frame(maxWidth: .infinity, alignment: .topLeading)
+                        }
+                        .frame(maxHeight: .infinity)
+
+                        // Botones de Navegación
                         HStack(spacing: 10) {
                             Button {
                                 prologue.previousChapter()
@@ -8966,7 +9389,7 @@ struct CinematicPrologueView: View {
                                 Image(systemName: "backward.fill")
                                     .font(.system(size: 11, weight: .bold))
                                     .foregroundStyle(prologue.currentChapterIndex > 0 ? .white : .white.opacity(0.25))
-                                    .frame(width: 30, height: 30)
+                                    .frame(width: 32, height: 32)
                                     .background(.ultraThinMaterial, in: Circle())
                                     .background(Color.white.opacity(0.08), in: Circle())
                             }
@@ -8978,7 +9401,7 @@ struct CinematicPrologueView: View {
                                 Image(systemName: "arrow.counterclockwise")
                                     .font(.system(size: 11, weight: .bold))
                                     .foregroundStyle(.white)
-                                    .frame(width: 30, height: 30)
+                                    .frame(width: 32, height: 32)
                                     .background(.ultraThinMaterial, in: Circle())
                                     .background(Color.white.opacity(0.08), in: Circle())
                             }
@@ -8987,14 +9410,14 @@ struct CinematicPrologueView: View {
                                 prologue.nextChapter()
                             } label: {
                                 HStack(spacing: 5) {
-                                    Text(prologue.currentChapterIndex < StoryPrologueManager.chapters.count - 1 ? "SIGUIENTE PARTE" : "FINALIZAR HISTORIA")
+                                    Text(prologue.currentChapterIndex < StoryPrologueManager.chapters.count - 1 ? "SIGUIENTE" : "FINALIZAR")
                                         .font(.system(size: 10.5, weight: .black, design: .rounded))
                                     Image(systemName: "forward.fill")
                                         .font(.system(size: 9, weight: .bold))
                                 }
                                 .foregroundStyle(.black)
                                 .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
+                                .padding(.vertical, 7)
                                 .background(Color.cyan, in: Capsule())
                                 .shadow(color: Color.cyan.opacity(0.6), radius: 5)
                             }
@@ -9004,14 +9427,14 @@ struct CinematicPrologueView: View {
                             Button {
                                 completeAndClose()
                             } label: {
-                                HStack(spacing: 6) {
+                                HStack(spacing: 5) {
                                     Image(systemName: "play.fill")
-                                        .font(.system(size: 11, weight: .bold))
+                                        .font(.system(size: 10, weight: .bold))
                                     Text("JUGAR")
                                         .font(.system(size: 11, weight: .black, design: .rounded))
                                 }
                                 .foregroundStyle(.white)
-                                .padding(.horizontal, 14)
+                                .padding(.horizontal, 12)
                                 .padding(.vertical, 7)
                                 .background(
                                     LinearGradient(colors: [Color.cyan, Color.pink], startPoint: .leading, endPoint: .trailing),
@@ -9022,22 +9445,57 @@ struct CinematicPrologueView: View {
                             }
                         }
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .background(Color.black.opacity(0.38), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(
-                                LinearGradient(colors: [Color.cyan.opacity(0.65), Color.pink.opacity(0.45)], startPoint: .topLeading, endPoint: .bottomTrailing),
-                                lineWidth: 1.2
-                            )
-                    )
-                    .shadow(color: .black.opacity(0.4), radius: 12)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 12)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .padding(14)
+                    .frame(width: 340)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18))
+                    .background(Color.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 18))
+                    .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.white.opacity(0.20), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.4), radius: 10)
                 }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+            }
+
+            // Gesto TikTok 2X en toda la pantalla
+            Color.clear
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in
+                            if !prologue.isSpeedingUp {
+                                prologue.setSpeedingUp(true)
+                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            }
+                        }
+                        .onEnded { _ in
+                            if prologue.isSpeedingUp {
+                                prologue.setSpeedingUp(false)
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            }
+                        }
+                )
+
+            // Indicador TikTok 2X
+            if prologue.isSpeedingUp {
+                VStack {
+                    HStack(spacing: 6) {
+                        Image(systemName: "bolt.fill")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.yellow)
+                        Text("2X VELOCIDAD ACTIVA")
+                            .font(.system(size: 12, weight: .black, design: .monospaced))
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .background(Color.black.opacity(0.65), in: Capsule())
+                    .overlay(Capsule().stroke(Color.yellow, lineWidth: 1.5))
+                    .shadow(color: .yellow.opacity(0.6), radius: 10)
+                    .padding(.top, 50)
+                    Spacer()
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.9)))
             }
         }
         .onAppear {
