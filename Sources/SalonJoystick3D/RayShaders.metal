@@ -1626,22 +1626,21 @@ kernel void raytracePatio(
             float dotDir = dot(toolToSurface, normalize(uniforms.toolDirection.xyz));
             
             // Tactical dual-cone: haz central concentrado de alta intensidad + halo perimetral suave
-            float centerBeam = smoothstep(0.80f, 0.985f, dotDir);
-            float wideSpill = smoothstep(0.42f, 0.80f, dotDir) * 0.45f;
-            float ambientHalo = smoothstep(0.05f, 0.42f, dotDir) * 0.14f;
-            float cone = centerBeam + wideSpill + ambientHalo;
+            float centerBeam = smoothstep(0.85f, 0.985f, dotDir);
+            float wideSpill = smoothstep(0.62f, 0.85f, dotDir) * 0.35f;
+            float cone = centerBeam + wideSpill;
             
             float battery = clamp(uniforms.toolParameters.y, 0.0f, 1.0f);
             float flicker = (battery < 0.06f && battery > 0.001f) ? (0.88f + 0.12f * sin(uniforms.viewport.z * 10.0f)) : 1.0f;
-            if (cone > 0.001f && toolDistance < 48.0f && battery > 0.001f) {
+            if (cone > 0.001f && toolDistance < 38.0f && battery > 0.001f) {
                 float incidence = saturate(dot(normal, -toolToSurface));
-                float flashlightPower = (72.0f / (1.0f + toolDistance * toolDistance * 0.022f)) * battery * flicker;
-                float3 flashlightColor = float3(1.0f, 0.95f, 0.84f);
-                direct += albedo * flashlightColor * flashlightPower * cone * (0.28f + incidence * 0.72f);
+                float flashlightPower = (52.0f / (1.0f + toolDistance * toolDistance * 0.032f)) * battery * flicker;
+                float3 flashlightColor = float3(1.0f, 0.94f, 0.82f);
+                direct += albedo * flashlightColor * flashlightPower * cone * (0.22f + incidence * 0.78f);
                 
                 float3 flashlightHalf = normalize(-toolToSurface - currentRay.direction);
                 float flashlightGloss = pow(saturate(dot(normal, flashlightHalf)), 140.0f);
-                direct += flashlightColor * flashlightPower * cone * flashlightGloss * 0.45f;
+                direct += flashlightColor * flashlightPower * cone * flashlightGloss * 0.40f;
             }
         } else if (uniforms.toolParameters.x > 1.5f && uniforms.toolParameters.x < 2.5f && uniforms.toolParameters.y > 0.01f) {
             float primarySpot = laserResult.primaryEnd.w > 0.5f
