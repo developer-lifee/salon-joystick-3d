@@ -8644,8 +8644,11 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
     @Published var isStoryCompleted: Bool = false
     @Published var playbackSpeed: Float = 1.0 // 1.0x, 1.5x, 2.0x
     @Published var isSpeedingUp: Bool = false // Gesto TikTok estilo press-and-hold
-    @Published var autoAdvance: Bool = false
+    @Published var autoAdvance: Bool = true
     @Published var showsSubtitles: Bool = true
+
+    var onPrologueCompleted: (() -> Void)? = nil
+    private var autoAdvanceWorkItem: DispatchWorkItem? = nil
 
     private let synthesizer = AVSpeechSynthesizer()
     private var audioPlayer: AVAudioPlayer?
@@ -8770,6 +8773,44 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
         }
     }
 
+    func cancelAutoAdvance() {
+        autoAdvanceWorkItem?.cancel()
+        autoAdvanceWorkItem = nil
+    }
+
+    func triggerAutoAdvanceIfNeeded() {
+        guard autoAdvance else { return }
+        guard currentChapterIndex < Self.chapters.count else { return }
+        let chapter = Self.chapters[currentChapterIndex]
+        let fullText = chapter.script(for: selectedLanguage)
+
+        // 1. El texto mecanografiado debe haber terminado por completo
+        guard displayedChars >= fullText.count else { return }
+
+        // 2. Si el audio está activo, esperar a que termine la narración
+        if !isMuted {
+            if isSpeaking || (audioPlayer?.isPlaying == true) {
+                return
+            }
+        }
+
+        // Cancelar cualquier auto-avance previo pendiente
+        cancelAutoAdvance()
+
+        let delay: TimeInterval = is2XActive ? 0.6 : 1.2
+        let item = DispatchWorkItem { [weak self] in
+            guard let self = self, self.autoAdvance else { return }
+            if self.currentChapterIndex + 1 < Self.chapters.count {
+                self.nextChapter()
+            } else {
+                self.isStoryCompleted = true
+                self.onPrologueCompleted?()
+            }
+        }
+        self.autoAdvanceWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
+    }
+
     func startPrologue() {
         currentChapterIndex = 0
         isStoryCompleted = false
@@ -8777,6 +8818,7 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
     }
 
     func playCurrentChapter(resumeChars: Int = 0) {
+        cancelAutoAdvance()
         isStoppingIntentionally = true
         stopTypewriter()
         synthesizer.stopSpeaking(at: .immediate)
@@ -8806,6 +8848,7 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
                 self.displayedChars += 1
             } else {
                 timer.invalidate()
+                self.triggerAutoAdvanceIfNeeded()
             }
         }
 
@@ -8857,16 +8900,19 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
     }
 
     func nextChapter() {
+        cancelAutoAdvance()
         if currentChapterIndex + 1 < Self.chapters.count {
             currentChapterIndex += 1
             playCurrentChapter()
         } else {
             isStoryCompleted = true
             stopAll()
+            onPrologueCompleted?()
         }
     }
 
     func previousChapter() {
+        cancelAutoAdvance()
         if currentChapterIndex > 0 {
             currentChapterIndex -= 1
             playCurrentChapter()
@@ -8882,12 +8928,14 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
             audioPlayer = nil
             isStoppingIntentionally = false
             isSpeaking = false
+            triggerAutoAdvanceIfNeeded()
         } else {
             playCurrentChapter()
         }
     }
 
     func changeLanguage(_ lang: String) {
+        cancelAutoAdvance()
         selectedLanguage = lang
         playCurrentChapter()
     }
@@ -8897,16 +8945,7 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             self.isSpeaking = false
-            if self.autoAdvance {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
-                    guard let self = self, self.autoAdvance else { return }
-                    if self.currentChapterIndex + 1 < Self.chapters.count {
-                        self.nextChapter()
-                    } else {
-                        self.isStoryCompleted = true
-                    }
-                }
-            }
+            self.triggerAutoAdvanceIfNeeded()
         }
     }
 
@@ -8915,16 +8954,7 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             self.isSpeaking = false
-            if self.autoAdvance {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
-                    guard let self = self, self.autoAdvance else { return }
-                    if self.currentChapterIndex + 1 < Self.chapters.count {
-                        self.nextChapter()
-                    } else {
-                        self.isStoryCompleted = true
-                    }
-                }
-            }
+            self.triggerAutoAdvanceIfNeeded()
         }
     }
 
@@ -8934,6 +8964,7 @@ final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesize
     }
 
     func stopAll() {
+        cancelAutoAdvance()
         isStoppingIntentionally = true
         stopTypewriter()
         synthesizer.stopSpeaking(at: .immediate)
@@ -9651,6 +9682,9 @@ struct CinematicPrologueView: View {
         }
         .onAppear {
             GKAccessPoint.shared.isActive = false
+            prologue.onPrologueCompleted = {
+                completeAndClose()
+            }
             prologue.startPrologue()
         }
         .onDisappear {
