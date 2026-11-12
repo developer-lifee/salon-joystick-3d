@@ -2811,12 +2811,12 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
     }
 
-    // 🛸 Centinelas Aéreos / Drones Voladores con Láser (Acompañan a los terrestres desde la Oleada 2)
+    // 🛸 Centinelas Aéreos / Drones Voladores con Láser (Aparecen solo a partir de la Oleada 5)
     private func isBotFlyingDrone(index: Int) -> Bool {
-        guard currentWave >= 2 else { return false }
-        if currentWave == 2 {
+        guard currentWave >= 5 else { return false }
+        if currentWave == 5 {
             return index == 0
-        } else if currentWave <= 4 {
+        } else if currentWave <= 7 {
             return index == 0 || index == 1
         } else {
             return index == 0 || index == 1 || index == 2

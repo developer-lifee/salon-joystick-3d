@@ -965,7 +965,7 @@ struct ContentView: View {
                         .padding(.top, 2)
                     }
 
-                    if model.currentWave >= 7 && (0..<min(2, model.npcHealths.count)).contains(where: { model.npcHealths[$0] > 0 }) {
+                    if model.currentWave >= 5 && (0..<min(2, model.npcHealths.count)).contains(where: { model.npcHealths[$0] > 0 }) {
                         HStack(spacing: 6) {
                             Text("🛸 AMENAZA AÉREA")
                                 .font(.system(size: 9, weight: .black, design: .monospaced))
