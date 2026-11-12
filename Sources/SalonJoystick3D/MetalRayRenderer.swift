@@ -4697,8 +4697,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         let renderTool: GameHeldTool
         switch heldTool {
-        case .laser: renderTool = (laserActiveRemaining > 0 && laserBattery > 0.005) ? .laser : .none
-        case .mirror: renderTool = (mirrorActiveRemaining > 0 && !mirrorOverheated) ? .mirror : .none
+        case .laser: renderTool = (laserBattery > 0.005) ? .laser : .none
+        case .mirror: renderTool = (!mirrorOverheated) ? .mirror : .none
         default: renderTool = heldTool
         }
 
@@ -4738,7 +4738,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if renderTool == .flashlight {
             effectiveToolParamY = flashlightBattery
         } else if renderTool == .laser {
-            effectiveToolParamY = laserPropagationDistance
+            effectiveToolParamY = (laserActiveRemaining > 0) ? max(0.05, laserPropagationDistance) : 0.0
         } else if renderTool == .mirror {
             let effYaw = playerYaw + shieldYawOffset
             let baseMirrorPitch: Float = (cameraMode == .firstPerson) ? firstPersonPitch : -(orbitPitch - 0.22) * 1.15
@@ -4749,7 +4749,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 sin(effPitch),
                 cos(effYaw) * cos(effPitch)
             ))
-            effectiveToolParamY = isMirrorReflectingLaser ? 2.0 : 1.0
+            effectiveToolParamY = isMirrorReflectingLaser ? 2.0 : (mirrorActiveRemaining > 0 ? 1.5 : 1.0)
         }
 
         var uniforms = RTUniforms(
@@ -4796,7 +4796,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let isDeepSubmerged = (currentlyInPool || isSubterraneanTarget) && playerPosition.y < -0.25
         let isSwimmingInWater = isDeepSubmerged && !isClimbingLadder && !isSlidingOnToboggan
         let isPlayerDead = self.isPlayerDead
-        let isMirrorActive = (heldTool == .mirror && mirrorActiveRemaining > 0)
+        let isMirrorActive = (heldTool == .mirror && !mirrorOverheated)
         let isMoving = hypot(joystick.dx, joystick.dy) > 0.15
 
         let melt = playerMeltProgress

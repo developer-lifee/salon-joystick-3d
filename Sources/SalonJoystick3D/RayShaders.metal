@@ -514,7 +514,7 @@ kernel void traceToolLaser(
     result.primaryEnd = float4(origin, 0.0f);
     result.reflectedEnd = float4(origin, 0.0f);
 
-    bool isLaserGun = (uniforms.toolParameters.x > 1.5f && uniforms.toolParameters.x < 2.5f);
+    bool isLaserGun = (uniforms.toolParameters.x > 1.5f && uniforms.toolParameters.x < 2.5f && uniforms.toolParameters.y > 0.01f);
     bool isMirrorReflecting = (uniforms.toolParameters.x > 2.5f && uniforms.toolParameters.y > 1.5f);
 
     if (!isLaserGun && !isMirrorReflecting) {
@@ -769,6 +769,110 @@ inline FirstPersonHit intersectFirstPersonViewModel(
         float3 rHandCam = float3(0.22f, -0.20f + breathe, 0.45f);
         float3 rHandWorld = camPos + cRight * rHandCam.x + cUp * rHandCam.y + cFwd * rHandCam.z;
 
+        // 🪞 Si el rayo viene de frente (reflejo en el espejo hacia el jugador), dibujar el cuerpo y rostro del slime
+        bool isReflectedFromMirror = dot(r.direction, cFwd) < -0.10f;
+        if (isReflectedFromMirror) {
+            // 🟢 Torso / Cuerpo de Slime Gelatinoso Bioluminiscente
+            float3 slimeTorso = camPos - cUp * 0.48f - cFwd * 0.05f;
+            float3 ocTorso = r.origin - slimeTorso;
+            float bTorso = dot(ocTorso, r.direction);
+            float discTorso = bTorso * bTorso - (dot(ocTorso, ocTorso) - 0.28f * 0.28f);
+            if (discTorso >= 0.0f) {
+                float tTorso = -bTorso - sqrt(discTorso);
+                if (tTorso > 0.08f && tTorso < result.distance) {
+                    result.hit = true;
+                    result.distance = tTorso;
+                    result.normal = normalize((r.origin + r.direction * tTorso) - slimeTorso);
+                    result.albedo = float3(0.24f, 0.92f, 0.30f);
+                    result.emission = float3(0.05f, 0.25f, 0.10f);
+                    result.reflectivity = 0.28f;
+                    result.roughness = 0.14f;
+                }
+            }
+
+            // 👀 Ojos negros brillantes con reflejo especular
+            float3 eyeL = camPos - cUp * 0.22f + cRight * 0.075f + cFwd * 0.16f;
+            float3 ocEL = r.origin - eyeL;
+            float bEL = dot(ocEL, r.direction);
+            float discEL = bEL * bEL - (dot(ocEL, ocEL) - 0.032f * 0.032f);
+            if (discEL >= 0.0f) {
+                float tEL = -bEL - sqrt(discEL);
+                if (tEL > 0.08f && tEL < result.distance) {
+                    result.hit = true;
+                    result.distance = tEL;
+                    result.normal = normalize((r.origin + r.direction * tEL) - eyeL);
+                    result.albedo = float3(0.04f, 0.04f, 0.05f);
+                    result.emission = float3(0.0f);
+                    result.reflectivity = 0.85f;
+                    result.roughness = 0.02f;
+                }
+            }
+
+            float3 eyeR = camPos - cUp * 0.22f - cRight * 0.075f + cFwd * 0.16f;
+            float3 ocER = r.origin - eyeR;
+            float bER = dot(ocER, r.direction);
+            float discER = bER * bER - (dot(ocER, ocER) - 0.032f * 0.032f);
+            if (discER >= 0.0f) {
+                float tER = -bER - sqrt(discER);
+                if (tER > 0.08f && tER < result.distance) {
+                    result.hit = true;
+                    result.distance = tER;
+                    result.normal = normalize((r.origin + r.direction * tER) - eyeR);
+                    result.albedo = float3(0.04f, 0.04f, 0.05f);
+                    result.emission = float3(0.0f);
+                    result.reflectivity = 0.85f;
+                    result.roughness = 0.02f;
+                }
+            }
+
+            // ✋ Mano izquierda en reposo/balanceo en el reflejo
+            float3 lHandCam = float3(-0.24f, -0.22f - breathe * 0.6f, 0.38f);
+            float3 lHandWorld = camPos + cRight * lHandCam.x + cUp * lHandCam.y + cFwd * lHandCam.z;
+            float3 ocLH = r.origin - lHandWorld;
+            float bLH = dot(ocLH, r.direction);
+            float discLH = bLH * bLH - (dot(ocLH, ocLH) - 0.048f * 0.048f);
+            if (discLH >= 0.0f) {
+                float tLH = -bLH - sqrt(discLH);
+                if (tLH > 0.08f && tLH < result.distance) {
+                    result.hit = true;
+                    result.distance = tLH;
+                    result.normal = normalize((r.origin + r.direction * tLH) - lHandWorld);
+                    result.albedo = float3(0.24f, 0.90f, 0.28f);
+                    result.emission = float3(0.04f, 0.22f, 0.08f);
+                    result.reflectivity = 0.25f;
+                    result.roughness = 0.15f;
+                }
+            }
+        }
+
+        // Antebrazo derecho conectando la mano al cuerpo
+        float3 rElbowWorld = camPos + cRight * 0.26f - cUp * 0.38f + cFwd * 0.05f;
+        float3 baArm = rHandWorld - rElbowWorld;
+        float3 oaArm = r.origin - rElbowWorld;
+        float badaArm = dot(baArm, baArm);
+        float bardArm = dot(baArm, r.direction);
+        float baoaArm = dot(baArm, oaArm);
+        float aArm = badaArm - bardArm * bardArm;
+        float bArm = badaArm * dot(r.direction, oaArm) - baoaArm * bardArm;
+        float cArm = badaArm * dot(oaArm, oaArm) - baoaArm * baoaArm - 0.042f * 0.042f * badaArm;
+        float dArm = bArm * bArm - aArm * cArm;
+        if (dArm >= 0.0f && abs(aArm) > 1e-6f) {
+            float tArm = (-bArm - sqrt(dArm)) / aArm;
+            if (tArm > 0.08f && tArm < result.distance) {
+                float yArm = baoaArm + tArm * bardArm;
+                if (yArm > 0.0f && yArm < badaArm) {
+                    result.hit = true;
+                    result.distance = tArm;
+                    float3 pHit = r.origin + r.direction * tArm;
+                    result.normal = normalize(pHit - (rElbowWorld + baArm * (yArm / badaArm)));
+                    result.albedo = float3(0.24f, 0.90f, 0.28f);
+                    result.emission = float3(0.04f, 0.22f, 0.08f);
+                    result.reflectivity = 0.25f;
+                    result.roughness = 0.15f;
+                }
+            }
+        }
+
         // 1. Palma de Slime Verde Gelatina Bioluminiscente
         float handRadius = 0.052f;
         float3 ocR = r.origin - rHandWorld;
@@ -959,36 +1063,44 @@ inline FirstPersonHit intersectFirstPersonViewModel(
                 }
             }
         } else if (toolKind > 2.5f) {
-            // 🛡️ 3. ESCUDO ESPEJO PRISMÁTICO: Espejo hexagonal reflectante con marco de neón cian
-            float3 shieldCenter = rHandWorld + cFwd * 0.14f + cUp * 0.01f;
-            float3 ocSh = r.origin - shieldCenter;
-            float bSh = dot(ocSh, r.direction);
-            float discSh = bSh * bSh - (dot(ocSh, ocSh) - 0.095f * 0.095f);
-            if (discSh >= 0.0f) {
-                float tSh = -bSh - sqrt(discSh);
-                if (tSh > 0.08f && tSh < result.distance) {
-                    result.hit = true;
-                    result.distance = tSh;
-                    result.normal = -cFwd; // Refleja directamente hacia adelante
-                    result.albedo = float3(0.94f, 0.96f, 0.98f);
-                    result.emission = float3(0.0f);
-                    result.reflectivity = 0.98f; // Espejo puro reflectante Ray-Traced
-                    result.roughness = 0.005f;
-                }
-            }
+            // 🛡️ 3. ESCUDO ESPEJO PRISMÁTICO: Disco táctico reflectante (diámetro 46cm) con marco cian y núcleo cuántico
+            float3 shieldCenter = rHandWorld + cFwd * 0.12f + cUp * 0.02f - cRight * 0.04f;
+            float denom = dot(r.direction, cFwd);
+            if (abs(denom) > 1e-5f) {
+                float tShield = dot(shieldCenter - r.origin, cFwd) / denom;
+                if (tShield > 0.08f && tShield < result.distance) {
+                    float3 pHit = r.origin + r.direction * tShield;
+                    float distFromCenter = length(pHit - shieldCenter);
+                    if (distFromCenter <= 0.23f) {
+                        result.hit = true;
+                        result.distance = tShield;
+                        bool frontFacing = denom < 0.0f; // Rayo viene del frente (reflejo en el espejo hacia el jugador)
+                        result.normal = frontFacing ? cFwd : -cFwd;
 
-            // Marco perimétrico de Neón Cian
-            float discRim = bSh * bSh - (dot(ocSh, ocSh) - 0.115f * 0.115f);
-            if (discRim >= 0.0f && discSh < 0.0f) {
-                float tRim = -bSh - sqrt(discRim);
-                if (tRim > 0.08f && tRim < result.distance) {
-                    result.hit = true;
-                    result.distance = tRim;
-                    result.normal = normalize((r.origin + r.direction * tRim) - shieldCenter);
-                    result.albedo = float3(0.05f, 0.85f, 0.98f);
-                    result.emission = float3(0.2f, 3.6f, 5.2f);
-                    result.reflectivity = 0.40f;
-                    result.roughness = 0.15f;
+                        if (distFromCenter <= 0.20f) {
+                            if (frontFacing) {
+                                // Cara frontal: Espejo puro reflectante de alta fidelidad (98%)
+                                result.albedo = float3(0.96f, 0.98f, 1.0f);
+                                result.reflectivity = 0.98f;
+                                result.roughness = 0.005f;
+                                result.emission = (distFromCenter <= 0.045f) ? float3(0.4f, 4.5f, 6.0f) : float3(0.0f);
+                            } else {
+                                // Cara trasera: Visor táctico cian translúcido
+                                result.albedo = float3(0.12f, 0.55f, 0.75f);
+                                result.reflectivity = 0.35f;
+                                result.roughness = 0.15f;
+                                result.emission = float3(0.06f, 0.75f, 1.05f);
+                            }
+                        } else {
+                            // Marco perimétrico de Neón Cian de alto brillo
+                            float3 rDir = normalize(pHit - shieldCenter);
+                            result.normal = normalize(rDir * 0.6f + (frontFacing ? cFwd : -cFwd) * 0.8f);
+                            result.albedo = float3(0.06f, 0.88f, 1.0f);
+                            result.emission = float3(0.35f, 4.8f, 6.5f);
+                            result.reflectivity = 0.50f;
+                            result.roughness = 0.10f;
+                        }
+                    }
                 }
             }
         }
@@ -1128,7 +1240,7 @@ kernel void raytracePatio(
             bounce1Throughput = throughput;
         }
         tracer.accept_any_intersection(false);
-        uint rayMask = (bounce == 0 && isMirrorViewport) ? 0x01 : (bounce == 0 && firstPerson ? 0x05 : 0x07);
+        uint rayMask = (bounce == 0 && isMirrorViewport) ? 0x01 : (firstPerson ? 0x05 : 0x07);
         auto hit = tracer.intersect(currentRay, accelerationStructure, rayMask);
         float3 position;
         float3 normal;
@@ -1139,7 +1251,7 @@ kernel void raytracePatio(
         float3 emission = float3(0.0f);
 
         bool hitFP = false;
-        if (bounce == 0 && firstPerson) {
+        if (firstPerson && bounce < 2) {
             bool inWater = uniforms.cameraPosition.y < 0.35f || uniforms.cameraPosition.y <= -4.75f;
             FirstPersonHit fpHit = intersectFirstPersonViewModel(
                 currentRay,
@@ -1154,7 +1266,11 @@ kernel void raytracePatio(
             );
             if (fpHit.hit && (hit.type == intersection_type::none || fpHit.distance < hit.distance)) {
                 hitFP = true;
-                firstSurfaceDistance = fpHit.distance;
+                if (bounce == 0) {
+                    firstSurfaceDistance = fpHit.distance;
+                } else if (bounce == 1) {
+                    bounce1Distance = fpHit.distance;
+                }
                 position = currentRay.origin + currentRay.direction * fpHit.distance;
                 normal = fpHit.normal;
                 if (dot(normal, currentRay.direction) > 0.0f) {
@@ -1508,7 +1624,7 @@ kernel void raytracePatio(
                 float flashlightGloss = pow(saturate(dot(normal, flashlightHalf)), 140.0f);
                 direct += flashlightColor * flashlightPower * cone * flashlightGloss * 0.40f;
             }
-        } else if (uniforms.toolParameters.x > 1.5f && uniforms.toolParameters.x < 2.5f) {
+        } else if (uniforms.toolParameters.x > 1.5f && uniforms.toolParameters.x < 2.5f && uniforms.toolParameters.y > 0.01f) {
             float primarySpot = laserResult.primaryEnd.w > 0.5f
                 ? 1.0f - smoothstep(0.025f, 0.14f, distance(position, laserResult.primaryEnd.xyz))
                 : 0.0f;
@@ -1794,8 +1910,8 @@ kernel void raytracePatio(
         currentRay.max_distance = 145.0f;
     }
 
-    if (uniforms.toolParameters.x > 1.5f && uniforms.toolParameters.x < 2.5f && laserResult.primaryEnd.w > 0.5f) {
-        float maxDist = uniforms.toolParameters.y > 0.01f ? uniforms.toolParameters.y : 100.0f;
+    if (uniforms.toolParameters.x > 1.5f && uniforms.toolParameters.x < 2.5f && uniforms.toolParameters.y > 0.01f && laserResult.primaryEnd.w > 0.5f) {
+        float maxDist = uniforms.toolParameters.y;
         float3 pStart = laserResult.primaryStart.xyz;
         float3 pEndTarget = laserResult.primaryEnd.xyz;
         float pLen = distance(pStart, pEndTarget);
