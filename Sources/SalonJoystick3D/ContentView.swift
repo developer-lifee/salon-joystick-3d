@@ -9386,6 +9386,7 @@ struct CinematicPrologueView: View {
     @StateObject private var prologue = StoryPrologueManager()
     @Environment(\.dismiss) private var dismiss
     @State private var kenBurnsScale: CGFloat = 1.02
+    @State private var pressStartTime: Date? = nil
 
     private func panelImageName(for index: Int) -> String {
         switch index {
@@ -9431,13 +9432,22 @@ struct CinematicPrologueView: View {
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { _ in
-                        if !prologue.isSpeedingUp {
-                            prologue.setSpeedingUp(true)
-                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        if pressStartTime == nil {
+                            pressStartTime = Date()
+                            if !prologue.is2XActive {
+                                prologue.setSpeedingUp(true)
+                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            }
                         }
                     }
                     .onEnded { _ in
-                        if prologue.isSpeedingUp {
+                        let duration = Date().timeIntervalSince(pressStartTime ?? Date())
+                        pressStartTime = nil
+                        if duration < 0.28 && prologue.is2XActive {
+                            // Toque rápido en pantalla completa en modo 2X: restaura controles e interfaz
+                            prologue.toggle2X()
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        } else if prologue.isSpeedingUp {
                             prologue.setSpeedingUp(false)
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         }
@@ -9445,263 +9455,313 @@ struct CinematicPrologueView: View {
             )
             .animation(.easeInOut(duration: 0.35), value: prologue.currentChapterIndex)
 
-            // 💎 2. Interfaz Liquid Glass Flotante
+            // 💎 2. Interfaz Liquid Glass Flotante (En 2X se oculta por completo para inmersión cinematográfica 100%)
             VStack(spacing: 0) {
                 // Barra Superior Liquid Glass Flotante
-                HStack(spacing: 8) {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(Color.red)
-                            .frame(width: 8, height: 8)
-                            .shadow(color: .red, radius: 4)
-                        Text("LUMINA // REGISTRO 0-7")
-                            .font(.system(size: 10, weight: .black, design: .monospaced))
-                            .foregroundStyle(.white)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .background(Color.black.opacity(0.50), in: Capsule())
-                    .overlay(Capsule().stroke(Color.red.opacity(0.65), lineWidth: 1))
-
-                    Spacer()
-
-                    // Selector de Idiomas
-                    HStack(spacing: 2) {
-                        ForEach(["es", "en", "pt", "fr"], id: \.self) { lang in
-                            Button {
-                                prologue.changeLanguage(lang)
-                            } label: {
-                                Text(flagForLang(lang))
-                                    .font(.system(size: 11, weight: .bold))
-                                    .foregroundStyle(prologue.selectedLanguage == lang ? .white : .white.opacity(0.55))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 3)
-                                    .background(
-                                        prologue.selectedLanguage == lang ? Color.cyan.opacity(0.45) : Color.clear,
-                                        in: RoundedRectangle(cornerRadius: 6)
-                                    )
-                            }
-                        }
-                    }
-                    .padding(3)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
-                    .background(Color.black.opacity(0.50), in: RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.15), lineWidth: 1))
-
-                    // Botón de Velocidad
-                    Button {
-                        prologue.cyclePlaybackSpeed()
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    } label: {
-                        HStack(spacing: 2) {
-                            Image(systemName: "bolt.fill")
-                                .font(.system(size: 10, weight: .bold))
-                            Text(String(format: "%.1fx", prologue.playbackSpeed))
-                                .font(.system(size: 11, weight: .black, design: .monospaced))
-                        }
-                        .foregroundStyle(prologue.playbackSpeed > 1.0 ? Color.yellow : Color.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .background(Color.black.opacity(0.50), in: Capsule())
-                        .overlay(Capsule().stroke(prologue.playbackSpeed > 1.0 ? Color.yellow.opacity(0.8) : Color.white.opacity(0.25), lineWidth: 1))
-                    }
-
-                    // Botón de Silencio
-                    Button {
-                        prologue.toggleMute()
-                    } label: {
-                        Image(systemName: prologue.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(prologue.isMuted ? Color.pink : Color.cyan)
-                            .frame(width: 30, height: 30)
-                            .background(.ultraThinMaterial, in: Circle())
-                            .background(Color.black.opacity(0.50), in: Circle())
-                            .overlay(Circle().stroke((prologue.isMuted ? Color.pink : Color.cyan).opacity(0.6), lineWidth: 1))
-                    }
-
-                    // Omitir
-                    Button {
-                        completeAndClose()
-                    } label: {
-                        HStack(spacing: 3) {
-                            Text("OMITIR")
-                                .font(.system(size: 10, weight: .black, design: .rounded))
-                            Image(systemName: "forward.end.fill")
-                                .font(.system(size: 9, weight: .bold))
-                        }
-                        .foregroundStyle(.white.opacity(0.9))
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 5)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .background(Color.white.opacity(0.12), in: Capsule())
-                        .overlay(Capsule().stroke(Color.white.opacity(0.35), lineWidth: 1))
-                    }
-                }
-                .padding(.horizontal, 28)
-                .padding(.top, 14)
-
-                Spacer()
-
-                // 💧 Panel Cinematográfico Flotante Liquid Glass (Tercio Inferior)
-                let currentChapter = StoryPrologueManager.chapters[min(prologue.currentChapterIndex, StoryPrologueManager.chapters.count - 1)]
-                let fullScript = currentChapter.script(for: prologue.selectedLanguage)
-                let visibleText = String(fullScript.prefix(prologue.displayedChars))
-
-                VStack(alignment: .leading, spacing: 8) {
-                    // Fila Cabecera: Badge + Título + Progreso
-                    HStack(spacing: 10) {
-                        Text(currentChapter.badge)
-                            .font(.system(size: 8.5, weight: .black, design: .monospaced))
-                            .foregroundStyle(.yellow)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 2.5)
-                            .background(Color.yellow.opacity(0.20), in: Capsule())
-                            .overlay(Capsule().stroke(Color.yellow.opacity(0.7), lineWidth: 1))
-
-                        Text(currentChapter.title)
-                            .font(.system(size: 13, weight: .black, design: .rounded))
-                            .foregroundStyle(.white)
-
-                        Spacer()
-
-                        // Barra de Progreso de Capítulos
-                        HStack(spacing: 5) {
-                            ForEach(0..<StoryPrologueManager.chapters.count, id: \.self) { idx in
-                                Capsule()
-                                    .fill(idx <= prologue.currentChapterIndex ? Color.cyan : Color.white.opacity(0.25))
-                                    .frame(width: idx == prologue.currentChapterIndex ? 22 : 12, height: 4)
-                                    .shadow(color: idx == prologue.currentChapterIndex ? Color.cyan.opacity(0.8) : Color.clear, radius: 4)
-                            }
-                        }
-
-                        Text("PARTE \(prologue.currentChapterIndex + 1)/\(StoryPrologueManager.chapters.count)")
-                            .font(.system(size: 10, weight: .black, design: .monospaced))
-                            .foregroundStyle(Color.cyan)
-                    }
-
-                    // Subtítulo Cinematográfico con Typewriter
-                    ScrollView(.vertical, showsIndicators: false) {
-                        Text(visibleText)
-                            .font(.system(size: 13.5, weight: .medium, design: .rounded))
-                            .foregroundStyle(.white)
-                            .lineSpacing(3.5)
-                            .shadow(color: .black.opacity(0.9), radius: 4, x: 0, y: 1)
-                            .frame(maxWidth: .infinity, alignment: .topLeading)
-                    }
-                    .frame(height: 52)
-
-                    // Fila de Controles de Navegación
-                    HStack(spacing: 9) {
-                        Button {
-                            prologue.previousChapter()
-                        } label: {
-                            Image(systemName: "backward.fill")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundStyle(prologue.currentChapterIndex > 0 ? .white : .white.opacity(0.25))
-                                .frame(width: 32, height: 32)
-                                .background(.ultraThinMaterial, in: Circle())
-                                .background(Color.white.opacity(0.08), in: Circle())
-                        }
-                        .disabled(prologue.currentChapterIndex == 0)
-
-                        Button {
-                            prologue.playCurrentChapter()
-                        } label: {
-                            Image(systemName: "arrow.counterclockwise")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundStyle(.white)
-                                .frame(width: 32, height: 32)
-                                .background(.ultraThinMaterial, in: Circle())
-                                .background(Color.white.opacity(0.08), in: Circle())
-                        }
-
-                        // ⚡ Botón de Velocidad 2X
+                if prologue.is2XActive || prologue.isSpeedingUp {
+                    HStack(spacing: 8) {
                         Button {
                             prologue.toggle2X()
                             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                         } label: {
-                            HStack(spacing: 3) {
+                            HStack(spacing: 6) {
                                 Image(systemName: "bolt.fill")
-                                    .font(.system(size: 10, weight: .bold))
-                                Text(prologue.is2XActive ? "2X ON" : "2X")
-                                    .font(.system(size: 10.5, weight: .black, design: .monospaced))
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(.yellow)
+                                Text("⚡ 2X CINEMÁTICO // TOCA PARA RESTAURAR CONTROLES")
+                                    .font(.system(size: 10, weight: .black, design: .monospaced))
+                                    .foregroundStyle(.white)
                             }
-                            .foregroundStyle(prologue.is2XActive ? Color.black : Color.yellow)
-                            .padding(.horizontal, 9)
+                            .padding(.horizontal, 14)
                             .padding(.vertical, 7)
-                            .background(prologue.is2XActive ? Color.yellow : Color.yellow.opacity(0.18), in: Capsule())
+                            .background(.ultraThinMaterial, in: Capsule())
+                            .background(Color.black.opacity(0.35), in: Capsule())
                             .overlay(Capsule().stroke(Color.yellow.opacity(0.8), lineWidth: 1.2))
-                            .shadow(color: Color.yellow.opacity(prologue.is2XActive ? 0.6 : 0.2), radius: 5)
-                        }
-
-                        // ⏩ Botón SIGUIENTE / FINALIZAR
-                        Button {
-                            if prologue.currentChapterIndex < StoryPrologueManager.chapters.count - 1 {
-                                prologue.nextChapter()
-                            } else {
-                                completeAndClose()
-                            }
-                        } label: {
-                            HStack(spacing: 5) {
-                                Text(prologue.currentChapterIndex < StoryPrologueManager.chapters.count - 1 ? "SIGUIENTE" : "FINALIZAR")
-                                    .font(.system(size: 10.5, weight: .black, design: .rounded))
-                                Image(systemName: prologue.currentChapterIndex < StoryPrologueManager.chapters.count - 1 ? "forward.fill" : "checkmark.circle.fill")
-                                    .font(.system(size: 9, weight: .bold))
-                            }
-                            .foregroundStyle(.black)
-                            .padding(.horizontal, 13)
-                            .padding(.vertical, 7)
-                            .background(prologue.currentChapterIndex < StoryPrologueManager.chapters.count - 1 ? Color.cyan : Color.green, in: Capsule())
-                            .shadow(color: (prologue.currentChapterIndex < StoryPrologueManager.chapters.count - 1 ? Color.cyan : Color.green).opacity(0.6), radius: 5)
+                            .shadow(color: Color.yellow.opacity(0.5), radius: 8)
                         }
 
                         Spacer()
 
-                        // Botón JUGAR
                         Button {
                             completeAndClose()
                         } label: {
-                            HStack(spacing: 5) {
-                                Image(systemName: "play.fill")
-                                    .font(.system(size: 10, weight: .bold))
-                                Text("JUGAR")
-                                    .font(.system(size: 11, weight: .black, design: .rounded))
+                            HStack(spacing: 4) {
+                                Text("OMITIR")
+                                    .font(.system(size: 10, weight: .black, design: .rounded))
+                                Image(systemName: "forward.end.fill")
+                                    .font(.system(size: 9, weight: .bold))
                             }
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 7)
-                            .background(
-                                LinearGradient(colors: [Color.cyan, Color.pink], startPoint: .leading, endPoint: .trailing),
-                                in: Capsule()
-                            )
-                            .overlay(Capsule().stroke(Color.white.opacity(0.75), lineWidth: 1.2))
-                            .shadow(color: Color.pink.opacity(0.55), radius: 6)
+                            .foregroundStyle(.white.opacity(0.85))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(.ultraThinMaterial, in: Capsule())
+                            .background(Color.white.opacity(0.12), in: Capsule())
                         }
                     }
+                    .padding(.horizontal, 28)
+                    .padding(.top, 14)
+                    .transition(.opacity)
+                } else {
+                    HStack(spacing: 8) {
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 8, height: 8)
+                                .shadow(color: .red, radius: 4)
+                            Text("LUMINA // REGISTRO 0-7")
+                                .font(.system(size: 10, weight: .black, design: .monospaced))
+                                .foregroundStyle(.white)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .background(Color.black.opacity(0.50), in: Capsule())
+                        .overlay(Capsule().stroke(Color.red.opacity(0.65), lineWidth: 1))
+
+                        Spacer()
+
+                        // Selector de Idiomas
+                        HStack(spacing: 2) {
+                            ForEach(["es", "en", "pt", "fr"], id: \.self) { lang in
+                                Button {
+                                    prologue.changeLanguage(lang)
+                                } label: {
+                                    Text(flagForLang(lang))
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundStyle(prologue.selectedLanguage == lang ? .white : .white.opacity(0.55))
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 3)
+                                        .background(
+                                            prologue.selectedLanguage == lang ? Color.cyan.opacity(0.45) : Color.clear,
+                                            in: RoundedRectangle(cornerRadius: 6)
+                                        )
+                                }
+                            }
+                        }
+                        .padding(3)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                        .background(Color.black.opacity(0.50), in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.15), lineWidth: 1))
+
+                        // Botón de Velocidad
+                        Button {
+                            prologue.cyclePlaybackSpeed()
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        } label: {
+                            HStack(spacing: 2) {
+                                Image(systemName: "bolt.fill")
+                                    .font(.system(size: 10, weight: .bold))
+                                Text(String(format: "%.1fx", prologue.playbackSpeed))
+                                    .font(.system(size: 11, weight: .black, design: .monospaced))
+                            }
+                            .foregroundStyle(prologue.playbackSpeed > 1.0 ? Color.yellow : Color.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(.ultraThinMaterial, in: Capsule())
+                            .background(Color.black.opacity(0.50), in: Capsule())
+                            .overlay(Capsule().stroke(prologue.playbackSpeed > 1.0 ? Color.yellow.opacity(0.8) : Color.white.opacity(0.25), lineWidth: 1))
+                        }
+
+                        // Botón de Silencio
+                        Button {
+                            prologue.toggleMute()
+                        } label: {
+                            Image(systemName: prologue.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(prologue.isMuted ? Color.pink : Color.cyan)
+                                .frame(width: 30, height: 30)
+                                .background(.ultraThinMaterial, in: Circle())
+                                .background(Color.black.opacity(0.50), in: Circle())
+                                .overlay(Circle().stroke((prologue.isMuted ? Color.pink : Color.cyan).opacity(0.6), lineWidth: 1))
+                        }
+
+                        // Omitir
+                        Button {
+                            completeAndClose()
+                        } label: {
+                            HStack(spacing: 3) {
+                                Text("OMITIR")
+                                    .font(.system(size: 10, weight: .black, design: .rounded))
+                                Image(systemName: "forward.end.fill")
+                                    .font(.system(size: 9, weight: .bold))
+                            }
+                            .foregroundStyle(.white.opacity(0.9))
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 5)
+                            .background(.ultraThinMaterial, in: Capsule())
+                            .background(Color.white.opacity(0.12), in: Capsule())
+                            .overlay(Capsule().stroke(Color.white.opacity(0.35), lineWidth: 1))
+                        }
+                    }
+                    .padding(.horizontal, 28)
+                    .padding(.top, 14)
+                    .transition(.opacity)
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 10)
-                .frame(maxWidth: 820)
-                .background(.ultraThinMaterial.opacity(0.85), in: RoundedRectangle(cornerRadius: 20))
-                .background(Color.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 20))
-                .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 20))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(
-                            LinearGradient(
-                                colors: [Color.cyan.opacity(0.45), Color.white.opacity(0.25), Color.purple.opacity(0.25)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1.0
-                        )
-                )
-                .shadow(color: .black.opacity(0.40), radius: 14, y: 4)
-                .padding(.horizontal, 28)
-                .padding(.bottom, 12)
+
+                Spacer()
+
+                // 💧 Panel Cinematográfico Flotante Liquid Glass (Tercio Inferior - Oculto en 2X)
+                if !prologue.is2XActive && !prologue.isSpeedingUp {
+                    let currentChapter = StoryPrologueManager.chapters[min(prologue.currentChapterIndex, StoryPrologueManager.chapters.count - 1)]
+                    let fullScript = currentChapter.script(for: prologue.selectedLanguage)
+                    let visibleText = String(fullScript.prefix(prologue.displayedChars))
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        // Fila Cabecera: Badge + Título + Progreso
+                        HStack(spacing: 10) {
+                            Text(currentChapter.badge)
+                                .font(.system(size: 8.5, weight: .black, design: .monospaced))
+                                .foregroundStyle(.yellow)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2.5)
+                                .background(Color.yellow.opacity(0.20), in: Capsule())
+                                .overlay(Capsule().stroke(Color.yellow.opacity(0.7), lineWidth: 1))
+
+                            Text(currentChapter.title)
+                                .font(.system(size: 13, weight: .black, design: .rounded))
+                                .foregroundStyle(.white)
+
+                            Spacer()
+
+                            // Barra de Progreso de Capítulos
+                            HStack(spacing: 5) {
+                                ForEach(0..<StoryPrologueManager.chapters.count, id: \.self) { idx in
+                                    Capsule()
+                                        .fill(idx <= prologue.currentChapterIndex ? Color.cyan : Color.white.opacity(0.25))
+                                        .frame(width: idx == prologue.currentChapterIndex ? 22 : 12, height: 4)
+                                        .shadow(color: idx == prologue.currentChapterIndex ? Color.cyan.opacity(0.8) : Color.clear, radius: 4)
+                                }
+                            }
+
+                            Text("PARTE \(prologue.currentChapterIndex + 1)/\(StoryPrologueManager.chapters.count)")
+                                .font(.system(size: 10, weight: .black, design: .monospaced))
+                                .foregroundStyle(Color.cyan)
+                        }
+
+                        // Subtítulo Cinematográfico con Typewriter
+                        ScrollView(.vertical, showsIndicators: false) {
+                            Text(visibleText)
+                                .font(.system(size: 13.5, weight: .medium, design: .rounded))
+                                .foregroundStyle(.white)
+                                .lineSpacing(3.5)
+                                .shadow(color: .black.opacity(0.9), radius: 4, x: 0, y: 1)
+                                .frame(maxWidth: .infinity, alignment: .topLeading)
+                        }
+                        .frame(height: 52)
+
+                        // Fila de Controles de Navegación
+                        HStack(spacing: 9) {
+                            Button {
+                                prologue.previousChapter()
+                            } label: {
+                                Image(systemName: "backward.fill")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(prologue.currentChapterIndex > 0 ? .white : .white.opacity(0.25))
+                                    .frame(width: 32, height: 32)
+                                    .background(.ultraThinMaterial, in: Circle())
+                                    .background(Color.white.opacity(0.08), in: Circle())
+                            }
+                            .disabled(prologue.currentChapterIndex == 0)
+
+                            Button {
+                                prologue.playCurrentChapter()
+                            } label: {
+                                Image(systemName: "arrow.counterclockwise")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 32, height: 32)
+                                    .background(.ultraThinMaterial, in: Circle())
+                                    .background(Color.white.opacity(0.08), in: Circle())
+                            }
+
+                            // ⚡ Botón de Velocidad 2X
+                            Button {
+                                prologue.toggle2X()
+                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            } label: {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "bolt.fill")
+                                        .font(.system(size: 10, weight: .bold))
+                                    Text(prologue.is2XActive ? "2X ON" : "2X")
+                                        .font(.system(size: 10.5, weight: .black, design: .monospaced))
+                                }
+                                .foregroundStyle(prologue.is2XActive ? Color.black : Color.yellow)
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 7)
+                                .background(prologue.is2XActive ? Color.yellow : Color.yellow.opacity(0.18), in: Capsule())
+                                .overlay(Capsule().stroke(Color.yellow.opacity(0.8), lineWidth: 1.2))
+                                .shadow(color: Color.yellow.opacity(prologue.is2XActive ? 0.6 : 0.2), radius: 5)
+                            }
+
+                            // ⏩ Botón SIGUIENTE / FINALIZAR
+                            Button {
+                                if prologue.currentChapterIndex < StoryPrologueManager.chapters.count - 1 {
+                                    prologue.nextChapter()
+                                } else {
+                                    completeAndClose()
+                                }
+                            } label: {
+                                HStack(spacing: 5) {
+                                    Text(prologue.currentChapterIndex < StoryPrologueManager.chapters.count - 1 ? "SIGUIENTE" : "FINALIZAR")
+                                        .font(.system(size: 10.5, weight: .black, design: .rounded))
+                                    Image(systemName: prologue.currentChapterIndex < StoryPrologueManager.chapters.count - 1 ? "forward.fill" : "checkmark.circle.fill")
+                                        .font(.system(size: 9, weight: .bold))
+                                }
+                                .foregroundStyle(.black)
+                                .padding(.horizontal, 13)
+                                .padding(.vertical, 7)
+                                .background(prologue.currentChapterIndex < StoryPrologueManager.chapters.count - 1 ? Color.cyan : Color.green, in: Capsule())
+                                .shadow(color: (prologue.currentChapterIndex < StoryPrologueManager.chapters.count - 1 ? Color.cyan : Color.green).opacity(0.6), radius: 5)
+                            }
+
+                            Spacer()
+
+                            // Botón JUGAR
+                            Button {
+                                completeAndClose()
+                            } label: {
+                                HStack(spacing: 5) {
+                                    Image(systemName: "play.fill")
+                                        .font(.system(size: 10, weight: .bold))
+                                    Text("JUGAR")
+                                        .font(.system(size: 11, weight: .black, design: .rounded))
+                                }
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 7)
+                                .background(
+                                    LinearGradient(colors: [Color.cyan, Color.pink], startPoint: .leading, endPoint: .trailing),
+                                    in: Capsule()
+                                )
+                                .overlay(Capsule().stroke(Color.white.opacity(0.75), lineWidth: 1.2))
+                                .shadow(color: Color.pink.opacity(0.55), radius: 6)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: 820)
+                    .background(.ultraThinMaterial.opacity(0.85), in: RoundedRectangle(cornerRadius: 20))
+                    .background(Color.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 20))
+                    .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 20))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [Color.cyan.opacity(0.45), Color.white.opacity(0.25), Color.purple.opacity(0.25)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.0
+                            )
+                    )
+                    .shadow(color: .black.opacity(0.40), radius: 14, y: 4)
+                    .padding(.horizontal, 28)
+                    .padding(.bottom, 12)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
+            .animation(.easeInOut(duration: 0.35), value: prologue.is2XActive || prologue.isSpeedingUp)
 
             // Indicador TikTok 2X
             if prologue.isSpeedingUp {
