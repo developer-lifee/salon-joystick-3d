@@ -5158,6 +5158,7 @@ final class ChiptuneAudioEngine {
     private let splashNode = AVAudioPlayerNode()
     private let landingNode = AVAudioPlayerNode()
     private let masterMixer = AVAudioMixerNode()
+    private let underwaterEQ = AVAudioUnitEQ(numberOfBands: 1)
     private let slowMoTimePitch = AVAudioUnitTimePitch()
     private let slowMoFXNode = AVAudioPlayerNode()
     private let format = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 2)!
@@ -5261,6 +5262,7 @@ final class ChiptuneAudioEngine {
             }
             self.isInUnderwaterZone = isUnderwater
             self.isInRainbowHallZone = isRainbowHall
+            self.underwaterEQ.bands[0].bypass = !isUnderwater
             guard self.started else { return }
 
             self.musicNode.stop()
@@ -5353,6 +5355,11 @@ final class ChiptuneAudioEngine {
             try session.setPreferredIOBufferDuration(0.005)
             try session.setActive(true)
 
+            underwaterEQ.bands[0].filterType = .lowPass
+            underwaterEQ.bands[0].frequency = 580.0
+            underwaterEQ.bands[0].bandwidth = 1.0
+            underwaterEQ.bands[0].bypass = true
+
             if !nodesAttached {
                 engine.attach(musicNode)
                 engine.attach(glideNode)
@@ -5361,6 +5368,7 @@ final class ChiptuneAudioEngine {
                 engine.attach(splashNode)
                 engine.attach(landingNode)
                 engine.attach(masterMixer)
+                engine.attach(underwaterEQ)
                 engine.attach(slowMoTimePitch)
                 engine.attach(slowMoFXNode)
 
@@ -5371,7 +5379,8 @@ final class ChiptuneAudioEngine {
                 engine.connect(splashNode, to: masterMixer, format: format)
                 engine.connect(landingNode, to: masterMixer, format: format)
 
-                engine.connect(masterMixer, to: slowMoTimePitch, format: format)
+                engine.connect(masterMixer, to: underwaterEQ, format: format)
+                engine.connect(underwaterEQ, to: slowMoTimePitch, format: format)
                 engine.connect(slowMoTimePitch, to: engine.mainMixerNode, format: format)
                 engine.connect(slowMoFXNode, to: engine.mainMixerNode, format: format)
                 nodesAttached = true
@@ -8440,11 +8449,10 @@ struct ContextualActionCircleButton: View {
     @Binding var dimmerFixture: GameLightFixture?
 
     var body: some View {
-        let inWater = model.localPlayerPosition.y < -0.15 || (model.localPlayerPosition.x > -5.0 && model.localPlayerPosition.x < 3.0 && model.localPlayerPosition.z > -6.0 && model.localPlayerPosition.z < 2.5)
         let hasCover = model.isNearCoverRock || model.isCoverActive
         let hasLight = model.nearbyLight != nil && !model.isDefeated && !model.isRecoveringInChamber
 
-        if model.isEditingHUDLayout || inWater || hasCover || hasLight {
+        if model.isEditingHUDLayout || hasCover || hasLight {
             Button {
                 if hasCover {
                     model.toggleCover()
@@ -8470,14 +8478,6 @@ struct ContextualActionCircleButton: View {
                                 .font(.system(size: 7, weight: .black, design: .monospaced))
                         }
                         .foregroundStyle(isOn ? (light == .sheeritNeon ? .orange : (light == .piscinaNeon ? .cyan : .yellow)) : .white.opacity(0.85))
-                    } else if inWater {
-                        VStack(spacing: 1) {
-                            Image(systemName: "arrow.down.circle.fill")
-                                .font(.system(size: 16, weight: .bold))
-                            Text("BUCEAR")
-                                .font(.system(size: 6.5, weight: .black, design: .monospaced))
-                        }
-                        .foregroundStyle(.cyan)
                     } else {
                         VStack(spacing: 1) {
                             Image(systemName: "hand.tap.fill")
