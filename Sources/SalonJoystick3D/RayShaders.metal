@@ -1178,7 +1178,7 @@ kernel void raytracePatio(
                 baseReflectivity = 0.01f;
             }
         } else if (kind < 0.5f && abs(normal.y) < 0.35f && (abs(position.x) > 16.5f || abs(position.z) > 16.5f || abs(position.x) > 25.5f || position.z > 69.5f)) {
-            // 🧱 Muros Perimetrales: Paneles Modulares Cyber / Titanio con Juntas y Remaches
+            // 🧱 Muros Perimetrales: Paneles Modulares Cyber / Titanio con Juntas Biseladas Suaves
             float wallCoordH = (abs(normal.x) > 0.5f) ? position.z : position.x;
             float wallCoordV = position.y;
 
@@ -1187,15 +1187,14 @@ kernel void raytracePatio(
             float seamV = smoothstep(0.012f, 0.038f, abs(fract(wallCoordV * 0.500f) - 0.5f));
             float panelSeam = min(seamH, seamV); // 0 en la junta hundida, 1 en el panel
 
-            // Micro-relieve de textura de concreto reforzado / placa de titanio mate
-            float microGrain = sin(wallCoordH * 16.0f) * sin(wallCoordV * 16.0f) * 0.035f;
-            normal = normalize(normal + float3(microGrain, (1.0f - panelSeam) * -0.08f, microGrain));
+            // Bisel geométrico suave en las juntas de los paneles (sin microGrain de alta frecuencia para evitar aliasing/ruido en la distancia)
+            normal = normalize(normal + float3(0.0f, (1.0f - panelSeam) * -0.06f, 0.0f));
 
             // Sombra ambiental en las hendiduras de las juntas de los paneles
-            float seamShadow = mix(0.38f, 1.0f, panelSeam);
+            float seamShadow = mix(0.42f, 1.0f, panelSeam);
             albedo = albedo * seamShadow;
-            roughness = mix(0.45f, 0.78f, panelSeam);
-            baseReflectivity = 0.05f;
+            roughness = mix(0.55f, 0.85f, panelSeam);
+            baseReflectivity = 0.03f;
         } else if (obsidianSurface) {
             // 🌑 Armadura Sólida Mate Vantablack del Fotófago (opaca, absorbe la luz sin transparencias ni destellos invasivos)
             float viewCos = saturate(dot(-currentRay.direction, normal));
@@ -1505,9 +1504,11 @@ kernel void raytracePatio(
                     if (rNDotL > 0.0f && rDist < 38.0f) {
                         float rAtten = (68.0f * rainbowState[rIdx]) / (1.0f + rDistSq * 0.045f);
                         direct += albedo * rainbowCol[rIdx] * rAtten * rNDotL * fotofagoDrain;
-                        float3 rHalf = normalize(rDir - currentRay.direction);
-                        float rGloss = pow(saturate(dot(normal, rHalf)), mix(24.0f, 240.0f, 1.0f - roughness));
-                        direct += rainbowCol[rIdx] * rAtten * rGloss * (0.28f * (1.0f - roughness));
+                        if (roughness < 0.35f) {
+                            float3 rHalf = normalize(rDir - currentRay.direction);
+                            float rGloss = pow(saturate(dot(normal, rHalf)), mix(24.0f, 180.0f, 1.0f - roughness));
+                            direct += rainbowCol[rIdx] * rAtten * rGloss * (0.28f * (1.0f - roughness));
+                        }
                     }
                 }
             }
@@ -1520,9 +1521,11 @@ kernel void raytracePatio(
             if (cNDotL > 0.0f && cDist < 42.0f) {
                 float crownPower = (54.0f * lightScale) / (1.0f + cDistSq * 0.038f);
                 direct += albedo * dynamicSpectrum * crownPower * cNDotL * fotofagoDrain;
-                float3 cHalf = normalize(cDir - currentRay.direction);
-                float cGloss = pow(saturate(dot(normal, cHalf)), mix(24.0f, 240.0f, 1.0f - roughness));
-                direct += dynamicSpectrum * crownPower * cGloss * (0.32f * (1.0f - roughness));
+                if (roughness < 0.35f) {
+                    float3 cHalf = normalize(cDir - currentRay.direction);
+                    float cGloss = pow(saturate(dot(normal, cHalf)), mix(24.0f, 180.0f, 1.0f - roughness));
+                    direct += dynamicSpectrum * crownPower * cGloss * (0.32f * (1.0f - roughness));
+                }
             }
         }
 

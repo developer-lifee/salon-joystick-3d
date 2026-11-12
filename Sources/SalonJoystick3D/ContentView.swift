@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "128"
-    static let commitHash = "b128smoothmovementandwallphysicssliding"
+    static let build = "129"
+    static let commitHash = "b129cleanerhudminimapwallrepair"
     static let formatted = "v\(version) • Build \(build)"
 }
 
@@ -455,58 +455,70 @@ struct ContentView: View {
                 .allowsHitTesting(false)
             }
 
-            VStack(alignment: .leading, spacing: 5) {
-                // 🍄 Capa de Escudo / Poción (Electric Cyan)
-                HStack(spacing: 7) {
+            // 🛡️❤️ Barra de Vida, Escudo y Puntos (Anclada al centro inferior aprovechando el espacio muerto)
+            HStack(spacing: 12) {
+                // Escudo
+                HStack(spacing: 5) {
                     Image(systemName: "shield.fill")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(Color.cyan)
                     ProgressView(value: Double(model.playerShield), total: 100.0)
                         .tint(.cyan)
-                        .frame(width: 95)
-                    Text("\(Int(model.playerShield)) ESC")
-                        .font(.caption.monospacedDigit().bold())
+                        .frame(width: 65)
+                    Text("\(Int(model.playerShield))")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
                         .foregroundStyle(.cyan)
                 }
 
-                // ❤️ Capa de Salud / HP (Neon Pink)
-                HStack(spacing: 7) {
+                Divider()
+                    .frame(height: 14)
+                    .overlay(Color.white.opacity(0.3))
+
+                // Salud
+                HStack(spacing: 5) {
                     Image(systemName: "heart.fill")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(Color.pink)
                     ProgressView(value: Double(model.playerHealth), total: 100.0)
                         .tint(model.playerHealth > 25 ? Color.pink : Color.red)
-                        .frame(width: 95)
-                    Text("\(Int(model.playerHealth)) HP")
-                        .font(.caption.monospacedDigit().bold())
+                        .frame(width: 65)
+                    Text("\(Int(model.playerHealth))")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
                         .foregroundStyle(Color.pink)
                 }
 
-                HStack(spacing: 6) {
+                Divider()
+                    .frame(height: 14)
+                    .overlay(Color.white.opacity(0.3))
+
+                // Puntos
+                HStack(spacing: 4) {
                     Image(systemName: "sparkles")
+                        .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(Color.cyan)
-                    Text("Puntos: \(model.playerScore)")
-                        .font(.caption.bold())
+                    Text("\(model.playerScore)")
+                        .font(.system(size: 11, weight: .black, design: .monospaced))
                         .foregroundStyle(.white)
                 }
             }
-            .padding(12)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .background(.ultraThinMaterial, in: Capsule())
+            .background(Color.black.opacity(0.45), in: Capsule())
             .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                Capsule()
                     .stroke(
                         LinearGradient(
-                            colors: [Color.cyan.opacity(0.85), Color.pink.opacity(0.85)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+                            colors: [Color.cyan.opacity(0.75), Color.pink.opacity(0.75)],
+                            startPoint: .leading,
+                            endPoint: .trailing
                         ),
-                        lineWidth: 1.4
+                        lineWidth: 1.2
                     )
             )
-            .shadow(color: Color.cyan.opacity(0.20), radius: 8, x: 0, y: 4)
-            .padding(.leading, 14)
-            .padding(.top, 48)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .shadow(color: Color.black.opacity(0.3), radius: 6, x: 0, y: 3)
+            .padding(.bottom, 14)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
 
                 // 🧟 Call of Duty Zombies-Style Wave / Round HUD Banner o Duelo Versus / Equipos
                 VStack(spacing: 4) {
@@ -762,40 +774,57 @@ struct ContentView: View {
                     .shadow(color: .black.opacity(0.20), radius: 8, x: 0, y: 4)
                 }
 
-                // Active 5 Mobile NPCs Health Meters HUD with Class Tiers (solo en cooperativo o singleplayer)
+                // Barra de Jefe / Enemigo Colosal (Solo aparece cuando hay un TITÁN o HEAVY activo)
                 if !(model.isAnyMultiplayerConnected && (model.multiplayer.mode == .versus || model.multiplayer.mode == .lightBattle)) {
-                    HStack(spacing: 5) {
-                        let botNames = ["SCOUT", "SOLDIER", "GUARD", "HEAVY", "TITAN"]
-                        ForEach(0..<5, id: \.self) { idx in
-                            let maxHp = idx < model.npcMaxHealths.count ? model.npcMaxHealths[idx] : 100.0
-                            let hp = idx < model.npcHealths.count ? model.npcHealths[idx] : maxHp
-                            let fraction = max(0, min(1.0, hp / maxHp))
-                            let borderCol: Color = hp <= 0 ? Color.gray.opacity(0.3) : (idx == 4 ? Color.purple : Color.red.opacity(0.6))
+                    let titanHp = 4 < model.npcHealths.count ? model.npcHealths[4] : 0.0
+                    let heavyHp = 3 < model.npcHealths.count ? model.npcHealths[3] : 0.0
 
-                            HStack(spacing: 3) {
-                                Text(botNames[idx])
-                                    .font(.system(size: 8, weight: .black, design: .monospaced))
-                                    .foregroundStyle(hp > 0 ? .white : .secondary)
+                    if titanHp > 0 {
+                        let titanMax = 4 < model.npcMaxHealths.count ? model.npcMaxHealths[4] : 320.0
+                        let frac = max(0, min(1.0, titanHp / titanMax))
+                        HStack(spacing: 6) {
+                            Text("👾 TITÁN COLOSAL")
+                                .font(.system(size: 9, weight: .black, design: .monospaced))
+                                .foregroundStyle(Color.purple)
 
-                                GeometryReader { p in
-                                    ZStack(alignment: .leading) {
-                                        Rectangle()
-                                            .fill(.black.opacity(0.6))
-                                        Rectangle()
-                                            .fill(fraction > 0.5 ? Color.green : (fraction > 0.25 ? Color.yellow : Color.red))
-                                            .frame(width: p.size.width * CGFloat(fraction))
-                                    }
-                                }
-                                .frame(width: 24, height: 5)
-                                .cornerRadius(2.5)
-                            }
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 3)
-                            .background(.black.opacity(0.65), in: Capsule())
-                            .overlay(Capsule().stroke(borderCol, lineWidth: 1))
+                            ProgressView(value: Double(frac), total: 1.0)
+                                .tint(Color.purple)
+                                .frame(width: 110)
+
+                            Text("\(Int(titanHp)) HP")
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .foregroundStyle(.white)
                         }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .background(Color.black.opacity(0.6), in: Capsule())
+                        .overlay(Capsule().stroke(Color.purple.opacity(0.8), lineWidth: 1.2))
+                        .shadow(color: Color.purple.opacity(0.4), radius: 6)
+                        .padding(.top, 2)
+                    } else if heavyHp > 0 && model.currentWave >= 3 {
+                        let heavyMax = 3 < model.npcMaxHealths.count ? model.npcMaxHealths[3] : 200.0
+                        let frac = max(0, min(1.0, heavyHp / heavyMax))
+                        HStack(spacing: 6) {
+                            Text("🛡️ HEAVY BOT")
+                                .font(.system(size: 9, weight: .black, design: .monospaced))
+                                .foregroundStyle(Color.red)
+
+                            ProgressView(value: Double(frac), total: 1.0)
+                                .tint(Color.red)
+                                .frame(width: 90)
+
+                            Text("\(Int(heavyHp)) HP")
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .foregroundStyle(.white)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .background(Color.black.opacity(0.6), in: Capsule())
+                        .overlay(Capsule().stroke(Color.red.opacity(0.8), lineWidth: 1.2))
+                        .padding(.top, 2)
                     }
-                    .padding(.top, 2)
                 }
 
                 if let achievement = model.recentlyUnlockedAchievement {
@@ -970,48 +999,38 @@ struct ContentView: View {
             .padding(.leading, 18)
             .padding(.bottom, 22)
 
-            VStack(alignment: .trailing, spacing: 10) {
-                // 1. Radar Minimapa Táctico (Anclado limpiamente arriba de la barra de acciones)
-                if model.showsMinimap && !model.isMinimalHUDEnabled {
-                    TacticalMinimapView(model: model)
-                        .padding(.bottom, 2)
-                        .transition(.scale.combined(with: .opacity))
-                }
+            // 🧭 Radar Minimapa Táctico (Anclado con posición fija independiente, NUNCA se desplaza por botones ni alertas)
+            if model.showsMinimap && !model.isMinimalHUDEnabled {
+                TacticalMinimapView(model: model)
+                    .padding(.trailing, 12)
+                    .padding(.bottom, 126)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .transition(.scale.combined(with: .opacity))
+            }
 
-                // 2. Estado de herramienta / Escudo activo
-                if !model.toolStatus.label.isEmpty {
+            VStack(alignment: .trailing, spacing: 8) {
+                // Aviso crítico de herramienta (solo si es advertencia de batería o sobrecalentamiento)
+                if !model.toolStatus.label.isEmpty && (model.toolStatus.label.contains("⚠️") || model.toolStatus.label.contains("🔥")) {
                     HStack(spacing: 5) {
                         Circle()
-                            .fill(model.toolStatus.activeRemaining > 0 ? Color.pink : Color.cyan)
+                            .fill(Color.red)
                             .frame(width: 7, height: 7)
-                            .shadow(color: (model.toolStatus.activeRemaining > 0 ? Color.pink : Color.cyan).opacity(0.8), radius: 3)
+                            .shadow(color: Color.red.opacity(0.8), radius: 3)
 
                         Text(model.toolStatus.label)
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
                             .foregroundStyle(.white)
                     }
                     .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
+                    .padding(.vertical, 4)
                     .background(.ultraThinMaterial, in: Capsule())
-                    .overlay(
-                        Capsule()
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        (model.toolStatus.activeRemaining > 0 ? Color.pink : Color.cyan).opacity(0.85),
-                                        Color.white.opacity(0.25)
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ),
-                                lineWidth: 1.2
-                            )
-                    )
-                    .shadow(color: .black.opacity(0.35), radius: 6, x: 0, y: 2)
+                    .background(Color.black.opacity(0.75), in: Capsule())
+                    .overlay(Capsule().stroke(Color.red.opacity(0.85), lineWidth: 1.2))
+                    .shadow(color: Color.black.opacity(0.35), radius: 6, x: 0, y: 2)
                     .transition(.scale.combined(with: .opacity))
                 }
 
-                // 3. Bar 1: Action/Skill Capsules (Encendedor Contextual, Slow-Mo, Warp, Radar) - Paleta Cyan & Pink
+                // Bar 1: Action/Skill Capsules (Encendedor Contextual, Slow-Mo, Warp, Radar) - Paleta Cyan & Pink
                 HStack(spacing: 8) {
                     // 💡 Encendedor Contextual de Luz Cercana (Siempre anclado abajo junto a las habilidades, sin saltar arriba al abrir el radar)
                     if let nearbyLight = model.nearbyLight {
@@ -1348,8 +1367,8 @@ struct ContentView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-            .padding(.trailing, 28)
-            .padding(.bottom, 48)
+            .padding(.trailing, 12)
+            .padding(.bottom, 16)
 
             VStack(alignment: .trailing, spacing: 8) {
                 // ⚙️ Botón de Ajustes (Cyan & Pink Liquid Glass)
