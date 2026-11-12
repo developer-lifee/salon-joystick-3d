@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "129"
-    static let commitHash = "b129cleanerhudminimapwallrepair"
+    static let build = "130"
+    static let commitHash = "b130fullycustomizablehudnodefeattoverlap"
     static let formatted = "v\(version) • Build \(build)"
 }
 
@@ -455,70 +455,82 @@ struct ContentView: View {
                 .allowsHitTesting(false)
             }
 
-            // 🛡️❤️ Barra de Vida, Escudo y Puntos (Anclada al centro inferior aprovechando el espacio muerto)
-            HStack(spacing: 12) {
-                // Escudo
-                HStack(spacing: 5) {
-                    Image(systemName: "shield.fill")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Color.cyan)
-                    ProgressView(value: Double(model.playerShield), total: 100.0)
-                        .tint(.cyan)
-                        .frame(width: 65)
-                    Text("\(Int(model.playerShield))")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundStyle(.cyan)
+            // 🛡️❤️ Barra de Vida, Escudo y Puntos (Anclada al centro inferior, configurable en el editor de HUD)
+            if (!model.isDefeated && !model.isRecoveringInChamber) || model.isEditingHUDLayout {
+                HStack(spacing: 12) {
+                    // Escudo
+                    HStack(spacing: 5) {
+                        Image(systemName: "shield.fill")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(Color.cyan)
+                        ProgressView(value: Double(model.playerShield), total: 100.0)
+                            .tint(.cyan)
+                            .frame(width: 65)
+                        Text("\(Int(model.playerShield))")
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.cyan)
+                    }
+
+                    Divider()
+                        .frame(height: 14)
+                        .overlay(Color.white.opacity(0.3))
+
+                    // Salud
+                    HStack(spacing: 5) {
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(Color.pink)
+                        ProgressView(value: Double(model.playerHealth), total: 100.0)
+                            .tint(model.playerHealth > 25 ? Color.pink : Color.red)
+                            .frame(width: 65)
+                        Text("\(Int(model.playerHealth))")
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundStyle(Color.pink)
+                    }
+
+                    Divider()
+                        .frame(height: 14)
+                        .overlay(Color.white.opacity(0.3))
+
+                    // Puntos
+                    HStack(spacing: 4) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(Color.cyan)
+                        Text("\(model.playerScore)")
+                            .font(.system(size: 11, weight: .black, design: .monospaced))
+                            .foregroundStyle(.white)
+                    }
                 }
-
-                Divider()
-                    .frame(height: 14)
-                    .overlay(Color.white.opacity(0.3))
-
-                // Salud
-                HStack(spacing: 5) {
-                    Image(systemName: "heart.fill")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Color.pink)
-                    ProgressView(value: Double(model.playerHealth), total: 100.0)
-                        .tint(model.playerHealth > 25 ? Color.pink : Color.red)
-                        .frame(width: 65)
-                    Text("\(Int(model.playerHealth))")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundStyle(Color.pink)
-                }
-
-                Divider()
-                    .frame(height: 14)
-                    .overlay(Color.white.opacity(0.3))
-
-                // Puntos
-                HStack(spacing: 4) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Color.cyan)
-                    Text("\(model.playerScore)")
-                        .font(.system(size: 11, weight: .black, design: .monospaced))
-                        .foregroundStyle(.white)
-                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .background(.ultraThinMaterial, in: Capsule())
+                .background(Color.black.opacity(0.45), in: Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(
+                            LinearGradient(
+                                colors: [Color.cyan.opacity(0.75), Color.pink.opacity(0.75)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ),
+                            lineWidth: 1.2
+                        )
+                )
+                .shadow(color: Color.black.opacity(0.3), radius: 6, x: 0, y: 3)
+                .opacity(model.hudHealthOpacity)
+                .modifier(HUDDraggableModifier(
+                    isEditing: model.isEditingHUDLayout,
+                    isSelected: model.selectedHUDGroup == 7,
+                    label: "❤️ SALUD / ESCUDO",
+                    offsetX: $model.hudHealthX,
+                    offsetY: $model.hudHealthY,
+                    scale: model.hudHealthScale,
+                    onSelect: { model.selectedHUDGroup = 7 }
+                ))
+                .padding(.bottom, 14)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 7)
-            .background(.ultraThinMaterial, in: Capsule())
-            .background(Color.black.opacity(0.45), in: Capsule())
-            .overlay(
-                Capsule()
-                    .stroke(
-                        LinearGradient(
-                            colors: [Color.cyan.opacity(0.75), Color.pink.opacity(0.75)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        ),
-                        lineWidth: 1.2
-                    )
-            )
-            .shadow(color: Color.black.opacity(0.3), radius: 6, x: 0, y: 3)
-            .padding(.bottom, 14)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
 
                 // 🧟 Call of Duty Zombies-Style Wave / Round HUD Banner o Duelo Versus / Equipos
                 VStack(spacing: 4) {
@@ -975,65 +987,79 @@ struct ContentView: View {
             .padding(.top, 46)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
-            VStack(alignment: .leading, spacing: 10) {
-                JoystickView(onChanged: { vector in
-                    guard !model.isDefeated, model.gameState == .playing else {
-                        model.joystick = .zero
-                        return
-                    }
-                    model.joystick = vector
-                }, isLiquidGlass: model.isLiquidGlassUIEnabled)
-                .frame(width: 156, height: 156)
-                .opacity(model.hudJoystickOpacity)
-                .disabled(model.isDefeated || model.gameState != .playing)
-                .modifier(HUDDraggableModifier(
-                    isEditing: model.isEditingHUDLayout,
-                    isSelected: model.selectedHUDGroup == 0,
-                    label: "🕹️ JOYSTICK",
-                    offsetX: $model.hudJoystickX,
-                    offsetY: $model.hudJoystickY,
-                    scale: model.hudJoystickScale,
-                    onSelect: { model.selectedHUDGroup = 0 }
-                ))
+            if (!model.isDefeated && !model.isRecoveringInChamber) || model.isEditingHUDLayout {
+                VStack(alignment: .leading, spacing: 10) {
+                    JoystickView(onChanged: { vector in
+                        guard !model.isDefeated, model.gameState == .playing else {
+                            model.joystick = .zero
+                            return
+                        }
+                        model.joystick = vector
+                    }, isLiquidGlass: model.isLiquidGlassUIEnabled)
+                    .frame(width: 156, height: 156)
+                    .opacity(model.hudJoystickOpacity)
+                    .disabled(model.isDefeated || model.gameState != .playing)
+                    .modifier(HUDDraggableModifier(
+                        isEditing: model.isEditingHUDLayout,
+                        isSelected: model.selectedHUDGroup == 0,
+                        label: "🕹️ JOYSTICK",
+                        offsetX: $model.hudJoystickX,
+                        offsetY: $model.hudJoystickY,
+                        scale: model.hudJoystickScale,
+                        onSelect: { model.selectedHUDGroup = 0 }
+                    ))
+                }
+                .padding(.leading, 18)
+                .padding(.bottom, 22)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
             }
-            .padding(.leading, 18)
-            .padding(.bottom, 22)
 
-            // 🧭 Radar Minimapa Táctico (Anclado con posición fija independiente, NUNCA se desplaza por botones ni alertas)
-            if model.showsMinimap && !model.isMinimalHUDEnabled {
+            // 🧭 Radar Minimapa Táctico (Anclado con posición fija independiente, configurable en editor de HUD)
+            if ((model.showsMinimap && !model.isMinimalHUDEnabled && !model.isDefeated && !model.isRecoveringInChamber) || model.isEditingHUDLayout) {
                 TacticalMinimapView(model: model)
+                    .opacity(model.hudMinimapOpacity)
+                    .modifier(HUDDraggableModifier(
+                        isEditing: model.isEditingHUDLayout,
+                        isSelected: model.selectedHUDGroup == 5,
+                        label: "🗺️ RADAR",
+                        offsetX: $model.hudMinimapX,
+                        offsetY: $model.hudMinimapY,
+                        scale: model.hudMinimapScale,
+                        onSelect: { model.selectedHUDGroup = 5 }
+                    ))
                     .padding(.trailing, 12)
                     .padding(.bottom, 126)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                     .transition(.scale.combined(with: .opacity))
             }
 
-            VStack(alignment: .trailing, spacing: 8) {
-                // Aviso crítico de herramienta (solo si es advertencia de batería o sobrecalentamiento)
-                if !model.toolStatus.label.isEmpty && (model.toolStatus.label.contains("⚠️") || model.toolStatus.label.contains("🔥")) {
-                    HStack(spacing: 5) {
-                        Circle()
-                            .fill(Color.red)
-                            .frame(width: 7, height: 7)
-                            .shadow(color: Color.red.opacity(0.8), radius: 3)
+            if (!model.isDefeated && !model.isRecoveringInChamber) || model.isEditingHUDLayout {
+                VStack(alignment: .trailing, spacing: 8) {
+                    // Aviso crítico de herramienta (solo si es advertencia de batería o sobrecalentamiento)
+                    if !model.toolStatus.label.isEmpty && (model.toolStatus.label.contains("⚠️") || model.toolStatus.label.contains("🔥")) {
+                        HStack(spacing: 5) {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 7, height: 7)
+                                .shadow(color: Color.red.opacity(0.8), radius: 3)
 
-                        Text(model.toolStatus.label)
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
-                            .foregroundStyle(.white)
+                            Text(model.toolStatus.label)
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundStyle(.white)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .background(Color.black.opacity(0.75), in: Capsule())
+                        .overlay(Capsule().stroke(Color.red.opacity(0.85), lineWidth: 1.2))
+                        .shadow(color: Color.black.opacity(0.35), radius: 6, x: 0, y: 2)
+                        .transition(.scale.combined(with: .opacity))
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .background(Color.black.opacity(0.75), in: Capsule())
-                    .overlay(Capsule().stroke(Color.red.opacity(0.85), lineWidth: 1.2))
-                    .shadow(color: Color.black.opacity(0.35), radius: 6, x: 0, y: 2)
-                    .transition(.scale.combined(with: .opacity))
-                }
 
-                // Bar 1: Action/Skill Capsules (Encendedor Contextual, Slow-Mo, Warp, Radar) - Paleta Cyan & Pink
-                HStack(spacing: 8) {
-                    // 💡 Encendedor Contextual de Luz Cercana (Siempre anclado abajo junto a las habilidades, sin saltar arriba al abrir el radar)
-                    if let nearbyLight = model.nearbyLight {
+                    // Bar 1: Action/Skill Capsules (Encendedor Contextual, Slow-Mo, Warp, Radar) - Paleta Cyan & Pink
+                    HStack(spacing: 8) {
+                        // 💡 Encendedor Contextual de Luz Cercana (Solo visible cuando estamos vivos para no solapar la pantalla de reintentar)
+                        if let nearbyLight = model.nearbyLight, !model.isDefeated && !model.isRecoveringInChamber {
                         ContextualLightButton(
                             isOn: model.lightStates.isEnabled(nearbyLight),
                             label: nearbyLight.label,
@@ -1097,6 +1123,17 @@ struct ContentView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Cámara Lenta Slow Motion")
+                    .opacity(model.hudSlowMoOpacity)
+                    .disabled(model.isDefeated || model.gameState != .playing)
+                    .modifier(HUDDraggableModifier(
+                        isEditing: model.isEditingHUDLayout,
+                        isSelected: model.selectedHUDGroup == 3,
+                        label: "⏳ SLOW-MO",
+                        offsetX: $model.hudSlowMoX,
+                        offsetY: $model.hudSlowMoY,
+                        scale: model.hudSlowMoScale,
+                        onSelect: { model.selectedHUDGroup = 3 }
+                    ))
 
                     Button {
                         model.showsLightRadialMenu.toggle()
@@ -1120,6 +1157,17 @@ struct ContentView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Menú Radial de Teletransporte")
+                    .opacity(model.hudWarpOpacity)
+                    .disabled(model.isDefeated || model.gameState != .playing)
+                    .modifier(HUDDraggableModifier(
+                        isEditing: model.isEditingHUDLayout,
+                        isSelected: model.selectedHUDGroup == 4,
+                        label: "⚡ WARP",
+                        offsetX: $model.hudWarpX,
+                        offsetY: $model.hudWarpY,
+                        scale: model.hudWarpScale,
+                        onSelect: { model.selectedHUDGroup = 4 }
+                    ))
 
                     Button {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
@@ -1238,17 +1286,7 @@ struct ContentView: View {
                         .accessibilityLabel("Sumergirse hacia el fondo del agua")
                     }
                 }
-                .opacity(model.hudSkillsOpacity)
                 .disabled(model.isDefeated || model.gameState != .playing)
-                .modifier(HUDDraggableModifier(
-                    isEditing: model.isEditingHUDLayout,
-                    isSelected: model.selectedHUDGroup == 3,
-                    label: "⏳ HABILIDADES",
-                    offsetX: $model.hudSkillsX,
-                    offsetY: $model.hudSkillsY,
-                    scale: model.hudSkillsScale,
-                    onSelect: { model.selectedHUDGroup = 3 }
-                ))
 
                 // Bar 2: Equipment Dock + Jump Action Button
                 HStack(alignment: .center, spacing: 12) {
@@ -1369,6 +1407,7 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             .padding(.trailing, 12)
             .padding(.bottom, 16)
+        }
 
             VStack(alignment: .trailing, spacing: 8) {
                 // ⚙️ Botón de Ajustes (Cyan & Pink Liquid Glass)
@@ -1457,8 +1496,19 @@ struct ContentView: View {
                         )
                 }
             }
+            .opacity(model.hudMenuOpacity)
+            .modifier(HUDDraggableModifier(
+                isEditing: model.isEditingHUDLayout,
+                isSelected: model.selectedHUDGroup == 6,
+                label: "⚙️ MENÚ / PAUSA",
+                offsetX: $model.hudMenuX,
+                offsetY: $model.hudMenuY,
+                scale: model.hudMenuScale,
+                onSelect: { model.selectedHUDGroup = 6 }
+            ))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             .safeAreaPadding(.top, 8)
+            .padding(.trailing, 12)
 
             if model.showConnectedToast {
                 HStack(spacing: 8) {
@@ -1588,9 +1638,40 @@ struct ContentView: View {
                             .foregroundStyle(.white.opacity(0.8))
                             .frame(maxWidth: .infinity, alignment: .leading)
 
+                        let groupNames = [
+                            "🕹️ Joystick",
+                            "🔦 Armas",
+                            "⬆️ Saltar",
+                            "⏳ Slow-Mo",
+                            "⚡ Warp",
+                            "🗺️ Radar",
+                            "⚙️ Menú",
+                            "❤️ Salud"
+                        ]
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(0..<groupNames.count, id: \.self) { idx in
+                                    Button {
+                                        model.selectedHUDGroup = idx
+                                    } label: {
+                                        Text(groupNames[idx])
+                                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                                            .foregroundStyle(model.selectedHUDGroup == idx ? .black : .white)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 5)
+                                            .background(
+                                                model.selectedHUDGroup == idx ? Color.cyan : Color.white.opacity(0.14),
+                                                in: Capsule()
+                                            )
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 2)
+                        }
+
                         HStack(spacing: 12) {
-                            let groupNames = ["🕹️ Joystick", "🔦⚡🛡️ Armas", "⬆️ Saltar", "⏳ Habilidades"]
-                            Text("Seleccionado: \(groupNames[min(max(model.selectedHUDGroup, 0), 3)])")
+                            Text("Ajustando: \(groupNames[min(max(model.selectedHUDGroup, 0), 7)])")
                                 .font(.system(size: 12, weight: .bold, design: .rounded))
                                 .foregroundStyle(.cyan)
 
@@ -1602,7 +1683,11 @@ struct ContentView: View {
                                     case 0: return model.hudJoystickScale
                                     case 1: return model.hudWeaponsScale
                                     case 2: return model.hudJumpScale
-                                    default: return model.hudSkillsScale
+                                    case 3: return model.hudSlowMoScale
+                                    case 4: return model.hudWarpScale
+                                    case 5: return model.hudMinimapScale
+                                    case 6: return model.hudMenuScale
+                                    default: return model.hudHealthScale
                                     }
                                 },
                                 set: { newVal in
@@ -1610,7 +1695,11 @@ struct ContentView: View {
                                     case 0: model.hudJoystickScale = newVal
                                     case 1: model.hudWeaponsScale = newVal
                                     case 2: model.hudJumpScale = newVal
-                                    default: model.hudSkillsScale = newVal
+                                    case 3: model.hudSlowMoScale = newVal
+                                    case 4: model.hudWarpScale = newVal
+                                    case 5: model.hudMinimapScale = newVal
+                                    case 6: model.hudMenuScale = newVal
+                                    default: model.hudHealthScale = newVal
                                     }
                                 }
                             )
@@ -1621,7 +1710,11 @@ struct ContentView: View {
                                     case 0: return model.hudJoystickOpacity
                                     case 1: return model.hudWeaponsOpacity
                                     case 2: return model.hudJumpOpacity
-                                    default: return model.hudSkillsOpacity
+                                    case 3: return model.hudSlowMoOpacity
+                                    case 4: return model.hudWarpOpacity
+                                    case 5: return model.hudMinimapOpacity
+                                    case 6: return model.hudMenuOpacity
+                                    default: return model.hudHealthOpacity
                                     }
                                 },
                                 set: { newVal in
@@ -1629,7 +1722,11 @@ struct ContentView: View {
                                     case 0: model.hudJoystickOpacity = newVal
                                     case 1: model.hudWeaponsOpacity = newVal
                                     case 2: model.hudJumpOpacity = newVal
-                                    default: model.hudSkillsOpacity = newVal
+                                    case 3: model.hudSlowMoOpacity = newVal
+                                    case 4: model.hudWarpOpacity = newVal
+                                    case 5: model.hudMinimapOpacity = newVal
+                                    case 6: model.hudMenuOpacity = newVal
+                                    default: model.hudHealthOpacity = newVal
                                     }
                                 }
                             )
@@ -1639,14 +1736,14 @@ struct ContentView: View {
                                 .foregroundStyle(.white)
                             Slider(value: currentScaleBinding, in: 0.60...1.50, step: 0.05)
                                 .tint(.cyan)
-                                .frame(width: 150)
+                                .frame(width: 140)
 
                             Text("Opacidad: \(Int(currentOpacityBinding.wrappedValue * 100))%")
                                 .font(.system(size: 11, weight: .bold, design: .monospaced))
                                 .foregroundStyle(.white)
                             Slider(value: currentOpacityBinding, in: 0.15...1.0, step: 0.05)
                                 .tint(.yellow)
-                                .frame(width: 110)
+                                .frame(width: 100)
                         }
                     }
                     .padding(14)
@@ -1832,6 +1929,26 @@ final class GameModel: ObservableObject {
     @AppStorage("hudSkillsY") var hudSkillsY: Double = 0
     @AppStorage("hudSkillsScale") var hudSkillsScale: Double = 1.0
     @AppStorage("hudSkillsOpacity") var hudSkillsOpacity: Double = 0.85
+    @AppStorage("hudSlowMoX") var hudSlowMoX: Double = 0
+    @AppStorage("hudSlowMoY") var hudSlowMoY: Double = 0
+    @AppStorage("hudSlowMoScale") var hudSlowMoScale: Double = 1.0
+    @AppStorage("hudSlowMoOpacity") var hudSlowMoOpacity: Double = 0.85
+    @AppStorage("hudWarpX") var hudWarpX: Double = 0
+    @AppStorage("hudWarpY") var hudWarpY: Double = 0
+    @AppStorage("hudWarpScale") var hudWarpScale: Double = 1.0
+    @AppStorage("hudWarpOpacity") var hudWarpOpacity: Double = 0.85
+    @AppStorage("hudMinimapX") var hudMinimapX: Double = 0
+    @AppStorage("hudMinimapY") var hudMinimapY: Double = 0
+    @AppStorage("hudMinimapScale") var hudMinimapScale: Double = 1.0
+    @AppStorage("hudMinimapOpacity") var hudMinimapOpacity: Double = 0.90
+    @AppStorage("hudMenuX") var hudMenuX: Double = 0
+    @AppStorage("hudMenuY") var hudMenuY: Double = 0
+    @AppStorage("hudMenuScale") var hudMenuScale: Double = 1.0
+    @AppStorage("hudMenuOpacity") var hudMenuOpacity: Double = 0.90
+    @AppStorage("hudHealthX") var hudHealthX: Double = 0
+    @AppStorage("hudHealthY") var hudHealthY: Double = 0
+    @AppStorage("hudHealthScale") var hudHealthScale: Double = 1.0
+    @AppStorage("hudHealthOpacity") var hudHealthOpacity: Double = 0.90
     @Published var isGameControllerConnected: Bool = false
     @Published var gameControllerName: String = ""
     @AppStorage("duoScreenModeRaw") var duoScreenModeRaw: Int = 0
@@ -1941,6 +2058,11 @@ final class GameModel: ObservableObject {
         hudWeaponsX = 0; hudWeaponsY = 0; hudWeaponsScale = 1.0; hudWeaponsOpacity = 0.85
         hudJumpX = 0; hudJumpY = 0; hudJumpScale = 1.0; hudJumpOpacity = 0.85
         hudSkillsX = 0; hudSkillsY = 0; hudSkillsScale = 1.0; hudSkillsOpacity = 0.85
+        hudSlowMoX = 0; hudSlowMoY = 0; hudSlowMoScale = 1.0; hudSlowMoOpacity = 0.85
+        hudWarpX = 0; hudWarpY = 0; hudWarpScale = 1.0; hudWarpOpacity = 0.85
+        hudMinimapX = 0; hudMinimapY = 0; hudMinimapScale = 1.0; hudMinimapOpacity = 0.90
+        hudMenuX = 0; hudMenuY = 0; hudMenuScale = 1.0; hudMenuOpacity = 0.90
+        hudHealthX = 0; hudHealthY = 0; hudHealthScale = 1.0; hudHealthOpacity = 0.90
         touchControlsOpacity = 0.85
     }
 
@@ -2975,6 +3097,7 @@ final class GameModel: ObservableObject {
                 isTeamDefeated = false
                 heldTool = .none
                 joystick = .zero
+                nearbyLight = nil
                 audio.stopAllNonMusicEffects()
                 audio.playSlimeDeflateSound()
                 if !hasRecordedVersusRoundResult {
@@ -2988,6 +3111,7 @@ final class GameModel: ObservableObject {
                 isTeamDefeated = false
                 heldTool = .none
                 joystick = .zero
+                nearbyLight = nil
                 audio.stopAllNonMusicEffects()
                 audio.playSlimeDeflateSound()
                 audio.playRobloxOofDefeatSound()
@@ -3195,8 +3319,15 @@ final class GameModel: ObservableObject {
 
     func reportNearbyLight(_ fixture: GameLightFixture?) {
         DispatchQueue.main.async { [weak self] in
-            guard self?.nearbyLight != fixture else { return }
-            self?.nearbyLight = fixture
+            guard let self else { return }
+            if self.isDefeated || self.isRecoveringInChamber {
+                if self.nearbyLight != nil {
+                    self.nearbyLight = nil
+                }
+                return
+            }
+            guard self.nearbyLight != fixture else { return }
+            self.nearbyLight = fixture
         }
     }
 
