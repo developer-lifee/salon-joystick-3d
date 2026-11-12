@@ -2072,9 +2072,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         resolveFloatCollision(position: &proposed)
         resolveRockCollisions(position: &proposed)
         resolveParkourAndCabinCollisions(position: &proposed)
+        resolveSubterraneanCollisions(position: &proposed)
         resolveCharacterCollisions(playerPos: &proposed, dt: dt)
         resolveRockCollisions(position: &proposed)
         resolveParkourAndCabinCollisions(position: &proposed)
+        resolveSubterraneanCollisions(position: &proposed)
         clampToArenaBounds(position: &proposed, previousPosition: playerPosition, margin: 0.38, velocity: &horizontalVelocity)
         let isSubterraneanTarget = enteredEasterEggViaToboggan && playerPosition.y <= -4.75
         let isSubmergedUnderwater = enteredEasterEggViaToboggan && (playerPosition.y < -0.25 || isSubterraneanTarget)
@@ -2260,7 +2262,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             insidePool: willBeInPool
         )
 
-        let isPlayerCurrentlyInWater = willBeInPool && !willBeOnFloat
+        let isPlayerCurrentlyInWater = (willBeInPool || (enteredEasterEggViaToboggan && proposed.y < -0.20) || proposed.y < -0.30) && !willBeOnFloat
         let enteredWaterThisFrame = isPlayerCurrentlyInWater && !wasPlayerInWater
         if enteredWaterThisFrame {
             let entryIntensity = min(1, max(0.38, -verticalVelocity / 3.8))
@@ -2269,9 +2271,14 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
         wasPlayerInWater = isPlayerCurrentlyInWater
 
-        if landingSpeed > 0 && !enteredWaterThisFrame && !isPlayerCurrentlyInWater {
-            let impact = min(1, max(0.15, (landingSpeed - 1.0) / 4.2))
-            audio.playLanding(intensity: impact)
+        if landingSpeed > 0 && !enteredWaterThisFrame {
+            if isPlayerCurrentlyInWater {
+                // Bajo el agua, el contacto vertical con el fondo abisal es un suave movimiento de agua, NUNCA impacto seco
+                audio.playWaterDisturbance(intensity: min(0.30, max(0.12, (landingSpeed - 1.0) / 6.0)))
+            } else {
+                let impact = min(1, max(0.15, (landingSpeed - 1.0) / 4.2))
+                audio.playLanding(intensity: impact)
+            }
         }
 
         let isAimingOrFiringTool = (heldTool == .laser && laserActiveRemaining > 0) || (heldTool == .mirror && mirrorActiveRemaining > 0)
@@ -4060,11 +4067,12 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let tableHalfX: Float = 1.60 + 0.36
         let tableHalfZ: Float = 0.36 + 0.36
         let tableTopY: Float = 0.65
+        let tableBottomY: Float = -0.15
         let dxTable = position.x - 7.3
         let dzTable = position.z - 4.8
         if abs(dxTable) < tableHalfX && abs(dzTable) < tableHalfZ {
-            // Si el jugador está subido a la mesa (pies en o sobre la superficie), no empujar lateralmente para permitir caminar
-            if position.y < tableTopY - 0.08 {
+            // Si el jugador está subido a la mesa (pies en o sobre la superficie) o bajo la superficie (en el agua profunda), ignorar colisión
+            if position.y < tableTopY - 0.08 && position.y > tableBottomY {
                 let overlapX = tableHalfX - abs(dxTable)
                 let overlapZ = tableHalfZ - abs(dzTable)
                 if overlapX < overlapZ {
@@ -4261,8 +4269,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         for rock in rtRiverRocks {
             let rockTop = rock.center.y + rock.radii.y * 1.02
-            // Si el jugador está sobre la roca (o en el tope), no empujar lateralmente para permitir caminar encima
-            guard position.y < rockTop - 0.10 else { continue }
+            let rockBottom = rock.center.y - rock.radii.y * 1.05
+            // Si el jugador está sobre la roca (o en el tope), o por debajo de ella (subacuático), no empujar lateralmente
+            guard position.y < rockTop - 0.10 && position.y > rockBottom - 0.20 else { continue }
 
             let center = SIMD2<Float>(rock.center.x, rock.center.z)
             let expandedRadii = SIMD2<Float>(rock.radii.x * 1.02 + playerRadius, rock.radii.z * 1.02 + playerRadius)
@@ -4295,6 +4304,132 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     horizontalVelocity -= surfaceNormal * inwardSpeed
                 }
             }
+        }
+    }
+
+    // 🌊 Colisión física subacuática sólida con obeliscos, turbinas, cofre y faroles cuánticos
+    private func resolveSubterraneanCollisions(position: inout SIMD3<Float>) {
+        guard enteredEasterEggViaToboggan && position.y < -0.20 else { return }
+        let playerRadius: Float = 0.38
+        var hitObstacle = false
+
+        // 1. 3 Obeliscos Ancestrales Sumergidos
+        struct SubObelisk {
+            let center: SIMD3<Float>
+            let size: SIMD3<Float>
+        }
+        let obelisks: [SubObelisk] = [
+            SubObelisk(center: SIMD3<Float>(-4.2, -7.5, -3.8), size: SIMD3<Float>(0.85, 5.0, 0.85)),
+            SubObelisk(center: SIMD3<Float>(3.8, -7.5, 2.8), size: SIMD3<Float>(0.85, 5.0, 0.85)),
+            SubObelisk(center: SIMD3<Float>(-3.2, -8.0, 3.2), size: SIMD3<Float>(0.75, 4.0, 0.75))
+        ]
+
+        for ob in obelisks {
+            let minY = ob.center.y - ob.size.y * 0.5 - 0.20
+            let maxY = ob.center.y + ob.size.y * 0.5 + 0.10
+            guard position.y >= minY && position.y <= maxY else { continue }
+
+            let halfX = ob.size.x * 0.5 + playerRadius
+            let halfZ = ob.size.z * 0.5 + playerRadius
+            let dx = position.x - ob.center.x
+            let dz = position.z - ob.center.z
+
+            if abs(dx) < halfX && abs(dz) < halfZ {
+                hitObstacle = true
+                let overlapX = halfX - abs(dx)
+                let overlapZ = halfZ - abs(dz)
+                if overlapX < overlapZ {
+                    position.x += dx >= 0 ? overlapX : -overlapX
+                    horizontalVelocity.x *= 0.15
+                } else {
+                    position.z += dz >= 0 ? overlapZ : -overlapZ
+                    horizontalVelocity.y *= 0.15
+                }
+            }
+        }
+
+        // 2. 4 Turbinas Generadoras Sumergidas en las esquinas
+        let turbineCorners: [SIMD2<Float>] = [
+            SIMD2<Float>(-10.5, -10.5),
+            SIMD2<Float>(10.5, -10.5),
+            SIMD2<Float>(-10.5, 10.5),
+            SIMD2<Float>(10.5, 10.5)
+        ]
+        for corner in turbineCorners {
+            let turbineCenterY: Float = -11.0
+            let turbineHalfY: Float = 0.55
+            guard position.y >= turbineCenterY - turbineHalfY && position.y <= turbineCenterY + turbineHalfY + 0.25 else { continue }
+
+            let halfX: Float = 1.20 + playerRadius
+            let halfZ: Float = 1.20 + playerRadius
+            let dx = position.x - corner.x
+            let dz = position.z - corner.y
+
+            if abs(dx) < halfX && abs(dz) < halfZ {
+                hitObstacle = true
+                let overlapX = halfX - abs(dx)
+                let overlapZ = halfZ - abs(dz)
+                if overlapX < overlapZ {
+                    position.x += dx >= 0 ? overlapX : -overlapX
+                    horizontalVelocity.x *= 0.20
+                } else {
+                    position.z += dz >= 0 ? overlapZ : -overlapZ
+                    horizontalVelocity.y *= 0.20
+                }
+            }
+        }
+
+        // 3. Cofre del Tesoro Sumergido: (2.8, -9.5, -1.8), size: (1.2, 0.75, 0.85)
+        let chestCenter = SIMD3<Float>(2.8, -9.5, -1.8)
+        let chestHalfSize = SIMD3<Float>(0.60 + playerRadius, 0.45, 0.425 + playerRadius)
+        if position.y >= chestCenter.y - chestHalfSize.y && position.y <= chestCenter.y + chestHalfSize.y + 0.20 {
+            let dx = position.x - chestCenter.x
+            let dz = position.z - chestCenter.z
+            if abs(dx) < chestHalfSize.x && abs(dz) < chestHalfSize.z {
+                hitObstacle = true
+                let overlapX = chestHalfSize.x - abs(dx)
+                let overlapZ = chestHalfSize.z - abs(dz)
+                if overlapX < overlapZ {
+                    position.x += dx >= 0 ? overlapX : -overlapX
+                    horizontalVelocity.x *= 0.20
+                } else {
+                    position.z += dz >= 0 ? overlapZ : -overlapZ
+                    horizontalVelocity.y *= 0.20
+                }
+            }
+        }
+
+        // 4. Cristales y Faroles Cuánticos Sumergidos
+        let subSpheres: [(center: SIMD3<Float>, radius: Float)] = [
+            (SIMD3<Float>(-8.0, -7.0, -8.0), 0.70),
+            (SIMD3<Float>(8.0, -7.0, -8.0), 0.70),
+            (SIMD3<Float>(-8.0, -7.0, 8.0), 0.70),
+            (SIMD3<Float>(8.0, -7.0, 8.0), 0.70),
+            (SIMD3<Float>(-3.8, -9.2, -3.2), 0.50),
+            (SIMD3<Float>(3.5, -9.2, 2.2), 0.50),
+            (SIMD3<Float>(1.8, -9.2, -4.2), 0.45)
+        ]
+        for sphere in subSpheres {
+            let expandedRadius = sphere.radius + playerRadius
+            let delta = position - sphere.center
+            let distSq = simd_length_squared(delta)
+            if distSq < expandedRadius * expandedRadius && distSq > 0.0001 {
+                hitObstacle = true
+                let dist = sqrt(distSq)
+                let normal = delta / dist
+                position = sphere.center + normal * expandedRadius
+                let inwardSpeed = simd_dot(SIMD3<Float>(horizontalVelocity.x, verticalVelocity, horizontalVelocity.y), normal)
+                if inwardSpeed < 0 {
+                    horizontalVelocity.x -= normal.x * inwardSpeed * 0.7
+                    horizontalVelocity.y -= normal.z * inwardSpeed * 0.7
+                    verticalVelocity -= normal.y * inwardSpeed * 0.7
+                }
+            }
+        }
+
+        if hitObstacle && characterBumpAudioCooldown <= 0 {
+            characterBumpAudioCooldown = 0.35
+            audio.playWaterDisturbance(intensity: 0.18)
         }
     }
 

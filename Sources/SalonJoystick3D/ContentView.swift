@@ -9404,6 +9404,7 @@ struct CinematicPrologueView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var kenBurnsScale: CGFloat = 1.02
     @State private var pressStartTime: Date? = nil
+    @State private var isImmersionMode: Bool = false
 
     private func panelImageName(for index: Int) -> String {
         switch index {
@@ -9451,18 +9452,20 @@ struct CinematicPrologueView: View {
                     .onChanged { _ in
                         if pressStartTime == nil {
                             pressStartTime = Date()
-                            if !prologue.is2XActive {
-                                prologue.setSpeedingUp(true)
-                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                            }
                         }
                     }
                     .onEnded { _ in
                         let duration = Date().timeIntervalSince(pressStartTime ?? Date())
                         pressStartTime = nil
-                        if duration < 0.28 && prologue.is2XActive {
-                            // Toque rápido en pantalla completa en modo 2X: restaura controles e interfaz
-                            prologue.toggle2X()
+                        if duration < 0.28 {
+                            // Toque rápido: si está en 2X, vuelve a 1X y restaura controles; si está en 1X, alterna modo inmersión limpia
+                            if prologue.is2XActive {
+                                prologue.toggle2X()
+                            } else {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    isImmersionMode.toggle()
+                                }
+                            }
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         } else if prologue.isSpeedingUp {
                             prologue.setSpeedingUp(false)
@@ -9472,53 +9475,10 @@ struct CinematicPrologueView: View {
             )
             .animation(.easeInOut(duration: 0.35), value: prologue.currentChapterIndex)
 
-            // 💎 2. Interfaz Liquid Glass Flotante (En 2X se oculta por completo para inmersión cinematográfica 100%)
-            VStack(spacing: 0) {
-                // Barra Superior Liquid Glass Flotante
-                if prologue.is2XActive || prologue.isSpeedingUp {
-                    HStack(spacing: 8) {
-                        Button {
-                            prologue.toggle2X()
-                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "bolt.fill")
-                                    .font(.system(size: 11, weight: .bold))
-                                    .foregroundStyle(.yellow)
-                                Text("⚡ 2X CINEMÁTICO // TOCA PARA RESTAURAR CONTROLES")
-                                    .font(.system(size: 10, weight: .black, design: .monospaced))
-                                    .foregroundStyle(.white)
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 7)
-                            .background(.ultraThinMaterial, in: Capsule())
-                            .background(Color.black.opacity(0.35), in: Capsule())
-                            .overlay(Capsule().stroke(Color.yellow.opacity(0.8), lineWidth: 1.2))
-                            .shadow(color: Color.yellow.opacity(0.5), radius: 8)
-                        }
-
-                        Spacer()
-
-                        Button {
-                            completeAndClose()
-                        } label: {
-                            HStack(spacing: 4) {
-                                Text("OMITIR")
-                                    .font(.system(size: 10, weight: .black, design: .rounded))
-                                Image(systemName: "forward.end.fill")
-                                    .font(.system(size: 9, weight: .bold))
-                            }
-                            .foregroundStyle(.white.opacity(0.85))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(.ultraThinMaterial, in: Capsule())
-                            .background(Color.white.opacity(0.12), in: Capsule())
-                        }
-                    }
-                    .padding(.horizontal, 28)
-                    .padding(.top, 14)
-                    .transition(.opacity)
-                } else {
+            // 💎 2. Interfaz Liquid Glass Flotante (En 2X o modo inmersión se oculta por completo para experiencia 100% cine sin estorbos)
+            if !prologue.is2XActive && !prologue.isSpeedingUp && !isImmersionMode {
+                VStack(spacing: 0) {
+                    // Barra Superior Liquid Glass Flotante
                     HStack(spacing: 8) {
                         HStack(spacing: 6) {
                             Circle()
@@ -9532,7 +9492,7 @@ struct CinematicPrologueView: View {
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
                         .background(.ultraThinMaterial, in: Capsule())
-                        .background(Color.black.opacity(0.50), in: Capsule())
+                        .background(Color.black.opacity(0.35), in: Capsule())
                         .overlay(Capsule().stroke(Color.red.opacity(0.65), lineWidth: 1))
 
                         Spacer()
@@ -9557,7 +9517,7 @@ struct CinematicPrologueView: View {
                         }
                         .padding(3)
                         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
-                        .background(Color.black.opacity(0.50), in: RoundedRectangle(cornerRadius: 8))
+                        .background(Color.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.15), lineWidth: 1))
 
                         // Botón de Velocidad
@@ -9575,7 +9535,7 @@ struct CinematicPrologueView: View {
                             .padding(.horizontal, 8)
                             .padding(.vertical, 5)
                             .background(.ultraThinMaterial, in: Capsule())
-                            .background(Color.black.opacity(0.50), in: Capsule())
+                            .background(Color.black.opacity(0.35), in: Capsule())
                             .overlay(Capsule().stroke(prologue.playbackSpeed > 1.0 ? Color.yellow.opacity(0.8) : Color.white.opacity(0.25), lineWidth: 1))
                         }
 
@@ -9588,8 +9548,24 @@ struct CinematicPrologueView: View {
                                 .foregroundStyle(prologue.isMuted ? Color.pink : Color.cyan)
                                 .frame(width: 30, height: 30)
                                 .background(.ultraThinMaterial, in: Circle())
-                                .background(Color.black.opacity(0.50), in: Circle())
+                                .background(Color.black.opacity(0.35), in: Circle())
                                 .overlay(Circle().stroke((prologue.isMuted ? Color.pink : Color.cyan).opacity(0.6), lineWidth: 1))
+                        }
+
+                        // Botón Ocultar HUD (Modo Cine Limpio)
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                isImmersionMode = true
+                            }
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        } label: {
+                            Image(systemName: "eye.slash")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.white.opacity(0.85))
+                                .frame(width: 30, height: 30)
+                                .background(.ultraThinMaterial, in: Circle())
+                                .background(Color.black.opacity(0.35), in: Circle())
+                                .overlay(Circle().stroke(Color.white.opacity(0.20), lineWidth: 1))
                         }
 
                         // Omitir
@@ -9613,12 +9589,10 @@ struct CinematicPrologueView: View {
                     .padding(.horizontal, 28)
                     .padding(.top, 14)
                     .transition(.opacity)
-                }
 
-                Spacer()
+                    Spacer()
 
-                // 💧 Panel Cinematográfico Flotante Liquid Glass (Tercio Inferior - Oculto en 2X)
-                if !prologue.is2XActive && !prologue.isSpeedingUp {
+                    // 💧 Panel Cinematográfico Flotante Liquid Glass Translúcido
                     let currentChapter = StoryPrologueManager.chapters[min(prologue.currentChapterIndex, StoryPrologueManager.chapters.count - 1)]
                     let fullScript = currentChapter.script(for: prologue.selectedLanguage)
                     let visibleText = String(fullScript.prefix(prologue.displayedChars))
@@ -9691,7 +9665,7 @@ struct CinematicPrologueView: View {
                                     .background(Color.white.opacity(0.08), in: Circle())
                             }
 
-                            // ⚡ Botón de Velocidad 2X
+                            // ⚡ Botón de Velocidad 2X (Inmersión Pura)
                             Button {
                                 prologue.toggle2X()
                                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -9758,27 +9732,34 @@ struct CinematicPrologueView: View {
                     .padding(.horizontal, 18)
                     .padding(.vertical, 10)
                     .frame(maxWidth: 820)
-                    .background(.ultraThinMaterial.opacity(0.85), in: RoundedRectangle(cornerRadius: 20))
-                    .background(Color.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 20))
-                    .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 20))
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+                    .background(
+                        LinearGradient(
+                            colors: [Color.cyan.opacity(0.12), Color.blue.opacity(0.06), Color.clear],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        in: RoundedRectangle(cornerRadius: 20)
+                    )
                     .overlay(
                         RoundedRectangle(cornerRadius: 20)
                             .stroke(
                                 LinearGradient(
-                                    colors: [Color.cyan.opacity(0.45), Color.white.opacity(0.25), Color.purple.opacity(0.25)],
+                                    colors: [Color.cyan.opacity(0.40), Color.white.opacity(0.25), Color.purple.opacity(0.20)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 ),
                                 lineWidth: 1.0
                             )
                     )
-                    .shadow(color: .black.opacity(0.40), radius: 14, y: 4)
+                    .shadow(color: .black.opacity(0.25), radius: 12, y: 3)
                     .padding(.horizontal, 28)
                     .padding(.bottom, 12)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
+                .transition(.opacity)
+                .animation(.easeInOut(duration: 0.35), value: prologue.is2XActive || prologue.isSpeedingUp || isImmersionMode)
             }
-            .animation(.easeInOut(duration: 0.35), value: prologue.is2XActive || prologue.isSpeedingUp)
 
             // Indicador TikTok 2X
             if prologue.isSpeedingUp {
