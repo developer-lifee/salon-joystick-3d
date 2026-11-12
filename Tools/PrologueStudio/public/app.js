@@ -2,8 +2,6 @@
 let chapters = [];
 let currentChapterIndex = 0;
 let isRecording = false;
-let mediaRecorder = null;
-let audioChunks = [];
 let recordedBlob = null;
 let audioContext = null;
 let analyser = null;
@@ -34,6 +32,7 @@ const bgAudio = document.getElementById('bgAudio');
 const deployBtn = document.getElementById('deployBtn');
 const visualizerCanvas = document.getElementById('visualizerCanvas');
 const canvasCtx = visualizerCanvas.getContext('2d');
+const takePlayer = document.getElementById('takePlayer');
 
 let bgMusicEnabled = true;
 
@@ -91,8 +90,10 @@ function selectChapter(idx) {
   recordedBlob = null;
   playTakeBtn.disabled = true;
   saveBtn.disabled = true;
+  takePlayer.style.display = 'none';
+  takePlayer.src = '';
   resetKaraokeHighlight();
-  statusNotice.innerHTML = `Capítulo ${idx + 1} listo. Presiona <b>Iniciar Grabación</b> para comenzar.`;
+  statusNotice.innerHTML = `Capítulo ${idx + 1} listo. Presiona <b>INICIAR GRABACIÓN</b> para comenzar.`;
 }
 
 function resetKaraokeHighlight() {
@@ -107,7 +108,6 @@ function resetKaraokeHighlight() {
 function startKaraokePacing() {
   resetKaraokeHighlight();
   const speed = parseFloat(pacerSpeed.value);
-  // Estimate ~280ms per word normalized by speed
   const intervalMs = Math.round(290 / speed);
 
   karaokeInterval = setInterval(() => {
@@ -132,53 +132,64 @@ function startKaraokePacing() {
   }, intervalMs);
 }
 
-// 5. Recording System (Web Audio + MediaRecorder)
+// 5. Universal WAV Audio Recorder (100% compatible with Mac/Safari/Chrome)
+let wavStream = null;
+let scriptProcessor = null;
+let audioChunksWav = [];
+
 async function startRecording() {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ 
+    audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
+    if (audioContext.state === 'suspended') {
+      await audioContext.resume();
+    }
+
+    wavStream = await navigator.mediaDevices.getUserMedia({ 
       audio: {
         echoCancellation: false,
         noiseSuppression: false,
-        autoGainControl: false,
-        channelCount: 2
+        autoGainControl: false
       } 
     });
 
-    // Start Audio Visualizer
-    setupVisualizer(stream);
+    // Audio Visualizer
+    setupVisualizer(wavStream);
 
     // Play Backing Track softly if enabled
     if (bgMusicEnabled) {
-      bgAudio.volume = 0.22;
+      bgAudio.volume = 0.20;
       bgAudio.currentTime = 0;
       bgAudio.play().catch(e => console.log('Autoplay muted:', e));
     }
 
-    mediaRecorder = new MediaRecorder(stream);
-    audioChunks = [];
+    sourceNode = audioContext.createMediaStreamSource(wavStream);
+    // Buffer size 4096, 1 channel
+    scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+    audioChunksWav = [];
 
-    mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0) audioChunks.push(e.data);
+    scriptProcessor.onaudioprocess = (e) => {
+      if (!isRecording) return;
+      const input = e.inputBuffer.getChannelData(0);
+      audioChunksWav.push(new Float32Array(input));
     };
 
-    mediaRecorder.onstop = () => {
-      recordedBlob = new Blob(audioChunks, { type: 'audio/webm' });
-      playTakeBtn.disabled = false;
-      saveBtn.disabled = false;
-      statusNotice.innerHTML = `✨ ¡Toma grabada! Puedes <b>Escucharla</b> o <b>Guardar en el Juego</b>.`;
-    };
+    sourceNode.connect(scriptProcessor);
+    scriptProcessor.connect(audioContext.destination);
 
-    mediaRecorder.start();
     isRecording = true;
     recordBtn.classList.add('recording');
     recordBtnText.innerText = '⏹️ DETENER GRABACIÓN (Espacio)';
 
+    takePlayer.style.display = 'none';
+    playTakeBtn.disabled = true;
+    saveBtn.disabled = true;
+
     // Start Karaoke Pacer
     startKaraokePacing();
-    statusNotice.innerHTML = `🎙️ <b style="color:#00f2fe">GRABANDO AHORA</b> — Lee el texto iluminado con tu emoción dramática.`;
+    statusNotice.innerHTML = `🎙️ <b style="color:#00f2fe">GRABANDO AHORA</b> — Lee el texto iluminado con tu entonación dramática.`;
 
   } catch (err) {
-    alert('Permiso de micrófono denegado o error: ' + err.message);
+    alert('Permiso de micrófono o error de audio: ' + err.message);
   }
 }
 
@@ -188,9 +199,10 @@ function stopRecording() {
   recordBtn.classList.remove('recording');
   recordBtnText.innerText = '🎙️ GRABAR OTRA VEZ (Espacio)';
 
-  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-    mediaRecorder.stop();
-    mediaRecorder.stream.getTracks().forEach(t => t.stop());
+  if (scriptProcessor) scriptProcessor.disconnect();
+  if (sourceNode) sourceNode.disconnect();
+  if (wavStream) {
+    wavStream.getTracks().forEach(t => t.stop());
   }
 
   clearInterval(karaokeInterval);
@@ -198,6 +210,64 @@ function stopRecording() {
     bgAudio.pause();
   }
   cancelAnimationFrame(animFrameId);
+
+  // Encode WAV
+  let totalLength = 0;
+  for (const chunk of audioChunksWav) {
+    totalLength += chunk.length;
+  }
+  const merged = new Float32Array(totalLength);
+  let offset = 0;
+  for (const chunk of audioChunksWav) {
+    merged.set(chunk, offset);
+    offset += chunk.length;
+  }
+
+  recordedBlob = encodeWAV(merged, audioContext.sampleRate || 44100);
+
+  // Set up Native Player
+  const audioUrl = URL.createObjectURL(recordedBlob);
+  takePlayer.src = audioUrl;
+  takePlayer.style.display = 'block';
+  playTakeBtn.disabled = false;
+  saveBtn.disabled = false;
+
+  const durationSec = (totalLength / (audioContext.sampleRate || 44100)).toFixed(1);
+  statusNotice.innerHTML = `✨ ¡Toma grabada (${durationSec}s)! Puedes escucharla abajo o pulsar <b>Guardar en el Juego</b>.`;
+}
+
+function encodeWAV(samples, sampleRate) {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+
+  function writeString(offset, string) {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i));
+    }
+  }
+
+  writeString(0, 'RIFF');
+  view.setUint32(4, 36 + samples.length * 2, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, 1, true); // Mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true); // Block align
+  view.setUint16(34, 16, true); // 16-bit
+  writeString(36, 'data');
+  view.setUint32(40, samples.length * 2, true);
+
+  let index = 44;
+  for (let i = 0; i < samples.length; i++) {
+    let s = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(index, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    index += 2;
+  }
+
+  return new Blob([view], { type: 'audio/wav' });
 }
 
 // Toggle Record Button
@@ -220,10 +290,20 @@ window.onkeydown = (e) => {
 // 6. Play Recorded Take
 playTakeBtn.onclick = () => {
   if (!recordedBlob) return;
-  const audioUrl = URL.createObjectURL(recordedBlob);
-  const audio = new Audio(audioUrl);
-  audio.play();
-  statusNotice.innerHTML = `▶️ Reproduciendo tu toma grabada...`;
+  takePlayer.currentTime = 0;
+  takePlayer.play().then(() => {
+    statusNotice.innerHTML = `▶️ <b style="color:#00f2fe">Reproduciendo tu toma...</b>`;
+  }).catch(err => {
+    statusNotice.innerHTML = `<span style="color:#ff0844">Error al reproducir: ${err.message}</span>`;
+  });
+};
+
+takePlayer.onended = () => {
+  statusNotice.innerHTML = `✅ Reproducción finalizada. Pulsa <b>Guardar en el Juego</b> para confirmar.`;
+};
+
+takePlayer.onerror = (e) => {
+  statusNotice.innerHTML = `<span style="color:#ff0844">Error en reproductor nativo.</span>`;
 };
 
 // 7. Save Take to Game Assets (POST /api/save-audio)
@@ -231,13 +311,14 @@ saveBtn.onclick = async () => {
   if (!recordedBlob) return;
 
   saveBtn.disabled = true;
-  saveBtn.innerText = '⏳ Procesando Filtros y Guardando...';
+  saveBtn.innerText = '⏳ Aplicando Filtro y Guardando...';
+  statusNotice.innerHTML = 'Procesando tu voz e insertándola en los assets del juego...';
 
   const filter = document.querySelector('input[name="voiceFilter"]:checked').value;
   const formData = new FormData();
   formData.append('chapter', currentChapterIndex);
   formData.append('filter', filter);
-  formData.append('audio', recordedBlob, 'take.webm');
+  formData.append('audio', recordedBlob, 'take.wav');
 
   try {
     const res = await fetch('/api/save-audio', {
@@ -260,7 +341,7 @@ saveBtn.onclick = async () => {
         if (currentChapterIndex < chapters.length - 1) {
           selectChapter(currentChapterIndex + 1);
         }
-      }, 1200);
+      }, 1400);
 
     } else {
       throw new Error(result.error);
@@ -277,8 +358,8 @@ function setupVisualizer(stream) {
   if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
   analyser = audioContext.createAnalyser();
   analyser.fftSize = 128;
-  sourceNode = audioContext.createMediaStreamSource(stream);
-  sourceNode.connect(analyser);
+  const vSource = audioContext.createMediaStreamSource(stream);
+  vSource.connect(analyser);
 
   const bufferLength = analyser.frequencyBinCount;
   const dataArray = new Uint8Array(bufferLength);
@@ -343,4 +424,3 @@ deployBtn.onclick = async () => {
 
 // Init
 loadChapters();
-

@@ -210,7 +210,7 @@ class StudioHandler(http.server.SimpleHTTPRequestHandler):
                             audio_data = part.split(b"\r\n\r\n")[1].rstrip(b"\r\n")
 
                     if audio_data:
-                        raw_temp = f"/tmp/take_raw_{ch_id}.webm"
+                        raw_temp = f"/tmp/take_raw_{ch_id}.bin"
                         wav_temp = f"/tmp/take_{ch_id}.wav"
                         dsp_temp = f"/tmp/take_dsp_{ch_id}.wav"
                         m4a_target = f"/tmp/take_{ch_id}.m4a"
@@ -218,8 +218,12 @@ class StudioHandler(http.server.SimpleHTTPRequestHandler):
                         with open(raw_temp, "wb") as f:
                             f.write(audio_data)
 
-                        # Convert to wav via afconvert
-                        subprocess.run(["afconvert", "-f", "WAVE", "-d", "LEI16@44100", raw_temp, wav_temp], check=True)
+                        # If audio is already WAV (starts with RIFF), direct use!
+                        if audio_data.startswith(b'RIFF'):
+                            shutil.copyfile(raw_temp, wav_temp)
+                        else:
+                            subprocess.run(["afconvert", "-f", "WAVE", "-d", "LEI16@44100", raw_temp, wav_temp], check=True)
+
                         process_audio_filter(wav_temp, dsp_temp, filter_mode)
                         subprocess.run(["afconvert", "-f", "m4af", "-d", "aac", "-b", "192000", dsp_temp, m4a_target], check=True)
 
