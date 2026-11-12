@@ -1461,6 +1461,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         orbitPitch = 0.22
         firstPersonPitch = 0
         isSlidingOnToboggan = false
+        heldTool = .flashlight
+        flashlightBattery = 1.0
 
         currentWave = 1
         botsKilledInCurrentWave = 0
@@ -1478,7 +1480,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 npcHealths[i] = npcMaxHealths[i]
                 npcMeltProgress[i] = 0
                 botLaserActiveTimers[i] = 0
-                botLaserCooldownTimers[i] = 3.5 + Float(i) * 1.5
+                botLaserCooldownTimers[i] = 6.5 + Float(i) * 2.0
                 botTeleportReactionTimers[i] = 0
                 botAimTargets[i] = npcSpawnPositions[spawnIndex] + SIMD3<Float>(0, 1.1, 0)
             } else {

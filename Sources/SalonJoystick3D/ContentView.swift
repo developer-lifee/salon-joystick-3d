@@ -62,10 +62,16 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 }
 
 struct GameAppVersion {
-    static let version = "2.1"
-    static let build = "135"
-    static let commitHash = "b135nanobananagadgetsandlasermuzzleorigin"
-    static let formatted = "v\(version) • Build \(build)"
+    static var version: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.1"
+    }
+    static var build: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "141"
+    }
+    static let commitHash = "b141firstpersonmirrorandflashlight"
+    static var formatted: String {
+        "v\(version) • Build \(build)"
+    }
 }
 
 extension UIDevice {
@@ -548,6 +554,26 @@ struct ContentView: View {
 
                 // 🧟 Call of Duty Zombies-Style Wave / Round HUD Banner o Duelo Versus / Equipos
                 VStack(spacing: 4) {
+                    if model.showsFlashlightGuideBanner {
+                        HStack(spacing: 8) {
+                            Image(systemName: "flashlight.on.fill")
+                                .font(.system(size: 14))
+                                .foregroundStyle(.yellow)
+                                .shadow(color: .yellow.opacity(0.8), radius: 6)
+
+                            Text("🔦 LINTERNA ENCENDIDA • La sala está a oscuras. Ilumina tu camino y activa los interruptores.")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .background(Color.black.opacity(0.7), in: Capsule())
+                        .overlay(Capsule().stroke(Color.yellow.opacity(0.85), lineWidth: 1.5))
+                        .shadow(color: Color.yellow.opacity(0.4), radius: 8)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+
                     if model.showsChronoLockBanner {
                         HStack(spacing: 8) {
                             Image(systemName: "lock.shield.fill")
@@ -1812,6 +1838,7 @@ final class GameModel: ObservableObject {
     }
     @Published var showsChronoLockBanner: Bool = false
     @Published var showsChronoCoreUnlockedBanner: Bool = false
+    @Published var showsFlashlightGuideBanner: Bool = false
     @Published var showsCampaignVictoryModal: Bool = false
     @Published var playerHealth: Float = UserDefaults.standard.bool(forKey: "isSlowMotionUnlocked") ? 150.0 : 100.0
     @Published var playerShield: Float = 100.0
@@ -2651,6 +2678,7 @@ final class GameModel: ObservableObject {
         showsMultiplayerSheet = false
         isRecoveringInChamber = false
         recoveryTimeRemaining = 0
+        heldTool = .flashlight
         isTeammateBoostingRecovery = false
         remotePlayerIsRecovering = false
         remotePlayerRecoveryTime = 0
@@ -2694,6 +2722,7 @@ final class GameModel: ObservableObject {
 
         resetRequestID += 1
         gameState = .playing
+        triggerFlashlightGuideBanner()
 
         if !fromNetwork {
             let startPacket = LocalMatchPacket(
@@ -2735,8 +2764,8 @@ final class GameModel: ObservableObject {
         remotePlayerShield = 100.0
         isDefeated = false
         isTeamDefeated = false
-        heldTool = .none
-        remotePlayerHeldTool = .none
+        heldTool = .flashlight
+        remotePlayerHeldTool = .flashlight
         isSlowMotionActive = false
         audio.setSlowMotion(false)
         lightStates.turnOffAllLights()
@@ -2751,6 +2780,7 @@ final class GameModel: ObservableObject {
 
         resetRequestID += 1
         gameState = .playing
+        triggerFlashlightGuideBanner()
 
         if !fromNetwork {
             let startPacket = LocalMatchPacket(
@@ -3092,7 +3122,7 @@ final class GameModel: ObservableObject {
         botsRemainingInWave = 2
         totalBotsInWave = 2
         isWaveIntermission = false
-        heldTool = .none
+        heldTool = .flashlight
         isSlowMotionActive = false
         audio.setSlowMotion(false)
         resetRequestID += 1
@@ -3220,6 +3250,7 @@ final class GameModel: ObservableObject {
         playerHealth = maxPlayerHealth
         playerShield = 100.0
         recoveryTimeRemaining = 0
+        heldTool = .flashlight
         isTeammateBoostingRecovery = false
         audio.playBalloonBouncePopSound()
         UINotificationFeedbackGenerator().notificationOccurred(.success)
@@ -3322,8 +3353,8 @@ final class GameModel: ObservableObject {
         botsRemainingInWave = 2
         totalBotsInWave = 2
         isWaveIntermission = false
-        heldTool = .none
-        remotePlayerHeldTool = .none
+        heldTool = .flashlight
+        remotePlayerHeldTool = .flashlight
         joystick = .zero
         isSlowMotionActive = false
         audio.setSlowMotion(false)
@@ -3354,7 +3385,7 @@ final class GameModel: ObservableObject {
         isRecoveringInChamber = false
         remotePlayerIsRecovering = false
         recoveryTimeRemaining = 0
-        heldTool = .none
+        heldTool = .flashlight
         joystick = .zero
         currentWave = 1
         botsRemainingInWave = 2
@@ -3367,6 +3398,18 @@ final class GameModel: ObservableObject {
         resetRequestID &+= 1
         respawnRequestID &+= 1
         updateAudioPauseState()
+        triggerFlashlightGuideBanner()
+    }
+
+    func triggerFlashlightGuideBanner() {
+        showsFlashlightGuideBanner = true
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        audio.playLaserIgnition()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.5) { [weak self] in
+            withAnimation {
+                self?.showsFlashlightGuideBanner = false
+            }
+        }
     }
 
     func requestJump() {
