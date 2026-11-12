@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "130"
-    static let commitHash = "b130fullycustomizablehudnodefeattoverlap"
+    static let build = "131"
+    static let commitHash = "b131unifiedactionbuttonandcompactskills"
     static let formatted = "v\(version) • Build \(build)"
 }
 
@@ -1056,148 +1056,108 @@ struct ContentView: View {
                         .transition(.scale.combined(with: .opacity))
                     }
 
-                    // Bar 1: Action/Skill Capsules (Encendedor Contextual, Slow-Mo, Warp, Radar) - Paleta Cyan & Pink
-                    HStack(spacing: 8) {
-                        // 💡 Encendedor Contextual de Luz Cercana (Solo visible cuando estamos vivos para no solapar la pantalla de reintentar)
-                        if let nearbyLight = model.nearbyLight, !model.isDefeated && !model.isRecoveringInChamber {
-                        ContextualLightButton(
-                            isOn: model.lightStates.isEnabled(nearbyLight),
-                            label: nearbyLight.label,
-                            onTap: model.toggleNearbyLight,
-                            onLongPress: { dimmerFixture = nearbyLight }
-                        )
-                        .popover(
-                            isPresented: Binding(
-                                get: { dimmerFixture != nil },
-                                set: { if !$0 { dimmerFixture = nil } }
-                            ),
-                            arrowEdge: .bottom
-                        ) {
-                            if let fixture = dimmerFixture {
-                                VStack(alignment: .leading, spacing: 10) {
-                                    HStack {
-                                        Image(systemName: "lightbulb.fill")
-                                            .foregroundStyle(Color.cyan)
-                                        Text(fixture.label)
-                                            .font(.headline)
-                                        Spacer()
-                                        Text("\(Int((model.lightStates.intensity(fixture) * 100).rounded()))%")
-                                            .font(.caption.monospacedDigit())
-                                            .foregroundStyle(Color.cyan)
-                                    }
-                                    Slider(
-                                        value: Binding(
-                                            get: { Double(model.lightStates.intensity(fixture)) },
-                                            set: { model.setLightIntensity(Float($0), for: fixture) }
-                                        ),
-                                        in: 0.1...1
-                                    )
-                                    .tint(.cyan)
-                                }
-                                .padding(14)
-                                .frame(width: 260)
-                                .presentationCompactAdaptation(.popover)
+                    // Bar 1: Action/Skill Capsules (Acción de Entorno, Slow-Mo, Warp, Radar) - Paleta Cyan & Pink Compacta
+                    HStack(spacing: 6) {
+                        // 🎯 Botón de Acción Contextual Unificado (Cobertura + Neón en UN SOLO BOTÓN para evitar barras largas)
+                        ContextualEnvironmentActionButton(model: model, dimmerFixture: $dimmerFixture)
+
+                        Button {
+                            model.toggleSlowMotion()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "hourglass")
+                                    .font(.system(size: 12, weight: .bold))
+                                Text("Slow-Mo")
+                                    .font(.system(size: 11, weight: .bold))
                             }
-                        }
-                        .transition(.scale.combined(with: .opacity))
-                    }
-                    Button {
-                        model.toggleSlowMotion()
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "hourglass")
-                                .font(.system(size: 13, weight: .bold))
-                            Text("Slow-Mo")
-                                .font(.system(size: 11, weight: .bold))
-                        }
-                        .foregroundStyle(model.isSlowMotionActive ? .black : Color.pink)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(
-                            model.isSlowMotionActive
-                                ? AnyShapeStyle(Color.pink)
-                                : AnyShapeStyle(Color.black.opacity(0.65)),
-                            in: Capsule()
-                        )
-                        .overlay(Capsule().stroke(Color.pink.opacity(0.85), lineWidth: 1.5))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Cámara Lenta Slow Motion")
-                    .opacity(model.hudSlowMoOpacity)
-                    .disabled(model.isDefeated || model.gameState != .playing)
-                    .modifier(HUDDraggableModifier(
-                        isEditing: model.isEditingHUDLayout,
-                        isSelected: model.selectedHUDGroup == 3,
-                        label: "⏳ SLOW-MO",
-                        offsetX: $model.hudSlowMoX,
-                        offsetY: $model.hudSlowMoY,
-                        scale: model.hudSlowMoScale,
-                        onSelect: { model.selectedHUDGroup = 3 }
-                    ))
-
-                    Button {
-                        model.showsLightRadialMenu.toggle()
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "bolt.shield.fill")
-                                .font(.system(size: 13, weight: .bold))
-                            Text("Warp")
-                                .font(.system(size: 11, weight: .bold))
-                        }
-                        .foregroundStyle(model.showsLightRadialMenu ? .black : Color.cyan)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(
-                            model.showsLightRadialMenu
-                                ? AnyShapeStyle(Color.cyan)
-                                : AnyShapeStyle(Color.black.opacity(0.65)),
-                            in: Capsule()
-                        )
-                        .overlay(Capsule().stroke(Color.cyan.opacity(0.85), lineWidth: 1.5))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Menú Radial de Teletransporte")
-                    .opacity(model.hudWarpOpacity)
-                    .disabled(model.isDefeated || model.gameState != .playing)
-                    .modifier(HUDDraggableModifier(
-                        isEditing: model.isEditingHUDLayout,
-                        isSelected: model.selectedHUDGroup == 4,
-                        label: "⚡ WARP",
-                        offsetX: $model.hudWarpX,
-                        offsetY: $model.hudWarpY,
-                        scale: model.hudWarpScale,
-                        onSelect: { model.selectedHUDGroup = 4 }
-                    ))
-
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                            model.showsMinimap.toggle()
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "map.fill")
-                                .font(.system(size: 13, weight: .bold))
-                            Text("Radar")
-                                .font(.system(size: 11, weight: .bold))
-                        }
-                        .foregroundStyle(model.showsMinimap ? .black : Color.cyan)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(
-                            model.showsMinimap
-                                ? AnyShapeStyle(LinearGradient(colors: [Color.cyan, Color.pink], startPoint: .leading, endPoint: .trailing))
-                                : AnyShapeStyle(Color.black.opacity(0.65)),
-                            in: Capsule()
-                        )
-                        .overlay(
-                            Capsule().stroke(
-                                LinearGradient(colors: [Color.cyan.opacity(0.85), Color.pink.opacity(0.85)], startPoint: .leading, endPoint: .trailing),
-                                lineWidth: 1.5
+                            .foregroundStyle(model.isSlowMotionActive ? .black : Color.pink)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(
+                                model.isSlowMotionActive
+                                    ? AnyShapeStyle(Color.pink)
+                                    : AnyShapeStyle(Color.black.opacity(0.65)),
+                                in: Capsule()
                             )
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Minimapa Radar Táctico")
+                            .overlay(Capsule().stroke(Color.pink.opacity(0.85), lineWidth: 1.4))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Cámara Lenta Slow Motion")
+                        .opacity(model.hudSlowMoOpacity)
+                        .disabled(model.isDefeated || model.gameState != .playing)
+                        .modifier(HUDDraggableModifier(
+                            isEditing: model.isEditingHUDLayout,
+                            isSelected: model.selectedHUDGroup == 3,
+                            label: "⏳ SLOW-MO",
+                            offsetX: $model.hudSlowMoX,
+                            offsetY: $model.hudSlowMoY,
+                            scale: model.hudSlowMoScale,
+                            onSelect: { model.selectedHUDGroup = 3 }
+                        ))
+
+                        Button {
+                            model.showsLightRadialMenu.toggle()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "bolt.shield.fill")
+                                    .font(.system(size: 12, weight: .bold))
+                                Text("Warp")
+                                    .font(.system(size: 11, weight: .bold))
+                            }
+                            .foregroundStyle(model.showsLightRadialMenu ? .black : Color.cyan)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(
+                                model.showsLightRadialMenu
+                                    ? AnyShapeStyle(Color.cyan)
+                                    : AnyShapeStyle(Color.black.opacity(0.65)),
+                                in: Capsule()
+                            )
+                            .overlay(Capsule().stroke(Color.cyan.opacity(0.85), lineWidth: 1.4))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Menú Radial de Teletransporte")
+                        .opacity(model.hudWarpOpacity)
+                        .disabled(model.isDefeated || model.gameState != .playing)
+                        .modifier(HUDDraggableModifier(
+                            isEditing: model.isEditingHUDLayout,
+                            isSelected: model.selectedHUDGroup == 4,
+                            label: "⚡ WARP",
+                            offsetX: $model.hudWarpX,
+                            offsetY: $model.hudWarpY,
+                            scale: model.hudWarpScale,
+                            onSelect: { model.selectedHUDGroup = 4 }
+                        ))
+
+                        Button {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                                model.showsMinimap.toggle()
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "map.fill")
+                                    .font(.system(size: 12, weight: .bold))
+                                Text("Radar")
+                                    .font(.system(size: 11, weight: .bold))
+                            }
+                            .foregroundStyle(model.showsMinimap ? .black : Color.cyan)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(
+                                model.showsMinimap
+                                    ? AnyShapeStyle(LinearGradient(colors: [Color.cyan, Color.pink], startPoint: .leading, endPoint: .trailing))
+                                    : AnyShapeStyle(Color.black.opacity(0.65)),
+                                in: Capsule()
+                            )
+                            .overlay(
+                                Capsule().stroke(
+                                    LinearGradient(colors: [Color.cyan.opacity(0.85), Color.pink.opacity(0.85)], startPoint: .leading, endPoint: .trailing),
+                                    lineWidth: 1.4
+                                )
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Minimapa Radar Táctico")
 
                     if model.isGameControllerConnected && !model.isMinimalHUDEnabled {
                         HStack(spacing: 5) {
@@ -1241,49 +1201,6 @@ struct ContentView: View {
                         .buttonStyle(.plain)
                         .disabled(model.isPumpingTeammateStroke)
                         .accessibilityLabel("Bombear Aire a Compañero con Bomba Neumática")
-                    }
-
-                    if model.isNearCoverRock || model.isCoverActive {
-                        Button {
-                            model.toggleCover()
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: model.isCoverActive ? "shield.fill" : "shield")
-                                    .font(.system(size: 13, weight: .bold))
-                                Text(model.isCoverActive ? "En Cobertura" : "Cobertura")
-                                    .font(.system(size: 11, weight: .bold))
-                            }
-                            .foregroundStyle(model.isCoverActive ? .black : .green)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(
-                                model.isCoverActive
-                                    ? AnyShapeStyle(Color.green)
-                                    : AnyShapeStyle(Color.black.opacity(0.65)),
-                                in: Capsule()
-                            )
-                            .overlay(Capsule().stroke(Color.green.opacity(0.8), lineWidth: 1.5))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Pegarse a Cobertura en Piedras")
-                    } else if model.isUnderwater {
-                        Button {
-                            model.requestDive()
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "arrow.down.circle.fill")
-                                    .font(.system(size: 13, weight: .bold))
-                                Text("Bucear")
-                                    .font(.system(size: 11, weight: .bold))
-                            }
-                            .foregroundStyle(.cyan)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color.black.opacity(0.65), in: Capsule())
-                            .overlay(Capsule().stroke(Color.cyan.opacity(0.8), lineWidth: 1.5))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Sumergirse hacia el fondo del agua")
                     }
                 }
                 .disabled(model.isDefeated || model.gameState != .playing)
@@ -3350,50 +3267,193 @@ final class GameModel: ObservableObject {
     }
 }
 
-private struct ContextualLightButton: View {
-    let isOn: Bool
-    let label: String
-    let onTap: () -> Void
-    let onLongPress: () -> Void
+struct LightDimmerPopover: View {
+    let fixture: GameLightFixture
+    @ObservedObject var model: GameModel
 
     var body: some View {
-        HStack(spacing: 5) {
-            Image(systemName: isOn ? "lightbulb.fill" : "lightbulb.slash.fill")
-                .font(.system(size: 13, weight: .bold))
-            Text(label)
-                .font(.system(size: 11, weight: .bold))
-        }
-        .foregroundStyle(isOn ? Color.cyan : Color.white.opacity(0.85))
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(
-            isOn ? AnyShapeStyle(Color.cyan.opacity(0.25)) : AnyShapeStyle(Color.black.opacity(0.65)),
-            in: Capsule()
-        )
-        .overlay(
-            Capsule().stroke(
-                isOn ? Color.cyan.opacity(0.90) : Color.white.opacity(0.35),
-                lineWidth: 1.5
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Image(systemName: "lightbulb.fill")
+                    .foregroundStyle(Color.cyan)
+                Text(fixture.label)
+                    .font(.headline)
+                Spacer()
+                Text("\(Int((model.lightStates.intensity(fixture) * 100).rounded()))%")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(Color.cyan)
+            }
+            Slider(
+                value: Binding(
+                    get: { Double(model.lightStates.intensity(fixture)) },
+                    set: { model.setLightIntensity(Float($0), for: fixture) }
+                ),
+                in: 0.1...1
             )
-        )
-        .shadow(color: isOn ? Color.cyan.opacity(0.40) : Color.clear, radius: 6)
-        .contentShape(Capsule())
-        .gesture(
-            LongPressGesture(minimumDuration: 0.45)
-                .exclusively(before: TapGesture())
-                .onEnded { result in
-                    switch result {
-                    case .first:
-                        onLongPress()
-                    case .second:
-                        onTap()
+            .tint(.cyan)
+        }
+        .padding(14)
+        .frame(width: 260)
+        .presentationCompactAdaptation(.popover)
+    }
+}
+
+private struct ContextualEnvironmentActionButton: View {
+    @ObservedObject var model: GameModel
+    @Binding var dimmerFixture: GameLightFixture?
+
+    var body: some View {
+        let hasLight = model.nearbyLight != nil && !model.isDefeated && !model.isRecoveringInChamber
+        let hasCover = model.isNearCoverRock || model.isCoverActive
+
+        if hasCover && hasLight, let light = model.nearbyLight {
+            // 🎯 Caso 1: Cerca de roca Y de luz (ej. Piscina Neón + Roca) -> UN SOLO BOTÓN DE ACCIÓN COMPACTO
+            let isLightOn = model.lightStates.isEnabled(light)
+            HStack(spacing: 6) {
+                Button {
+                    model.toggleCover()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: model.isCoverActive ? "shield.fill" : "shield")
+                            .font(.system(size: 12, weight: .bold))
+                        Text(model.isCoverActive ? "En Cobertura" : "Cobertura")
+                            .font(.system(size: 11, weight: .bold))
                     }
+                    .foregroundStyle(model.isCoverActive ? .black : Color.green)
                 }
-        )
-        .accessibilityAddTraits(.isButton)
-        .accessibilityLabel(isOn ? "Apagar \(label)" : "Encender \(label)")
-        .accessibilityAction(.default) {
-            onTap()
+                .buttonStyle(.plain)
+
+                Divider()
+                    .frame(height: 12)
+                    .overlay(Color.white.opacity(0.40))
+
+                Button {
+                    model.toggleNearbyLight()
+                } label: {
+                    Image(systemName: isLightOn ? "lightbulb.fill" : "lightbulb.slash.fill")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(isLightOn ? Color.cyan : Color.white.opacity(0.70))
+                }
+                .buttonStyle(.plain)
+                .simultaneousGesture(
+                    LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+                        dimmerFixture = light
+                    }
+                )
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(
+                model.isCoverActive
+                    ? AnyShapeStyle(Color.green)
+                    : AnyShapeStyle(Color.black.opacity(0.65)),
+                in: Capsule()
+            )
+            .overlay(
+                Capsule().stroke(
+                    model.isCoverActive ? Color.green : Color.cyan.opacity(0.85),
+                    lineWidth: 1.4
+                )
+            )
+            .popover(
+                isPresented: Binding(
+                    get: { dimmerFixture != nil },
+                    set: { if !$0 { dimmerFixture = nil } }
+                ),
+                arrowEdge: .bottom
+            ) {
+                if let fixture = dimmerFixture {
+                    LightDimmerPopover(fixture: fixture, model: model)
+                }
+            }
+            .transition(.scale.combined(with: .opacity))
+        } else if hasCover {
+            // 🎯 Caso 2: Solo cerca de roca de cobertura
+            Button {
+                model.toggleCover()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: model.isCoverActive ? "shield.fill" : "shield")
+                        .font(.system(size: 12, weight: .bold))
+                    Text(model.isCoverActive ? "En Cobertura" : "Cobertura")
+                        .font(.system(size: 11, weight: .bold))
+                }
+                .foregroundStyle(model.isCoverActive ? .black : Color.green)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(
+                    model.isCoverActive
+                        ? AnyShapeStyle(Color.green)
+                        : AnyShapeStyle(Color.black.opacity(0.65)),
+                    in: Capsule()
+                )
+                .overlay(Capsule().stroke(Color.green.opacity(0.85), lineWidth: 1.4))
+            }
+            .buttonStyle(.plain)
+            .transition(.scale.combined(with: .opacity))
+        } else if hasLight, let light = model.nearbyLight {
+            // 🎯 Caso 3: Solo cerca de una luminaria (ej. Neón o Poste)
+            let isLightOn = model.lightStates.isEnabled(light)
+            Button {
+                model.toggleNearbyLight()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: isLightOn ? "lightbulb.fill" : "lightbulb.slash.fill")
+                        .font(.system(size: 12, weight: .bold))
+                    Text(light.label)
+                        .font(.system(size: 11, weight: .bold))
+                }
+                .foregroundStyle(isLightOn ? Color.cyan : Color.white.opacity(0.85))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(
+                    isLightOn ? AnyShapeStyle(Color.cyan.opacity(0.25)) : AnyShapeStyle(Color.black.opacity(0.65)),
+                    in: Capsule()
+                )
+                .overlay(
+                    Capsule().stroke(
+                        isLightOn ? Color.cyan.opacity(0.90) : Color.white.opacity(0.35),
+                        lineWidth: 1.4
+                    )
+                )
+            }
+            .buttonStyle(.plain)
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+                    dimmerFixture = light
+                }
+            )
+            .popover(
+                isPresented: Binding(
+                    get: { dimmerFixture != nil },
+                    set: { if !$0 { dimmerFixture = nil } }
+                ),
+                arrowEdge: .bottom
+            ) {
+                if let fixture = dimmerFixture {
+                    LightDimmerPopover(fixture: fixture, model: model)
+                }
+            }
+            .transition(.scale.combined(with: .opacity))
+        } else if model.isUnderwater {
+            // 🎯 Caso 4: Bucear
+            Button {
+                model.requestDive()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .font(.system(size: 12, weight: .bold))
+                    Text("Bucear")
+                        .font(.system(size: 11, weight: .bold))
+                }
+                .foregroundStyle(.cyan)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(Color.black.opacity(0.65), in: Capsule())
+                .overlay(Capsule().stroke(Color.cyan.opacity(0.8), lineWidth: 1.4))
+            }
+            .buttonStyle(.plain)
+            .transition(.scale.combined(with: .opacity))
         }
     }
 }
