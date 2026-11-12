@@ -2248,7 +2248,11 @@ final class GameModel: ObservableObject {
         audio.playLaserIgnition()
     }
 
-    @Published var isUnderwater = false
+    @Published var isUnderwater = false {
+        didSet {
+            audio.setUnderwaterZone(isUnderwater: isUnderwater)
+        }
+    }
     @Published private(set) var diveRequestID = 0
 
     func requestDive() {
@@ -5160,7 +5164,9 @@ final class ChiptuneAudioEngine {
     private let audioQueue = DispatchQueue(label: "com.codex.salonjoystick3d.audio", qos: .userInitiated)
     private var musicBuffer: AVAudioPCMBuffer?
     private var rainbowMusicBuffer: AVAudioPCMBuffer?
+    private var underwaterMusicBuffer: AVAudioPCMBuffer?
     private var isInRainbowHallZone = false
+    private var isInUnderwaterZone = false
     private var waterBuffer: AVAudioPCMBuffer?
     private var glideBuffer: AVAudioPCMBuffer?
     private var splashBuffers: [AVAudioPCMBuffer] = []
@@ -5242,23 +5248,50 @@ final class ChiptuneAudioEngine {
         audioQueue.async { [weak self] in
             guard let self else { return }
             self.musicEnabled = enabled
-            self.musicNode.volume = enabled ? (self.isInRainbowHallZone ? 0.28 : 0.22) : 0
+            let vol: Float = self.isInUnderwaterZone ? 0.32 : (self.isInRainbowHallZone ? 0.28 : 0.22)
+            self.musicNode.volume = enabled ? vol : 0
         }
     }
 
-    func setArenaZone(isRainbowHall: Bool) {
+    func setAudioZone(isUnderwater: Bool, isRainbowHall: Bool) {
         audioQueue.async { [weak self] in
-            guard let self, self.isInRainbowHallZone != isRainbowHall else { return }
+            guard let self else { return }
+            if self.isInUnderwaterZone == isUnderwater && self.isInRainbowHallZone == isRainbowHall {
+                return
+            }
+            self.isInUnderwaterZone = isUnderwater
             self.isInRainbowHallZone = isRainbowHall
             guard self.started else { return }
+
             self.musicNode.stop()
-            let activeBuffer = isRainbowHall ? (self.rainbowMusicBuffer ?? self.musicBuffer) : self.musicBuffer
+            let activeBuffer: AVAudioPCMBuffer?
+            let targetVol: Float
+
+            if isUnderwater {
+                activeBuffer = self.underwaterMusicBuffer ?? self.musicBuffer
+                targetVol = self.musicEnabled ? 0.32 : 0
+            } else if isRainbowHall {
+                activeBuffer = self.rainbowMusicBuffer ?? self.musicBuffer
+                targetVol = self.musicEnabled ? 0.28 : 0
+            } else {
+                activeBuffer = self.musicBuffer
+                targetVol = self.musicEnabled ? 0.22 : 0
+            }
+
             if let activeBuffer {
-                self.musicNode.volume = self.musicEnabled ? (isRainbowHall ? 0.28 : 0.22) : 0
+                self.musicNode.volume = targetVol
                 self.musicNode.scheduleBuffer(activeBuffer, at: nil, options: .loops)
                 self.musicNode.play()
             }
         }
+    }
+
+    func setArenaZone(isRainbowHall: Bool) {
+        setAudioZone(isUnderwater: isInUnderwaterZone, isRainbowHall: isRainbowHall)
+    }
+
+    func setUnderwaterZone(isUnderwater: Bool) {
+        setAudioZone(isUnderwater: isUnderwater, isRainbowHall: isInRainbowHallZone)
     }
 
     func setEffectsEnabled(_ enabled: Bool) {
@@ -5289,6 +5322,7 @@ final class ChiptuneAudioEngine {
             if musicBuffer == nil {
                 musicBuffer = makeMusicBuffer()
                 rainbowMusicBuffer = makeRainbowMusicBuffer()
+                underwaterMusicBuffer = makeUnderwaterMusicBuffer()
                 waterBuffer = makeWaterBuffer()
                 glideBuffer = makeGlideBuffer()
                 splashBuffers = [
@@ -6268,6 +6302,82 @@ final class ChiptuneAudioEngine {
             channels[0][frame] = Float(leadL + subBass + shimmerL)
             if format.channelCount > 1 {
                 channels[1][frame] = Float(leadR + subBass + shimmerR)
+            }
+        }
+        return buffer
+    }
+
+    // 🌊 🐋 Banda Sonora Acuática Abisal Submarina (Subterranean Ocean / Mystic Water Realm)
+    // Atmósfera inmersiva inspirada en Donkey Kong Country (Aquatic Ambiance) y Super Mario 64 (Dire Dire Docks):
+    // Acordes flotantes con filtro pasabajos cálido, ondas senoidales marinas puras,
+    // campanas prismáticas líquidas y pulso sub-grave abisal envolvente.
+    private func makeUnderwaterMusicBuffer() -> AVAudioPCMBuffer? {
+        let duration = 12.0
+        let frameCount = AVAudioFrameCount(format.sampleRate * duration)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
+              let channels = buffer.floatChannelData else {
+            return nil
+        }
+        buffer.frameLength = frameCount
+
+        // 4 Secciones Armónicas Místicas de 3 segundos cada una (Progression: Dm9 -> Bbmaj9 -> Gm11 -> Asus4):
+        let chords: [[Double]] = [
+            [146.83, 220.00, 261.63, 329.63, 392.00], // Dm9: D3, A3, C4, E4, G4
+            [116.54, 174.61, 233.08, 293.66, 349.23], // Bbmaj9: Bb2, F3, Bb3, D4, F4
+            [98.00,  146.83, 196.00, 246.94, 329.63], // Gm11: G2, D3, G3, B3, E4
+            [110.00, 164.81, 220.00, 293.66, 329.63]  // Asus4: A2, E3, A3, D4, E4
+        ]
+        let subBassFrequencies: [Double] = [73.42, 58.27, 49.00, 55.00] // D2, Bb1, G1, A1
+
+        // Arpegio líquido acuático lento y meditativo:
+        let liquidMelody: [Double] = [
+            293.66, 329.63, 392.00, 440.00,
+            349.23, 293.66, 349.23, 440.00,
+            392.00, 329.63, 293.66, 261.63
+        ]
+
+        for frame in 0..<Int(frameCount) {
+            let time = Double(frame) / format.sampleRate
+            let section = min(3, Int(time / 3.0))
+            let chord = chords[section]
+
+            // 1. Acordes subacuáticos amortiguados (filtro cálido pasabajos):
+            var padL = 0.0
+            var padR = 0.0
+            for (idx, noteFreq) in chord.enumerated() {
+                let pPhase = 2 * Double.pi * noteFreq * time
+                let detune = 1.0 + Double(idx) * 0.0012
+                let pWaveL = sin(pPhase) * 0.016
+                let pWaveR = sin(pPhase * detune + 0.35) * 0.016
+                padL += pWaveL
+                padR += pWaveR
+            }
+
+            // 2. Pulso sub-grave oceánico profundo (49 - 73 Hz) con modulación suave de mareas:
+            let bassFreq = subBassFrequencies[section]
+            let tidalSwell = 0.85 + 0.15 * sin(2 * Double.pi * 0.25 * time)
+            let subBass = sin(2 * Double.pi * bassFreq * time) * 0.026 * tidalSwell
+
+            // 3. Campana líquida cristalina (Arpegio suave con decaimiento natural y burbujas armónicas):
+            let noteIdx = min(liquidMelody.count - 1, Int(time / 1.0))
+            let noteTime = time.truncatingRemainder(dividingBy: 1.0)
+            let bellAttack = min(1.0, noteTime / 0.06)
+            let bellDecay = exp(-noteTime * 2.2)
+            let bellEnv = bellAttack * bellDecay
+            let bellFreq = liquidMelody[noteIdx]
+            let bellPhase = 2 * Double.pi * bellFreq * time
+            let bellWave = (sin(bellPhase) + sin(bellPhase * 2.0) * 0.15 + sin(bellPhase * 3.0) * 0.04) * bellEnv * 0.024
+
+            // 4. Modulación binaural acuática estéreo (onda suave de 0.2 Hz):
+            let waveL = (padL * 0.65 + bellWave * 0.85 + subBass) * (0.92 + 0.08 * sin(2 * Double.pi * 0.2 * time))
+            let waveR = (padR * 0.65 + bellWave * 0.85 + subBass) * (0.92 + 0.08 * cos(2 * Double.pi * 0.2 * time))
+
+            // 5. Suavizado en bordes de buffer para loop perfecto sin clicks:
+            let loopFade = min(1.0, min(time, duration - time) / 0.06)
+
+            channels[0][frame] = Float(waveL * loopFade)
+            if format.channelCount > 1 {
+                channels[1][frame] = Float(waveR * loopFade)
             }
         }
         return buffer
