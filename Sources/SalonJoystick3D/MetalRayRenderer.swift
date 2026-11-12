@@ -3890,12 +3890,14 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         margin: Float = 0.38,
         velocity: inout SIMD2<Float>
     ) {
-        if position.y < -4.0 {
-            let poolMargin = max(0.40, margin)
-            let minX = -17.8 + poolMargin
-            let maxX = 17.8 - poolMargin
-            let minZ = -17.8 + poolMargin
-            let maxZ = 17.8 - poolMargin
+        // 🏊‍♂️ Pozo de la Piscina / Tramo Estrecho (-4.70 <= Y < 0.20):
+        // Conexión vertical entre la piscina superior y la cámara subterránea
+        if position.y < 0.20 && position.y >= -4.70 {
+            let shaftMargin = max(0.40, margin)
+            let minX: Float = -5.28 + shaftMargin
+            let maxX: Float = 2.28 - shaftMargin
+            let minZ: Float = -4.08 + shaftMargin
+            let maxZ: Float = 1.08 - shaftMargin
             if position.x < minX {
                 position.x = minX
                 if velocity.x < 0 { velocity.x = 0 }
@@ -3909,6 +3911,35 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             } else if position.z > maxZ {
                 position.z = maxZ
                 if velocity.y > 0 { velocity.y = 0 }
+            }
+            return
+        }
+
+        // 🌊 Gran Cámara Acuática Subterránea Abisal (Y < -4.70):
+        if position.y < -4.70 {
+            let poolMargin = max(0.40, margin)
+            let minX: Float = -17.8 + poolMargin
+            let maxX: Float = 17.8 - poolMargin
+            let minZ: Float = -17.8 + poolMargin
+            let maxZ: Float = 17.8 - poolMargin
+            if position.x < minX {
+                position.x = minX
+                if velocity.x < 0 { velocity.x = 0 }
+            } else if position.x > maxX {
+                position.x = maxX
+                if velocity.x > 0 { velocity.x = 0 }
+            }
+            if position.z < minZ {
+                position.z = minZ
+                if velocity.y < 0 { velocity.y = 0 }
+            } else if position.z > maxZ {
+                position.z = maxZ
+                if velocity.y > 0 { velocity.y = 0 }
+            }
+            // Techo subterráneo sólido fuera de la boca del pozo:
+            let underShaft = position.x >= -5.28 && position.x <= 2.28 && position.z >= -4.08 && position.z <= 1.08
+            if !underShaft && position.y > -4.95 {
+                position.y = -4.95
             }
             return
         }
@@ -4022,7 +4053,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
 
         guard position.z > 17.5 else { return }
-        let playerRadius: Float = 0.36
+        let playerRadius: Float = 0.46
         for box in rtRainbowParkourBoxes {
             let topY = box.center.y + box.size.y * 0.5
             let bottomY = box.center.y - box.size.y * 0.5
@@ -4041,12 +4072,12 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             let dz = position.z - box.center.z
 
             if abs(dx) < halfX && abs(dz) < halfZ {
-                // Auto-step up para bordes o escalones bajos transitables (altura del escalón <= 0.45m sobre los pies del jugador):
+                // Auto-step up para bordes o escalones bajos transitables (altura del escalón <= 0.38m sobre los pies del jugador):
                 let stepDiff = topY - position.y
-                if stepDiff > 0.0 && stepDiff <= 0.45 {
-                    let innerX = box.size.x * 0.5 + 0.12
-                    let innerZ = box.size.z * 0.5 + 0.12
-                    if abs(dx) < innerX && abs(dz) < innerZ {
+                if stepDiff > 0.0 && stepDiff <= 0.38 {
+                    let edgeMarginX = box.size.x * 0.5 + 0.04
+                    let edgeMarginZ = box.size.z * 0.5 + 0.04
+                    if abs(dx) < edgeMarginX && abs(dz) < edgeMarginZ {
                         position.y = topY
                         continue
                     }
@@ -4554,10 +4585,64 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 sin(firstPersonPitch),
                 viewForward.z * pitchCosine
             ))
-            var camPos = smoothedCameraTarget + viewForward * 0.38
+            var camPos = smoothedCameraTarget + viewForward * 0.10
             if isClimbingLadder {
                 camPos.z = max(-16.12, camPos.z)
             }
+
+            // 🛡️ Collider Fino de Cámara FPS (Anti-Clipping & Near-Plane Protection)
+            // a) Tramo estrecho del pozo de la piscina (-4.70 <= Y < 0.25):
+            if camPos.y < 0.25 && camPos.y >= -4.75 {
+                camPos.x = max(-5.05, min(2.05, camPos.x))
+                camPos.z = max(-3.85, min(0.85, camPos.z))
+            }
+            // b) Cámara subterránea abisal (Y < -4.75):
+            else if camPos.y < -4.75 {
+                camPos.x = max(-17.3, min(17.3, camPos.x))
+                camPos.z = max(-17.3, min(17.3, camPos.z))
+                camPos.y = max(-11.3, camPos.y)
+                let underShaft = camPos.x >= -5.15 && camPos.x <= 2.15 && camPos.z >= -3.95 && camPos.z <= 0.95
+                if !underShaft {
+                    camPos.y = min(-4.95, camPos.y)
+                }
+            }
+            // c) Gran Salón Arcoíris (Z >= 17.5):
+            else if camPos.z >= 17.5 {
+                camPos.x = max(-26.4, min(26.4, camPos.x))
+                camPos.z = max(18.0, min(71.4, camPos.z))
+                camPos.y = max(0.15, min(8.6, camPos.y))
+
+                // Anti-clipping contra cada bloque de parkour:
+                let camSkin: Float = 0.18
+                for box in rtRainbowParkourBoxes {
+                    let bMin = box.center - box.size * 0.5 - SIMD3<Float>(repeating: camSkin)
+                    let bMax = box.center + box.size * 0.5 + SIMD3<Float>(repeating: camSkin)
+                    if camPos.x > bMin.x && camPos.x < bMax.x &&
+                       camPos.y > bMin.y && camPos.y < bMax.y &&
+                       camPos.z > bMin.z && camPos.z < bMax.z {
+                        let dMinX = camPos.x - bMin.x
+                        let dMaxX = bMax.x - camPos.x
+                        let dMinY = camPos.y - bMin.y
+                        let dMaxY = bMax.y - camPos.y
+                        let dMinZ = camPos.z - bMin.z
+                        let dMaxZ = bMax.z - camPos.z
+                        let minD = min(min(min(dMinX, dMaxX), min(dMinY, dMaxY)), min(dMinZ, dMaxZ))
+                        if minD == dMinX { camPos.x = bMin.x }
+                        else if minD == dMaxX { camPos.x = bMax.x }
+                        else if minD == dMinY { camPos.y = bMin.y }
+                        else if minD == dMaxY { camPos.y = bMax.y }
+                        else if minD == dMinZ { camPos.z = bMin.z }
+                        else if minD == dMaxZ { camPos.z = bMax.z }
+                    }
+                }
+            }
+            // d) Patio / Salón Principal (Z < 17.5, Y >= 0.0):
+            else {
+                camPos.x = max(-17.3, min(17.3, camPos.x))
+                camPos.z = max(-17.3, min(17.3, camPos.z))
+                camPos.y = max(0.15, min(6.8, camPos.y))
+            }
+
             cameraPosition = camPos
             fieldOfView = 72
         } else {
@@ -5736,7 +5821,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 reflectivity: 0.0,
                 kind: 0
             )
-            builder.addBox(center: box.center, size: box.size, material: mat, doubleSided: true)
+            builder.addBox(center: box.center, size: box.size, material: mat, doubleSided: false)
         }
 
         return builder
