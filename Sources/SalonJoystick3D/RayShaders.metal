@@ -1435,12 +1435,16 @@ kernel void raytracePatio(
             normal = shallowPuddleNormal(position, uniforms.waterSimulation.y);
         } else if (kind > 0.5f && kind < 1.5f && abs(position.z - 17.8f) < 0.35f) {
             // 🌟 Espejo Mágico Portal Super Mario 64: Ondulación líquida de mercurio / cuadro mágico
-            float rippleTime = uniforms.waterSimulation.y * 2.8f;
-            float2 mUV = position.xy;
-            float ripple1 = sin(mUV.x * 2.4f + rippleTime) * cos(mUV.y * 3.0f - rippleTime * 0.85f);
-            float ripple2 = sin((mUV.x + mUV.y) * 4.2f - rippleTime * 1.3f) * 0.5f;
-            float3 liquidRipple = float3(ripple1 * 0.040f, ripple2 * 0.040f, 0.0f);
-            normal = normalize(normal + liquidRipple);
+            float distToCam = length(position - uniforms.cameraPosition.xyz);
+            float rippleFade = smoothstep(12.0f, 3.5f, distToCam);
+            if (rippleFade > 0.005f) {
+                float rippleTime = uniforms.waterSimulation.y * 2.8f;
+                float2 mUV = position.xy;
+                float ripple1 = sin(mUV.x * 2.4f + rippleTime) * cos(mUV.y * 3.0f - rippleTime * 0.85f);
+                float ripple2 = sin((mUV.x + mUV.y) * 4.2f - rippleTime * 1.3f) * 0.5f;
+                float3 liquidRipple = float3(ripple1 * 0.025f, ripple2 * 0.025f, 0.0f) * rippleFade;
+                normal = normalize(normal + liquidRipple);
+            }
             roughness = 0.005f;
             baseReflectivity = 0.98f;
             if (bounce >= 1) {
@@ -1506,21 +1510,25 @@ kernel void raytracePatio(
             }
         } else if (kind < 0.5f && abs(normal.y) < 0.35f && (abs(position.x) > 16.5f || abs(position.z) > 16.5f || abs(position.x) > 25.5f || position.z > 69.5f)) {
             // 🧱 Muros Perimetrales: Paneles Modulares Cyber / Titanio con Juntas Biseladas Suaves
-            float wallCoordH = (abs(normal.x) > 0.5f) ? position.z : position.x;
-            float wallCoordV = position.y;
+            float distToCam = length(position - uniforms.cameraPosition.xyz);
+            float distDetailFade = smoothstep(12.0f, 3.5f, distToCam);
+            if (distDetailFade > 0.005f) {
+                float wallCoordH = (abs(normal.x) > 0.5f) ? position.z : position.x;
+                float wallCoordV = position.y;
 
-            // Juntas modulares de paneles cada 2.4m horizontales y 2.0m verticales
-            float seamH = smoothstep(0.012f, 0.038f, abs(fract(wallCoordH * 0.416f) - 0.5f));
-            float seamV = smoothstep(0.012f, 0.038f, abs(fract(wallCoordV * 0.500f) - 0.5f));
-            float panelSeam = min(seamH, seamV); // 0 en la junta hundida, 1 en el panel
+                // Juntas modulares de paneles cada 2.4m horizontales y 2.0m verticales
+                float seamH = smoothstep(0.015f, 0.055f, abs(fract(wallCoordH * 0.416f) - 0.5f));
+                float seamV = smoothstep(0.015f, 0.055f, abs(fract(wallCoordV * 0.500f) - 0.5f));
+                float panelSeam = min(seamH, seamV); // 0 en la junta hundida, 1 en el panel
 
-            // Bisel geométrico suave en las juntas de los paneles (sin microGrain de alta frecuencia para evitar aliasing/ruido en la distancia)
-            normal = normalize(normal + float3(0.0f, (1.0f - panelSeam) * -0.06f, 0.0f));
+                // Bisel geométrico suave en las juntas de los paneles (modulado por distancia para anular 100% el aliasing/ruido en la lejanía)
+                normal = normalize(normal + float3(0.0f, (1.0f - panelSeam) * -0.05f * distDetailFade, 0.0f));
 
-            // Sombra ambiental en las hendiduras de las juntas de los paneles
-            float seamShadow = mix(0.42f, 1.0f, panelSeam);
-            albedo = albedo * seamShadow;
-            roughness = mix(0.55f, 0.85f, panelSeam);
+                // Sombra ambiental en las hendiduras de las juntas de los paneles
+                float seamShadow = mix(mix(0.60f, 1.0f, panelSeam), 1.0f, 1.0f - distDetailFade);
+                albedo = albedo * seamShadow;
+                roughness = mix(0.55f, 0.85f, panelSeam);
+            }
             baseReflectivity = 0.03f;
         } else if (obsidianSurface) {
             // 🌑 Armadura Sólida Mate Vantablack del Fotófago (opaca, absorbe la luz sin transparencias ni destellos invasivos)

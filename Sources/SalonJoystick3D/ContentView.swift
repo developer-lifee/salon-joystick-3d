@@ -332,6 +332,7 @@ struct ContentView: View {
                                 remoteWins: model.versusRemoteWins,
                                 remotePlayerName: model.remotePlayerName,
                                 coopDeaths: model.coopDeaths,
+                                slang: model.slang,
                                 onRespawn: {
                                     if model.isAnyMultiplayerConnected && model.multiplayer.mode == .versus {
                                         model.startNextVersusRound(fromNetwork: false)
@@ -1066,6 +1067,25 @@ struct ContentView: View {
                     .background(.black.opacity(0.75), in: Capsule())
                     .overlay(Capsule().stroke(Color.yellow.opacity(0.85), lineWidth: 1.5))
                     .shadow(color: .yellow.opacity(0.4), radius: 6)
+                } else if model.isNearRainbowGate && model.isRainbowGateUnlocked {
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.cyan)
+                        Text("✨ ¡PORTAL ABIERTO (3,000 PTS)! CRUZA AL OTRO MUNDO")
+                            .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .overlay(
+                        Capsule().stroke(
+                            LinearGradient(colors: [.cyan, .yellow, .purple, .pink], startPoint: .leading, endPoint: .trailing),
+                            lineWidth: 1.5
+                        )
+                    )
+                    .shadow(color: .cyan.opacity(0.6), radius: 6)
                 }
 
                 if model.heldTool == .mirror && model.toolStatus.activeRemaining > 0 {
@@ -1937,6 +1957,25 @@ final class GameModel: ObservableObject {
 
     // Batería de linterna y láser, calor de espejo, gráficos y editor interactivo de HUD
     @Published var flashlightBattery: Float = 1.0
+    @AppStorage("gameLanguagePreference") var selectedLanguagePreference: String = "auto"
+
+    var effectiveLanguageCode: String {
+        if selectedLanguagePreference != "auto" {
+            return selectedLanguagePreference
+        }
+        for preferred in Locale.preferredLanguages {
+            let code = String(preferred.prefix(2)).lowercased()
+            if ["es", "en", "pt", "fr", "ja", "de", "hi", "it", "zh", "ko"].contains(code) {
+                return code
+            }
+        }
+        return "es"
+    }
+
+    var slang: GameSlang {
+        GameSlang(languageCode: effectiveLanguageCode)
+    }
+
     @Published var laserBattery: Float = 1.0
     @Published var mirrorHeat: Float = 0.0
     @Published var mirrorOverheated: Bool = false
@@ -7710,10 +7749,199 @@ struct MultiplayerSettingsSheet: View {
     }
 }
 
+struct GameSlang {
+    let languageCode: String
+
+    // 💀 Pantalla de Derrota (Slangs de Infancia / Gamer)
+    var defeatTitle: String {
+        switch languageCode {
+        case "en": return "YOU DED 💀"
+        case "pt": return "FOI DE BASE 💀"
+        case "fr": return "T'ES MORT D'UN COUP :v"
+        case "ja": return "オワタ＼(^o^)／"
+        case "de": return "LOST GEGANGEN 💀"
+        case "hi": return "KHATAM TATA BYE BYE 💀"
+        case "it": return "SEI MORTO MALISSIMO 💀"
+        case "zh": return "芭比Q了 💀"
+        case "ko": return "망했다 💀"
+        default:   return "MORIDO :v"
+        }
+    }
+
+    var defeatVersusTitle: String {
+        switch languageCode {
+        case "en": return "WASTED IN COMBAT"
+        case "pt": return "DEITOU NA BRÈXA :v"
+        case "fr": return "MIS AU TAPIS!"
+        case "ja": return "しぼう :v"
+        case "de": return "WEGGEKLATSCHT!"
+        case "hi": return "DHOBI PACHAD HO GAYA!"
+        case "it": return "TI HANNO ARRIFATTO :v"
+        case "zh": return "直接被干碎了!"
+        case "ko": return "컷! 당해버렸쥬?"
+        default:   return "CAÍSTE EN COMBATE"
+        }
+    }
+
+    var defeatTeamTitle: String {
+        switch languageCode {
+        case "en": return "SQUAD WIPED OUT"
+        case "pt": return "BONDE DERRUBADO"
+        case "fr": return "MISSION ÉCHOUÉE"
+        case "ja": return "ぜんめつ..."
+        case "de": return "TEAM GEWIPED"
+        case "hi": return "SQUAD KHATAM BHAI!"
+        case "it": return "SQUADRA DISTRUTTA!"
+        case "zh": return "团灭了兄弟们..."
+        case "ko": return "올킬 당함..."
+        default:   return "MISIÓN FALLIDA"
+        }
+    }
+
+    var defeatSubtitleReset: String {
+        switch languageCode {
+        case "en": return "A MIMIR UN RATO • BACK TO WAVE 1"
+        case "pt": return "VACILOU, MORREU • ONDA 1 DE NOVO"
+        case "fr": return "RETOUR À LA CASE DÉPART • VAGUE 1"
+        case "ja": return "ゲームオーバー • ウェーブ1へもどる"
+        case "de": return "DIGGA WAS WAR DAS • WELLE 1"
+        case "hi": return "KHEL KHATAM BHAI • WAPAS WAVE 1 PE"
+        case "it": return "VACCI PIANO • SI RIPARTE DA ONDATA 1"
+        case "zh": return "重开一把 • 从第一波重新开始"
+        case "ko": return "멘탈 잡고 1웨이브부터 다시"
+        default:   return "OLEADA RESTABLECIDA A OLEADA 1"
+        }
+    }
+
+    var retryButton: String {
+        switch languageCode {
+        case "en": return "RESPAWN ME PLZ (RETRY)"
+        case "pt": return "RESSUSCITA AÍ (TENTAR DE NOVO)"
+        case "fr": return "REZ-MOI STP (RÉESSAYER)"
+        case "ja": return "もういっかい！ (RETRY)"
+        case "de": return "NOCHMAL REINDA! (RETRY)"
+        case "hi": return "FIR SE KHELENGE! (RESPAWN)"
+        case "it": return "SPAWNAMI PLS! (RIGIOCA)"
+        case "zh": return "再来一把! (RETRY)"
+        case "ko": return "한 판 더! (RETRY)"
+        default:   return "DAME VIDA (REINTENTAR)"
+        }
+    }
+
+    var nextRoundButton: String {
+        switch languageCode {
+        case "en": return "RUN IT BACK (NEXT ROUND)"
+        case "pt": return "PRÓXIMO ROUND"
+        case "fr": return "MANCHE SUIVANTE"
+        case "ja": return "つぎのラウンド"
+        case "de": return "NÄCHSTE RUNDE"
+        case "hi": return "AGLA ROUND CHALO!"
+        case "it": return "PROSSIMO ROUND"
+        case "zh": return "下一轮冲冲冲!"
+        case "ko": return "다음 라운드 가자!"
+        default:   return "SIGUIENTE RONDA"
+        }
+    }
+
+    // 🎬 Lore y Prólogo
+    var loreButtonTitle: String {
+        switch languageCode {
+        case "en": return "THE LORE THO: SECRET OF LUMINA"
+        case "pt": return "HISTÓRIA DAS ANTIGAS: O SEGREDO DE LUMINA"
+        case "fr": return "L'HISTOIRE DU DARON: LE SECRET DE LUMINA"
+        case "ja": return "むかしばなし: ルミナのひみつ"
+        case "de": return "DEEP LORE: DAS GEHEIMNIS VON LUMINA"
+        case "hi": return "ASLI KAHANI: SECRET OF LUMINA"
+        case "it": return "IL LORE SEGRETO: DI LUMINA"
+        case "zh": return "故事背景大揭秘: 卢米娜的秘密"
+        case "ko": return "비하인드 스토리: 루미나의 비밀"
+        default:   return "LORE & CUENTO: EL SECRETO DE LUMINA"
+        }
+    }
+
+    // 👑 Victoria
+    var victoryTitle: String {
+        switch languageCode {
+        case "en": return "POGGERS! EZ CLAP! 👑"
+        case "pt": return "MITOU DEMAIS! 👑"
+        case "fr": return "MASTERCLASS! 👑"
+        case "ja": return "カチカク！やったー！ 👑"
+        case "de": return "ABSOLUTER EHRENMANN! 👑"
+        case "hi": return "BOOYAH! OP BHAI OP! 👑"
+        case "it": return "LEGGENDA ASSOLUTA! GG! 👑"
+        case "zh": return "秀麻了! 绝杀! 👑"
+        case "ko": return "개이득! 레전드 찍었다! 👑"
+        default:   return "¡CORONAMOS! 👑"
+        }
+    }
+
+    // ⚡ Menú principal y botones
+    var playButton: String {
+        switch languageCode {
+        case "en": return "LET'S COOK! (PLAY)"
+        case "pt": return "BORA JOGAR! (PLAY)"
+        case "fr": return "C'EST PARTI! (JOUER)"
+        case "ja": return "あそぶ！(PLAY)"
+        case "de": return "LOS GEHT'S! (SPIELEN)"
+        case "hi": return "CHALO SHURU KAREIN! (PLAY)"
+        case "it": return "ANDIAMO A VINCERE! (GIOCA)"
+        case "zh": return "开整! (PLAY)"
+        case "ko": return "드가자! (PLAY)"
+        default:   return "¡A DARLE! (JUGAR)"
+        }
+    }
+
+    var optionsButton: String {
+        switch languageCode {
+        case "en": return "OPTIONS & SETTINGS"
+        case "pt": return "OPÇÕES E AJUSTES"
+        case "fr": return "OPTIONS ET PARAMÈTRES"
+        case "ja": return "せってい (SETTINGS)"
+        case "de": return "EINSTELLUNGEN"
+        case "hi": return "SETTINGS & OPTIONS"
+        case "it": return "OPZIONI E IMPOSTAZIONI"
+        case "zh": return "系统设置 (SETTINGS)"
+        case "ko": return "환경설정 (SETTINGS)"
+        default:   return "OPCIONES Y AJUSTES"
+        }
+    }
+
+    var multiplayerButton: String {
+        switch languageCode {
+        case "en": return "ONLINE / LOCAL MULTIPLAYER"
+        case "pt": return "MULTIJOGADOR ONLINE / LOCAL"
+        case "fr": return "MULTIJOUEUR EN LIGNE / LOCAL"
+        case "ja": return "マルチプレイ (ONLINE / LOCAL)"
+        case "de": return "MEHRSPIELER ONLINE / LOKAL"
+        case "hi": return "DOST KE SAATH (MULTIPLAYER)"
+        case "it": return "MULTIGIOCA ONLINE / LOCALE"
+        case "zh": return "联机对战 (MULTIPLAYER)"
+        case "ko": return "멀티플레이 (MULTIPLAYER)"
+        default:   return "MULTIJUGADOR ONLINE / LOCAL"
+        }
+    }
+
+    var speed2XTitle: String {
+        switch languageCode {
+        case "en": return "⚡ 2X ZOOMIN'"
+        case "pt": return "⚡ 2X TURBINADO"
+        case "fr": return "⚡ 2X VITESSE ÉCLAIR"
+        case "ja": return "⚡ 2X ばくそく"
+        case "de": return "⚡ 2X TURBO SPEED"
+        case "hi": return "⚡ 2X FULL SPEED JALDI"
+        case "it": return "⚡ 2X CORSA PAZZA"
+        case "zh": return "⚡ 2X 起飞倍速"
+        case "ko": return "⚡ 2X 초고속 모드"
+        default:   return "⚡ 2X CINE VOLAO"
+        }
+    }
+}
+
 enum GameOptionsTab: String, CaseIterable, Identifiable {
     case controls = "Controles"
     case graphics = "Gráficos"
     case audio = "Sonido"
+    case language = "Idioma / Slang"
     case achievements = "Logros"
     case system = "Sistema"
 
@@ -7724,6 +7952,7 @@ enum GameOptionsTab: String, CaseIterable, Identifiable {
         case .controls: "gamecontroller.fill"
         case .graphics: "display"
         case .audio: "speaker.wave.2.fill"
+        case .language: "globe.americas.fill"
         case .achievements: "trophy.fill"
         case .system: "info.circle.fill"
         }
@@ -8054,6 +8283,86 @@ struct GameOptionsSheet: View {
                             Toggle("Música de fondo", isOn: $model.musicEnabled)
                             Toggle("Efectos de sonido y pasos", isOn: $model.footstepsEnabled)
                             Toggle("Sonido de agua", isOn: $model.waterSoundEnabled)
+                        }
+
+                    case .language:
+                        Section("🌐 Detección Automática de Idioma") {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Por defecto, el juego detecta de manera 100% automática el idioma de tu iPhone y de la App Store en cualquier país del mundo.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                HStack {
+                                    Text("Idioma actual de iOS:")
+                                        .font(.caption.bold())
+                                    Spacer()
+                                    Text("\(Locale.current.identifier) • \(model.effectiveLanguageCode.uppercased())")
+                                        .font(.caption.monospaced())
+                                        .foregroundStyle(.cyan)
+                                }
+                            }
+
+                            Picker("Seleccionar Idioma / Cultura", selection: $model.selectedLanguagePreference) {
+                                Text("🌐 Automático (Detectar de iOS)").tag("auto")
+                                Text("🇲🇽/🇪🇸 Español (Morido :v / Coronamos)").tag("es")
+                                Text("🇺🇸/🇬🇧 English (You Ded 💀 / Poggers)").tag("en")
+                                Text("🇧🇷/🇵🇹 Português (Foi de Base 💀 / Mitou)").tag("pt")
+                                Text("🇫🇷 Français (T'es Mort :v / Masterclass)").tag("fr")
+                                Text("🇩🇪 Deutsch (Lost Gegangen 💀 / Ehrenmann / 🇨🇭)").tag("de")
+                                Text("🇮🇹 Italiano (Morto Malissimo 💀 / GG / 🇨🇭)").tag("it")
+                                Text("🇮🇳 Hindi / Hinglish (Khatam Tata Bye Bye 💀 / OP Bhai)").tag("hi")
+                                Text("🇯🇵 日本語 (オワタ＼(^o^)／ / カチカク)").tag("ja")
+                                Text("🇨🇳 中文 (芭比Q了 💀 / 秀麻了)").tag("zh")
+                                Text("🇰🇷 한국어 (망했다 💀 / 드가자)").tag("ko")
+                            }
+                        }
+
+                        Section("🎮 Slangs de Infancia & Cultura Gamer Activa") {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("¡Cero traducciones corporativas aburridas! Cada idioma tiene modismos nostálgicos de videojuegos de la infancia y cultura de internet.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+
+                                HStack {
+                                    Text("Al perder:")
+                                    Spacer()
+                                    Text(model.slang.defeatTitle)
+                                        .font(.subheadline.bold())
+                                        .foregroundStyle(.red)
+                                }
+
+                                HStack {
+                                    Text("Botón revivir:")
+                                    Spacer()
+                                    Text(model.slang.retryButton)
+                                        .font(.subheadline.bold())
+                                        .foregroundStyle(.cyan)
+                                }
+
+                                HStack {
+                                    Text("Victoria:")
+                                    Spacer()
+                                    Text(model.slang.victoryTitle)
+                                        .font(.subheadline.bold())
+                                        .foregroundStyle(.yellow)
+                                }
+
+                                HStack {
+                                    Text("Botón de jugar:")
+                                    Spacer()
+                                    Text(model.slang.playButton)
+                                        .font(.subheadline.bold())
+                                        .foregroundStyle(.green)
+                                }
+
+                                HStack {
+                                    Text("Modo 2X Cine:")
+                                    Spacer()
+                                    Text(model.slang.speed2XTitle)
+                                        .font(.subheadline.bold())
+                                        .foregroundStyle(.orange)
+                                }
+                            }
+                            .padding(.vertical, 4)
                         }
 
                     case .achievements:
@@ -10027,7 +10336,7 @@ struct MainMenuView: View {
                                     Text(
                                         model.isAnyMultiplayerConnected
                                             ? "INICIAR MULTIJUGADOR (\(model.activePeerDisplayName))"
-                                            : "JUGAR EN SOLITARIO"
+                                            : model.slang.playButton
                                     )
                                     .font(isCompactLandscape ? .subheadline.bold() : .headline.bold())
                                     .lineLimit(1)
@@ -10061,7 +10370,7 @@ struct MainMenuView: View {
                                     Image(systemName: "film.stack.fill")
                                         .font(isCompactLandscape ? .subheadline.bold() : .title3.bold())
                                         .foregroundStyle(Color.yellow)
-                                    Text("LORE & PRÓLOGO: EL SECRETO DE LUMINA")
+                                    Text(model.slang.loreButtonTitle)
                                         .font(isCompactLandscape ? .subheadline.bold() : .headline.bold())
                                         .lineLimit(1)
                                         .minimumScaleFactor(0.80)
@@ -10098,7 +10407,7 @@ struct MainMenuView: View {
                                     Text(
                                         model.isAnyMultiplayerConnected
                                             ? "SALA ACTIVA (\(model.activePeerDisplayName))"
-                                            : "MULTIJUGADOR ONLINE / LOCAL"
+                                            : model.slang.multiplayerButton
                                     )
                                     .font(isCompactLandscape ? .subheadline.bold() : .headline.bold())
                                     .lineLimit(1)
@@ -10134,7 +10443,7 @@ struct MainMenuView: View {
                                     Image(systemName: "gearshape.fill")
                                         .font(isCompactLandscape ? .subheadline.bold() : .title3.bold())
                                         .foregroundStyle(Color.cyan)
-                                    Text("OPCIONES Y AJUSTES")
+                                    Text(model.slang.optionsButton)
                                         .font(isCompactLandscape ? .subheadline.bold() : .headline.bold())
                                 }
                                 .foregroundStyle(.white)
@@ -10198,6 +10507,7 @@ struct DefeatOverlayView: View {
     var remoteWins: Int = 0
     var remotePlayerName: String = "Rival"
     var coopDeaths: Int = 0
+    var slang: GameSlang = GameSlang(languageCode: "es")
     var onRespawn: () -> Void
 
     @State private var animateIn = false
@@ -10220,7 +10530,7 @@ struct DefeatOverlayView: View {
                                 LinearGradient(colors: isVersus ? [.white, .red] : (isTeamDefeat ? [.white, .red, .orange] : [.white, .cyan, .orange]), startPoint: .topLeading, endPoint: .bottomTrailing)
                             )
 
-                        Text(isVersus ? "CAÍSTE EN COMBATE" : (isTeamDefeat ? "MISIÓN FALLIDA" : "MORIDO :v"))
+                        Text(isVersus ? slang.defeatVersusTitle : (isTeamDefeat ? slang.defeatTeamTitle : slang.defeatTitle))
                             .font(.system(size: isVersus ? 28 : (isTeamDefeat ? 30 : 38), weight: .black, design: .rounded))
                             .tracking(2)
                             .foregroundStyle(
@@ -10255,7 +10565,7 @@ struct DefeatOverlayView: View {
                             .foregroundStyle(.white.opacity(0.92))
                             .shadow(color: .black.opacity(0.7), radius: 3)
                     } else {
-                        Text("OLEADA RESTABLECIDA A OLEADA 1")
+                        Text(slang.defeatSubtitleReset)
                             .font(.system(size: 11, weight: .bold, design: .monospaced))
                             .tracking(2.0)
                             .foregroundStyle(.white.opacity(0.92))
@@ -10301,7 +10611,7 @@ struct DefeatOverlayView: View {
                             .font(.system(size: 18, weight: .bold))
                             .foregroundStyle(.white)
 
-                        Text(isVersus ? "SIGUIENTE RONDA" : (isTeamDefeat ? "REINTENTAR JUNTOS" : "REINTENTAR (OLEADA 1)"))
+                        Text(isVersus ? slang.nextRoundButton : slang.retryButton)
                             .font(.system(size: 13, weight: .black, design: .rounded))
                             .tracking(1.5)
                             .foregroundStyle(.white)

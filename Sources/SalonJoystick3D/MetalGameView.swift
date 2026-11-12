@@ -281,7 +281,7 @@ struct MetalGameView: UIViewRepresentable {
         }
         context.coordinator.invertsCameraY = model.invertsCameraY
         context.coordinator.cameraSensitivity = Float(model.cameraSensitivity)
-        context.coordinator.renderer?.playerScore = model.playerScore
+        context.coordinator.renderer?.playerScore = max(context.coordinator.renderer?.playerScore ?? 0, model.playerScore)
         context.coordinator.renderer?.isPlayerDead = (model.playerHealth <= 0 || model.isDefeated) && !model.isRecoveringInChamber
         context.coordinator.renderer?.isHost = model.isHost
         context.coordinator.renderer?.isRecoveringInChamber = model.isRecoveringInChamber

@@ -1133,6 +1133,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     var onScoreUpdate: ((Int) -> Void)?
     var playerScore: Int = 0
     var isRainbowGateUnlocked: Bool { playerScore >= 3000 }
+
+    func addInternalScore(_ points: Int) {
+        playerScore += points
+        onScoreUpdate?(points)
+    }
     var onRainbowGateStatusUpdate: ((Bool, Int, Int) -> Void)?
     private var previousGateUnlocked: Bool = false
     var onDamageTaken: ((Float) -> Void)?
@@ -1243,6 +1248,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private let mirrorShieldMesh: RTMeshResources
     private let rainbowGateMesh: RTMeshResources
     private let airPumpMesh: RTMeshResources
+    private let subterraneanDoorMesh: RTMeshResources
     private let instanceBuffer: MTLBuffer
     private var instanceDescriptor: MTLInstanceAccelerationStructureDescriptor?
     private var instanceAccelerationStructure: MTLAccelerationStructure?
@@ -1453,8 +1459,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         self.mirrorShieldMesh = try Self.makeMesh(builder: mirrorShieldBuilder, device: device, queue: commandQueue)
         self.rainbowGateMesh = try Self.makeMesh(builder: rainbowGateBuilder, device: device, queue: commandQueue)
         self.airPumpMesh = try Self.makeMesh(builder: airPumpBuilder, device: device, queue: commandQueue)
+        let subDoorBuilder = Self.makeSubterraneanDoorMesh()
+        self.subterraneanDoorMesh = try Self.makeMesh(builder: subDoorBuilder, device: device, queue: commandQueue)
 
-        let instanceLength = MemoryLayout<MTLAccelerationStructureInstanceDescriptor>.stride * 26
+        let instanceLength = MemoryLayout<MTLAccelerationStructureInstanceDescriptor>.stride * 27
         guard let instanceBuffer = device.makeBuffer(length: instanceLength, options: .storageModeShared) else {
             throw MetalRayRendererError.resourceCreationFailed
         }
@@ -1474,7 +1482,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
            let fotofagoAS = fotofagoMesh.accelerationStructure,
            let shieldAS = mirrorShieldMesh.accelerationStructure,
            let rainbowGateAS = rainbowGateMesh.accelerationStructure,
-           let airPumpAS = airPumpMesh.accelerationStructure {
+           let airPumpAS = airPumpMesh.accelerationStructure,
+           let subDoorAS = subterraneanDoorMesh.accelerationStructure {
             let descriptor = MTLInstanceAccelerationStructureDescriptor()
             descriptor.instancedAccelerationStructures = [
                 staticAS,        // 0
@@ -1490,9 +1499,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 playerClimbAS,   // 10 (climb escalera)
                 fotofagoAS,      // 11 (El Fotófago - Golem Devorador de Luz)
                 rainbowGateAS,   // 12 (Puerta Holográfica Arcoíris 3,000 Pts)
-                airPumpAS        // 13 (Bomba de Aire Neumática de Inflado Slime)
+                airPumpAS,       // 13 (Bomba de Aire Neumática de Inflado Slime)
+                subDoorAS        // 14 (Pared Sellada Subterránea Pre-3000 Pts)
             ]
-            descriptor.instanceCount = 26
+            descriptor.instanceCount = 27
             descriptor.instanceDescriptorBuffer = instanceBuffer
             self.instanceDescriptor = descriptor
 
@@ -1809,6 +1819,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 if let shieldAS = mirrorShieldMesh.accelerationStructure { encoder.useResource(shieldAS, usage: .read) }
                 if let rainbowGateAS = rainbowGateMesh.accelerationStructure { encoder.useResource(rainbowGateAS, usage: .read) }
                 if let airPumpAS = airPumpMesh.accelerationStructure { encoder.useResource(airPumpAS, usage: .read) }
+                if let subDoorAS = subterraneanDoorMesh.accelerationStructure { encoder.useResource(subDoorAS, usage: .read) }
                 encoder.dispatchThreads(
                     MTLSize(width: drawable.texture.width, height: drawable.texture.height, depth: 1),
                     threadsPerThreadgroup: MTLSize(width: 8, height: 8, depth: 1)
@@ -2341,7 +2352,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     if simd_distance(proposed, chest.center) < 1.75 {
                         openedUnderwaterChestIDs.insert(chest.id)
                         audio.playRecoveryCompleteSound()
-                        onScoreUpdate?(chest.points)
+                        addInternalScore(chest.points)
                         pendingWaterImpulse = SIMD4<Float>(chest.center.x, chest.center.z, -1.8, 1)
                     }
                 }
@@ -2351,16 +2362,40 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     if simd_distance(proposed, relic.center) < 1.35 {
                         collectedUnderwaterRelicIDs.insert(relic.id)
                         audio.playLaserIgnition()
-                        onScoreUpdate?(relic.points)
+                        addInternalScore(relic.points)
                         pendingWaterImpulse = SIMD4<Float>(relic.center.x, relic.center.z, -1.2, 1)
                     }
                 }
             }
 
             // 3. Paredes perimetrales de la cámara subterránea o corredor/santuario
-            if !(isRainbowGateUnlocked && proposed.z > 17.0) {
-                proposed.x = max(-17.0, min(17.0, proposed.x))
-                proposed.z = max(-17.0, min(17.0, proposed.z))
+            if isRainbowGateUnlocked {
+                if proposed.z <= 17.8 {
+                    // Cámara 1 (Piscina)
+                    proposed.x = max(-17.2, min(17.2, proposed.x))
+                    proposed.z = max(-17.2, proposed.z)
+                    // Si intenta ir al sur fuera del vano del portal (|X| > 4.70), pared sólida en 17.4
+                    if abs(proposed.x) > 4.70 {
+                        proposed.z = min(17.4, proposed.z)
+                    }
+                } else if proposed.z <= 36.0 {
+                    // Gran Acueducto Abisal (Corredor Z: 17.8 -> 36.0, ancho ±4.65m)
+                    let corrW: Float = 4.65
+                    proposed.x = max(-corrW, min(corrW, proposed.x))
+                    // ¡Permite nadar hacia el norte de regreso a la piscina libremente!
+                } else {
+                    // Santuario Sumergido de los Prismas (Z: 36.0 -> 67.5, ancho ±21.5m)
+                    let sanctW: Float = 21.5
+                    proposed.x = max(-sanctW, min(sanctW, proposed.x))
+                    proposed.z = min(67.5, proposed.z)
+                    if proposed.z < 36.0 && abs(proposed.x) > 4.70 {
+                        proposed.z = 36.0
+                    }
+                }
+            } else {
+                // Cámara 1 sellada: no puede pasar de Z = 17.4
+                proposed.x = max(-17.2, min(17.2, proposed.x))
+                proposed.z = max(-17.2, min(17.4, proposed.z))
             }
         } else if (currentlyInPool || willBeInPool) && !willBeOnFloat {
             // 🧱 Fondo cerámico SÓLIDO: sin importar la velocidad de caída o esquinas, nunca se atraviesa
@@ -2512,7 +2547,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                         if simd_distance(center, closest) < 0.70 {
                             dummyAlive[i] = false
                             audio.playLightsaberDefeatSound()
-                            onScoreUpdate?(300)
+                            addInternalScore(300)
                         }
                     }
                 }
@@ -2634,7 +2669,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 onRecoveryCompleted?()
             }
             audio.playLaserReflectionSound()
-            onScoreUpdate?(500)
+            addInternalScore(500)
             onRemoteNPCEliminated?(500)
             onDamageTaken?(-25.0) // Health regen rest reward (+25 HP)
             onWaveUpdate?(currentWave, 0, totalBotsInWave, true, 10.0)
@@ -3511,7 +3546,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                                             botLaserActiveTimers[index] = 0
                                             botLaserCooldownTimers[index] = botCooldown
                                             audio.playLaserPlayerHitSound()
-                                            onScoreUpdate?(500)
+                                            addInternalScore(500)
                                             handleNPCElimination(index: targetIdx)
                                             onMirrorReflectionKill?()
                                             if isBotFlyingDrone(index: targetIdx) {
@@ -3739,15 +3774,15 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
                 if npcHealths[closestIndex] <= 0 {
                     audio.playLaserPlayerHitSound()
-                    onScoreUpdate?(250)
+                    addInternalScore(250)
                     handleNPCElimination(index: closestIndex)
                 } else {
                     audio.playLaserPlayerHitSound()
-                    onScoreUpdate?(25)
+                    addInternalScore(25)
                 }
             } else {
                 audio.playLaserPlayerHitSound()
-                onScoreUpdate?(25)
+                addInternalScore(25)
                 onClientNPCHit?(closestIndex, damage)
             }
         }
@@ -3887,14 +3922,14 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
                 if npcHealths[reflectedTarget] <= 0 {
                     audio.playLaserPlayerHitSound()
-                    onScoreUpdate?(350)
+                    addInternalScore(350)
                     handleNPCElimination(index: reflectedTarget)
                 } else {
-                    onScoreUpdate?(35)
+                    addInternalScore(35)
                 }
             } else {
                 audio.playLanding(intensity: 0.85)
-                onScoreUpdate?(35)
+                addInternalScore(35)
                 onClientNPCHit?(reflectedTarget, damage)
             }
         }
@@ -4070,13 +4105,27 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             if margin < 1.0 {
                 if distToSubGate < 6.0 {
                     onRainbowGateStatusUpdate?(isGateUnlocked, playerScore, 3000)
+                } else {
+                    onRainbowGateStatusUpdate?(isGateUnlocked, -1, 3000)
                 }
             }
 
-            if isGateUnlocked && position.z > 17.0 {
-                // En tránsito por el Gran Acueducto Subterráneo o dentro del Santuario de los Prismas
-                if position.z <= 36.0 {
-                    // Gran Acueducto Abisal (Corredor Z: 17.8 -> 36.0, X: [-4.7, 4.7])
+            if isGateUnlocked {
+                if position.z <= 17.8 {
+                    // Cámara 1 (Piscina Subterránea)
+                    let minX: Float = -17.8 + poolMargin
+                    let maxX: Float = 17.8 - poolMargin
+                    let minZ: Float = -17.8 + poolMargin
+                    if position.x < minX { position.x = minX; if velocity.x < 0 { velocity.x = 0 } }
+                    else if position.x > maxX { position.x = maxX; if velocity.x > 0 { velocity.x = 0 } }
+                    if position.z < minZ { position.z = minZ; if velocity.y < 0 { velocity.y = 0 } }
+                    // Alas laterales sur fuera del vano (|X| > 4.70) retienen al jugador en 17.8 - poolMargin
+                    if position.z > 17.8 - poolMargin && abs(position.x) > 4.70 {
+                        position.z = 17.8 - poolMargin
+                        if velocity.y > 0 { velocity.y = 0 }
+                    }
+                } else if position.z <= 36.0 {
+                    // Gran Acueducto Subterráneo (Z: 17.8 -> 36.0, X: [-4.70, 4.70])
                     let corrHalfWidth: Float = 4.70 - poolMargin
                     if position.x < -corrHalfWidth {
                         position.x = -corrHalfWidth
@@ -4085,12 +4134,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                         position.x = corrHalfWidth
                         if velocity.x > 0 { velocity.x = 0 }
                     }
-                    if position.z < 17.8 - poolMargin {
-                        position.z = 17.8 - poolMargin
-                        if velocity.y < 0 { velocity.y = 0 }
-                    } else if position.z > 36.0 {
-                        position.z = 36.0
-                    }
+                    // ¡Total libertad de movimiento en Z para regresar a la piscina (Z < 17.8) o avanzar (Z > 36.0)!
                 } else {
                     // Santuario Submarino de los Prismas (Z: 36.0 -> 67.5, X: [-21.5, 21.5])
                     let sanctHalfWidth: Float = 21.5 - poolMargin
@@ -4101,24 +4145,20 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                         position.x = sanctHalfWidth
                         if velocity.x > 0 { velocity.x = 0 }
                     }
-                    if position.z < 36.0 {
-                        // Entrada al corredor desde el sur (X debe estar entre -4.7 y 4.7)
-                        if abs(position.x) > 4.70 - poolMargin {
-                            position.z = 36.0 + poolMargin
-                            if velocity.y < 0 { velocity.y = 0 }
-                        }
+                    if position.z < 36.0 + poolMargin && abs(position.x) > 4.70 {
+                        position.z = 36.0 + poolMargin
+                        if velocity.y < 0 { velocity.y = 0 }
                     } else if position.z > 67.5 - poolMargin {
                         position.z = 67.5 - poolMargin
                         if velocity.y > 0 { velocity.y = 0 }
                     }
                 }
             } else {
-                // Cámara Abisal 1 (-17.8 a 17.8)
+                // Cámara 1 sellada (-17.8 a 17.8)
                 let minX: Float = -17.8 + poolMargin
                 let maxX: Float = 17.8 - poolMargin
                 let minZ: Float = -17.8 + poolMargin
-                let canCrossGate = isGateUnlocked && abs(position.x) <= 4.70
-                let maxZ: Float = canCrossGate ? 67.5 - poolMargin : 17.8 - poolMargin
+                let maxZ: Float = 17.8 - poolMargin
 
                 if position.x < minX {
                     position.x = minX
@@ -5476,6 +5516,20 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
         descriptors.append(Self.makeInstanceDescriptor(translation: pumpPos, yaw: pumpYaw, pitch: 0, scale: pumpScale, mask: pumpMask, accelerationStructureIndex: 13))
 
+        // 🚪 Muro Sellado Subterráneo Abisal (AS Index 14) - Idéntico y continuo a la pared antes de abrirse
+        let subDoorPos: SIMD3<Float>
+        let subDoorMask: UInt32
+        if isGateUnlocked {
+            // Puerta abierta: se retira hacia el lecho abisal, revelando el corredor y el santuario
+            subDoorPos = SIMD3<Float>(0, -500, 0)
+            subDoorMask = 0x00
+        } else {
+            // Puerta sellada: pared sólida de 10.5m x 6.3m que sella herméticamente la piscina subterránea
+            subDoorPos = SIMD3<Float>(0, -7.85, 17.80)
+            subDoorMask = 0x01
+        }
+        descriptors.append(Self.makeInstanceDescriptor(translation: subDoorPos, yaw: 0, pitch: 0, mask: subDoorMask, accelerationStructureIndex: 14))
+
         descriptors.withUnsafeBytes { bytes in
             guard let baseAddress = bytes.baseAddress else { return }
             instanceBuffer.contents().copyMemory(from: baseAddress, byteCount: bytes.count)
@@ -5771,6 +5825,14 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         return builder
     }
 
+    private static func makeSubterraneanDoorMesh() -> RTMeshBuilder {
+        var builder = RTMeshBuilder()
+        // Textura idéntica y continua a subWallMat de la piscina subterránea (bloque de 10.5m x 6.3m x 0.50m)
+        let subWallMat = RTMaterial(color: SIMD3<Float>(0.08, 0.12, 0.16), roughness: 0.88, reflectivity: 0.02, kind: 0.0)
+        builder.addBox(center: SIMD3<Float>(0, 0, 0), size: SIMD3<Float>(10.5, 6.30, 0.50), material: subWallMat)
+        return builder
+    }
+
     private static func makeMirrorShieldMesh() -> RTMeshBuilder {
         var builder = RTMeshBuilder()
         let mirrorFrame = RTMaterial(color: SIMD3<Float>(0.02, 0.72, 0.95), roughness: 0.08, emission: SIMD3<Float>(0.05, 0.40, 0.65), reflectivity: 0.88, kind: 1.0)
@@ -5986,8 +6048,6 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         builder.addBox(center: SIMD3<Float>(0.00, -4.95, 17.8), size: SIMD3<Float>(10.5, 0.45, 0.65), material: sunkenObeliskStone)
         builder.addBox(center: SIMD3<Float>(-5.00, -7.85, 17.52), size: SIMD3<Float>(0.12, 5.8, 0.08), material: obeliskRuneCyan)
         builder.addBox(center: SIMD3<Float>( 5.00, -7.85, 17.52), size: SIMD3<Float>(0.12, 5.8, 0.08), material: obeliskRuneCyan)
-        // Valla de energía cuántica traslúcida que se disuelve con 3000 puntos
-        builder.addBox(center: SIMD3<Float>(0.00, -7.85, 17.80), size: SIMD3<Float>(9.5, 5.8, 0.04), material: bioCrystal)
 
         // 🌊 💎 GRAN ACUEDUCTO SUBTERRÁNEO (Z = 17.8 a 36.0, conexión hacia "el otro mundo")
         builder.addBox(center: SIMD3<Float>(0.0, -11.60, 26.9), size: SIMD3<Float>(10.2, 0.30, 18.2), material: subFloorMat)
