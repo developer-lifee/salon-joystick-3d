@@ -63,8 +63,8 @@ enum GameLightFixture: Int, CaseIterable, Identifiable {
 
 struct GameAppVersion {
     static let version = "2.1"
-    static let build = "131"
-    static let commitHash = "b131unifiedactionbuttonandcompactskills"
+    static let build = "133"
+    static let commitHash = "b133mario64aquaticsandsynthprologuestory"
     static let formatted = "v\(version) • Build \(build)"
 }
 
@@ -233,6 +233,7 @@ enum GameRenderResolution: String, CaseIterable, Identifiable {
 struct ContentView: View {
     @StateObject private var model = GameModel()
     @State private var dimmerFixture: GameLightFixture?
+    @State private var isHUDBarMinimized: Bool = false
 
     var body: some View {
         if model.multiplayer.isConnected && model.multiplayer.role == .remoteController {
@@ -246,6 +247,7 @@ struct ContentView: View {
                         ZStack {
                             MetalGameView(model: model)
                                 .ignoresSafeArea(.all)
+                                .allowsHitTesting(!model.isEditingHUDLayout)
                             if model.heldTool == .laser && model.laserBattery > 0.01 {
                                 Circle()
                                     .stroke(Color.red.opacity(0.85), lineWidth: 1.5)
@@ -268,6 +270,7 @@ struct ContentView: View {
                         ZStack {
                             MetalGameView(model: model)
                                 .ignoresSafeArea(.all)
+                                .allowsHitTesting(!model.isEditingHUDLayout)
                             if model.heldTool == .laser && model.laserBattery > 0.01 {
                                 Circle()
                                     .stroke(Color.red.opacity(0.85), lineWidth: 1.5)
@@ -300,11 +303,15 @@ struct ContentView: View {
                     AchievementsView(model: model)
                 }
             }
+            .fullScreenCover(isPresented: $model.showsPrologueScreen) {
+                CinematicPrologueView(model: model)
+            }
         } else {
             ZStack(alignment: .bottomLeading) {
                 MetalGameView(model: model)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .ignoresSafeArea(.all)
+                    .allowsHitTesting(!model.isEditingHUDLayout)
                     .overlay {
                         if model.isDefeated {
                             DefeatOverlayView(
@@ -521,15 +528,16 @@ struct ContentView: View {
                 .opacity(model.hudHealthOpacity)
                 .modifier(HUDDraggableModifier(
                     isEditing: model.isEditingHUDLayout,
-                    isSelected: model.selectedHUDGroup == 7,
+                    isSelected: model.selectedHUDGroup == 10,
                     label: "❤️ SALUD / ESCUDO",
                     offsetX: $model.hudHealthX,
                     offsetY: $model.hudHealthY,
                     scale: model.hudHealthScale,
-                    onSelect: { model.selectedHUDGroup = 7 }
+                    onSelect: { model.selectedHUDGroup = 10 }
                 ))
                 .padding(.bottom, 14)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .padding(.leading, 185)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
             }
 
                 // 🧟 Call of Duty Zombies-Style Wave / Round HUD Banner o Duelo Versus / Equipos
@@ -1020,12 +1028,12 @@ struct ContentView: View {
                     .opacity(model.hudMinimapOpacity)
                     .modifier(HUDDraggableModifier(
                         isEditing: model.isEditingHUDLayout,
-                        isSelected: model.selectedHUDGroup == 5,
+                        isSelected: model.selectedHUDGroup == 8,
                         label: "🗺️ RADAR",
                         offsetX: $model.hudMinimapX,
                         offsetY: $model.hudMinimapY,
                         scale: model.hudMinimapScale,
-                        onSelect: { model.selectedHUDGroup = 5 }
+                        onSelect: { model.selectedHUDGroup = 8 }
                     ))
                     .padding(.trailing, 12)
                     .padding(.bottom, 126)
@@ -1056,270 +1064,147 @@ struct ContentView: View {
                         .transition(.scale.combined(with: .opacity))
                     }
 
-                    // Bar 1: Action/Skill Capsules (Acción de Entorno, Slow-Mo, Warp, Radar) - Paleta Cyan & Pink Compacta
-                    HStack(spacing: 6) {
-                        // 🎯 Botón de Acción Contextual Unificado (Cobertura + Neón en UN SOLO BOTÓN para evitar barras largas)
-                        ContextualEnvironmentActionButton(model: model, dimmerFixture: $dimmerFixture)
-
-                        Button {
-                            model.toggleSlowMotion()
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "hourglass")
-                                    .font(.system(size: 12, weight: .bold))
-                                Text("Slow-Mo")
-                                    .font(.system(size: 11, weight: .bold))
-                            }
-                            .foregroundStyle(model.isSlowMotionActive ? .black : Color.pink)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
-                            .background(
-                                model.isSlowMotionActive
-                                    ? AnyShapeStyle(Color.pink)
-                                    : AnyShapeStyle(Color.black.opacity(0.65)),
-                                in: Capsule()
-                            )
-                            .overlay(Capsule().stroke(Color.pink.opacity(0.85), lineWidth: 1.4))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Cámara Lenta Slow Motion")
-                        .opacity(model.hudSlowMoOpacity)
-                        .disabled(model.isDefeated || model.gameState != .playing)
-                        .modifier(HUDDraggableModifier(
-                            isEditing: model.isEditingHUDLayout,
-                            isSelected: model.selectedHUDGroup == 3,
-                            label: "⏳ SLOW-MO",
-                            offsetX: $model.hudSlowMoX,
-                            offsetY: $model.hudSlowMoY,
-                            scale: model.hudSlowMoScale,
-                            onSelect: { model.selectedHUDGroup = 3 }
-                        ))
-
-                        Button {
-                            model.showsLightRadialMenu.toggle()
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "bolt.shield.fill")
-                                    .font(.system(size: 12, weight: .bold))
-                                Text("Warp")
-                                    .font(.system(size: 11, weight: .bold))
-                            }
-                            .foregroundStyle(model.showsLightRadialMenu ? .black : Color.cyan)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
-                            .background(
-                                model.showsLightRadialMenu
-                                    ? AnyShapeStyle(Color.cyan)
-                                    : AnyShapeStyle(Color.black.opacity(0.65)),
-                                in: Capsule()
-                            )
-                            .overlay(Capsule().stroke(Color.cyan.opacity(0.85), lineWidth: 1.4))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Menú Radial de Teletransporte")
-                        .opacity(model.hudWarpOpacity)
-                        .disabled(model.isDefeated || model.gameState != .playing)
-                        .modifier(HUDDraggableModifier(
-                            isEditing: model.isEditingHUDLayout,
-                            isSelected: model.selectedHUDGroup == 4,
-                            label: "⚡ WARP",
-                            offsetX: $model.hudWarpX,
-                            offsetY: $model.hudWarpY,
-                            scale: model.hudWarpScale,
-                            onSelect: { model.selectedHUDGroup = 4 }
-                        ))
-
-                        Button {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                                model.showsMinimap.toggle()
-                            }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "map.fill")
-                                    .font(.system(size: 12, weight: .bold))
-                                Text("Radar")
-                                    .font(.system(size: 11, weight: .bold))
-                            }
-                            .foregroundStyle(model.showsMinimap ? .black : Color.cyan)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
-                            .background(
-                                model.showsMinimap
-                                    ? AnyShapeStyle(LinearGradient(colors: [Color.cyan, Color.pink], startPoint: .leading, endPoint: .trailing))
-                                    : AnyShapeStyle(Color.black.opacity(0.65)),
-                                in: Capsule()
-                            )
-                            .overlay(
-                                Capsule().stroke(
-                                    LinearGradient(colors: [Color.cyan.opacity(0.85), Color.pink.opacity(0.85)], startPoint: .leading, endPoint: .trailing),
-                                    lineWidth: 1.4
-                                )
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Minimapa Radar Táctico")
-
-                    if model.isGameControllerConnected && !model.isMinimalHUDEnabled {
-                        HStack(spacing: 5) {
-                            Image(systemName: "gamecontroller.fill")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundStyle(Color.cyan)
-                            Text(model.gameControllerName)
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(.white.opacity(0.9))
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .overlay(Capsule().stroke(Color.cyan.opacity(0.6), lineWidth: 1))
-                    }
-
-                    if model.isNearRecoveryConsole && model.remotePlayerIsRecovering {
-                        Button {
-                            model.pumpTeammateAir()
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "gauge.with.needle.fill")
-                                    .font(.system(size: 18, weight: .black))
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("💨 BOMBEAR A \(model.remotePlayerName.isEmpty ? "COMPAÑERO" : model.remotePlayerName.uppercased())")
-                                        .font(.system(size: 13, weight: .black, design: .rounded))
-                                    Text("BOMBEO: \(model.teammateRevivePumps)/5 (Mínimo 5s)")
-                                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                }
-                            }
-                            .foregroundStyle(.black)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(
-                                LinearGradient(colors: [.yellow, .orange], startPoint: .top, endPoint: .bottom),
-                                in: Capsule()
-                            )
-                            .overlay(Capsule().stroke(Color.white, lineWidth: 1.5))
-                            .shadow(color: .orange.opacity(0.8), radius: 8)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(model.isPumpingTeammateStroke)
-                        .accessibilityLabel("Bombear Aire a Compañero con Bomba Neumática")
-                    }
-                }
-                .disabled(model.isDefeated || model.gameState != .playing)
-
-                // Bar 2: Equipment Dock + Jump Action Button
-                HStack(alignment: .center, spacing: 12) {
+                    // Bar 1: Action & Skill Buttons (Acción Contextual, Slow-Mo, Warp) - Estilo Circular Neón
                     HStack(spacing: 8) {
-                        Button {
-                            model.heldTool = (model.heldTool == .flashlight ? .none : .flashlight)
-                        } label: {
-                            ZStack {
-                                Circle()
-                                    .stroke(Color.white.opacity(0.15), lineWidth: 2.5)
-                                Circle()
-                                    .trim(from: 0, to: CGFloat(model.flashlightBattery))
-                                    .stroke(
-                                        model.flashlightBattery > 0.35 ? Color.yellow : (model.flashlightBattery > 0.15 ? Color.orange : Color.red),
-                                        style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
-                                    )
-                                    .rotationEffect(.degrees(-90))
+                        ContextualActionCircleButton(model: model, dimmerFixture: $dimmerFixture)
+                            .opacity(model.hudActionOpacity)
+                            .disabled(model.isDefeated || model.gameState != .playing)
+                            .modifier(HUDDraggableModifier(
+                                isEditing: model.isEditingHUDLayout,
+                                isSelected: model.selectedHUDGroup == 5,
+                                label: "🎯 ACCIÓN",
+                                offsetX: $model.hudActionX,
+                                offsetY: $model.hudActionY,
+                                scale: model.hudActionScale,
+                                onSelect: { model.selectedHUDGroup = 5 }
+                            ))
 
-                                VStack(spacing: 1) {
-                                    Image(systemName: model.flashlightBattery <= 0.02 ? "battery.0percent" : "flashlight.on.fill")
-                                        .font(.system(size: 15, weight: .bold))
-                                    Text("\(Int((model.flashlightBattery * 100).rounded()))%")
-                                        .font(.system(size: 8, weight: .heavy, design: .monospaced))
-                                }
-                                .foregroundStyle(model.heldTool == .flashlight ? .black : (model.flashlightBattery > 0.20 ? .yellow : .orange))
+                        SlowMoCircleButton(model: model)
+                            .opacity(model.hudSlowMoOpacity)
+                            .disabled(model.isDefeated || model.gameState != .playing)
+                            .modifier(HUDDraggableModifier(
+                                isEditing: model.isEditingHUDLayout,
+                                isSelected: model.selectedHUDGroup == 6,
+                                label: "⏳ SLOW-MO",
+                                offsetX: $model.hudSlowMoX,
+                                offsetY: $model.hudSlowMoY,
+                                scale: model.hudSlowMoScale,
+                                onSelect: { model.selectedHUDGroup = 6 }
+                            ))
+
+                        WarpCircleButton(model: model)
+                            .opacity(model.hudWarpOpacity)
+                            .disabled(model.isDefeated || model.gameState != .playing)
+                            .modifier(HUDDraggableModifier(
+                                isEditing: model.isEditingHUDLayout,
+                                isSelected: model.selectedHUDGroup == 7,
+                                label: "⚡ WARP",
+                                offsetX: $model.hudWarpX,
+                                offsetY: $model.hudWarpY,
+                                scale: model.hudWarpScale,
+                                onSelect: { model.selectedHUDGroup = 7 }
+                            ))
+
+                        if model.isGameControllerConnected && !model.isMinimalHUDEnabled {
+                            HStack(spacing: 5) {
+                                Image(systemName: "gamecontroller.fill")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(Color.cyan)
+                                Text(model.gameControllerName)
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(.white.opacity(0.9))
                             }
-                            .frame(width: 48, height: 48)
-                            .background(
-                                model.heldTool == .flashlight
-                                    ? AnyShapeStyle(model.flashlightBattery > 0.20 ? Color.yellow : Color.orange)
-                                    : AnyShapeStyle(Color.black.opacity(0.65)),
-                                in: Circle()
-                            )
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(.ultraThinMaterial, in: Capsule())
+                            .overlay(Capsule().stroke(Color.cyan.opacity(0.6), lineWidth: 1))
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Linterna")
 
-                        Button {
-                            guard model.laserBattery > 0.02 else { return }
-                            model.heldTool = (model.heldTool == .laser ? .none : .laser)
-                        } label: {
-                            ZStack {
-                                Circle()
-                                    .stroke(Color.white.opacity(0.15), lineWidth: 2.5)
-                                Circle()
-                                    .trim(from: 0, to: CGFloat(model.laserBattery))
-                                    .stroke(
-                                        model.laserBattery > 0.35 ? Color.cyan : (model.laserBattery > 0.15 ? Color.orange : Color.red),
-                                        style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
-                                    )
-                                    .rotationEffect(.degrees(-90))
-
-                                VStack(spacing: 1) {
-                                    Image(systemName: model.laserBattery <= 0.02 ? "bolt.slash.fill" : "bolt.fill")
-                                        .font(.system(size: 15, weight: .bold))
-                                    Text("\(Int((model.laserBattery * 100).rounded()))%")
-                                        .font(.system(size: 8, weight: .heavy, design: .monospaced))
+                        if model.isNearRecoveryConsole && model.remotePlayerIsRecovering {
+                            Button {
+                                model.pumpTeammateAir()
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "gauge.with.needle.fill")
+                                        .font(.system(size: 18, weight: .black))
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("💨 BOMBEAR A \(model.remotePlayerName.isEmpty ? "COMPAÑERO" : model.remotePlayerName.uppercased())")
+                                            .font(.system(size: 13, weight: .black, design: .rounded))
+                                        Text("BOMBEO: \(model.teammateRevivePumps)/5 (Mínimo 5s)")
+                                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                    }
                                 }
-                                .foregroundStyle(model.heldTool == .laser ? .white : (model.laserBattery > 0.20 ? .cyan : .red))
+                                .foregroundStyle(.black)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .background(
+                                    LinearGradient(colors: [.yellow, .orange], startPoint: .top, endPoint: .bottom),
+                                    in: Capsule()
+                                )
+                                .overlay(Capsule().stroke(Color.white, lineWidth: 1.5))
+                                .shadow(color: .orange.opacity(0.8), radius: 8)
                             }
-                            .frame(width: 48, height: 48)
-                            .background(
-                                model.heldTool == .laser
-                                    ? AnyShapeStyle(model.laserBattery > 0.02 ? Color.red : Color.gray.opacity(0.6))
-                                    : AnyShapeStyle(Color.black.opacity(0.65)),
-                                in: Circle()
-                            )
+                            .buttonStyle(.plain)
+                            .disabled(model.isPumpingTeammateStroke)
+                            .accessibilityLabel("Bombear Aire a Compañero con Bomba Neumática")
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Láser")
+                    }
+                    .disabled(model.isDefeated || model.gameState != .playing)
+
+                    // Bar 2: Independent Weapon Buttons + Jump Button (Cada arma independiente)
+                    HStack(alignment: .center, spacing: 8) {
+                        FlashlightButton(model: model)
+                            .opacity(model.hudFlashlightOpacity)
+                            .disabled(model.isDefeated || model.gameState != .playing)
+                            .modifier(HUDDraggableModifier(
+                                isEditing: model.isEditingHUDLayout,
+                                isSelected: model.selectedHUDGroup == 1,
+                                label: "🔦 LINTERNA",
+                                offsetX: $model.hudFlashlightX,
+                                offsetY: $model.hudFlashlightY,
+                                scale: model.hudFlashlightScale,
+                                onSelect: { model.selectedHUDGroup = 1 }
+                            ))
+
+                        LaserButton(model: model)
+                            .opacity(model.hudLaserOpacity)
+                            .disabled(model.isDefeated || model.gameState != .playing)
+                            .modifier(HUDDraggableModifier(
+                                isEditing: model.isEditingHUDLayout,
+                                isSelected: model.selectedHUDGroup == 2,
+                                label: "⚡ LÁSER",
+                                offsetX: $model.hudLaserX,
+                                offsetY: $model.hudLaserY,
+                                scale: model.hudLaserScale,
+                                onSelect: { model.selectedHUDGroup = 2 }
+                            ))
 
                         MirrorShieldJoystickButton(model: model)
-                    }
-                    .padding(6)
-                    .background(.black.opacity(0.55), in: Capsule())
-                    .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: 1))
-                    .opacity(model.hudWeaponsOpacity)
-                    .disabled(model.isDefeated || model.gameState != .playing)
-                    .modifier(HUDDraggableModifier(
-                        isEditing: model.isEditingHUDLayout,
-                        isSelected: model.selectedHUDGroup == 1,
-                        label: "🔦⚡🛡️ ARMAS",
-                        offsetX: $model.hudWeaponsX,
-                        offsetY: $model.hudWeaponsY,
-                        scale: model.hudWeaponsScale,
-                        onSelect: { model.selectedHUDGroup = 1 }
-                    ))
+                            .opacity(model.hudShieldOpacity)
+                            .disabled(model.isDefeated || model.gameState != .playing)
+                            .modifier(HUDDraggableModifier(
+                                isEditing: model.isEditingHUDLayout,
+                                isSelected: model.selectedHUDGroup == 3,
+                                label: "🛡️ ESCUDO",
+                                offsetX: $model.hudShieldX,
+                                offsetY: $model.hudShieldY,
+                                scale: model.hudShieldScale,
+                                onSelect: { model.selectedHUDGroup = 3 }
+                            ))
 
-                    Button {
-                        guard !model.isDefeated, model.gameState == .playing else { return }
-                        model.requestJump()
-                    } label: {
-                        Image(systemName: "arrow.up")
-                            .font(.system(size: 26, weight: .heavy))
-                            .foregroundStyle(.black)
-                            .frame(width: 62, height: 62)
-                            .background(.white.opacity(0.95), in: Circle())
-                            .overlay(Circle().stroke(Color.yellow, lineWidth: 3))
-                            .shadow(color: .black.opacity(0.4), radius: 4, x: 0, y: 2)
+                        JumpButton(model: model)
+                            .opacity(model.hudJumpOpacity)
+                            .disabled(model.isDefeated || model.gameState != .playing)
+                            .modifier(HUDDraggableModifier(
+                                isEditing: model.isEditingHUDLayout,
+                                isSelected: model.selectedHUDGroup == 4,
+                                label: "⬆️ SALTAR",
+                                offsetX: $model.hudJumpX,
+                                offsetY: $model.hudJumpY,
+                                scale: model.hudJumpScale,
+                                onSelect: { model.selectedHUDGroup = 4 }
+                            ))
                     }
-                    .buttonStyle(.plain)
-                    .contentShape(Circle())
-                    .accessibilityLabel("Saltar")
-                    .accessibilityIdentifier("jumpButton")
-                    .opacity(model.hudJumpOpacity)
-                    .disabled(model.isDefeated || model.gameState != .playing)
-                    .modifier(HUDDraggableModifier(
-                        isEditing: model.isEditingHUDLayout,
-                        isSelected: model.selectedHUDGroup == 2,
-                        label: "⬆️ SALTAR",
-                        offsetX: $model.hudJumpX,
-                        offsetY: $model.hudJumpY,
-                        scale: model.hudJumpScale,
-                        onSelect: { model.selectedHUDGroup = 2 }
-                    ))
-                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             .padding(.trailing, 12)
@@ -1416,12 +1301,12 @@ struct ContentView: View {
             .opacity(model.hudMenuOpacity)
             .modifier(HUDDraggableModifier(
                 isEditing: model.isEditingHUDLayout,
-                isSelected: model.selectedHUDGroup == 6,
+                isSelected: model.selectedHUDGroup == 9,
                 label: "⚙️ MENÚ / PAUSA",
                 offsetX: $model.hudMenuX,
                 offsetY: $model.hudMenuY,
                 scale: model.hudMenuScale,
-                onSelect: { model.selectedHUDGroup = 6 }
+                onSelect: { model.selectedHUDGroup = 9 }
             ))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             .safeAreaPadding(.top, 8)
@@ -1518,160 +1403,232 @@ struct ContentView: View {
 
             if model.isEditingHUDLayout {
                 VStack {
-                    VStack(spacing: 10) {
-                        HStack {
-                            Image(systemName: "slider.horizontal.below.square.and.square.filled")
-                                .foregroundStyle(.cyan)
-                            Text("EDITOR DE BOTONES Y CONTROLES HUD")
-                                .font(.system(size: 13, weight: .black, design: .rounded))
-                                .foregroundStyle(.white)
-                            Spacer()
+                    if isHUDBarMinimized {
+                        HStack(spacing: 10) {
                             Button {
-                                model.resetHUDLayout()
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                    isHUDBarMinimized = false
+                                }
                             } label: {
-                                Label("Restaurar", systemImage: "arrow.counterclockwise")
-                                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                                    .foregroundStyle(.orange)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 5)
-                                    .background(Color.orange.opacity(0.18), in: Capsule())
+                                HStack(spacing: 6) {
+                                    Image(systemName: "chevron.down.circle.fill")
+                                        .foregroundStyle(.cyan)
+                                    Text("EXPANDIR EDITOR HUD")
+                                        .font(.system(size: 11, weight: .black, design: .rounded))
+                                        .foregroundStyle(.white)
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .background(.ultraThinMaterial, in: Capsule())
+                                .background(Color.black.opacity(0.75), in: Capsule())
+                                .overlay(Capsule().stroke(Color.cyan.opacity(0.85), lineWidth: 1.5))
                             }
+
                             Button {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                     model.isEditingHUDLayout = false
                                 }
                             } label: {
                                 Label("Guardar", systemImage: "checkmark.circle.fill")
-                                    .font(.system(size: 12, weight: .black, design: .rounded))
+                                    .font(.system(size: 11, weight: .black, design: .rounded))
                                     .foregroundStyle(.black)
                                     .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
+                                    .padding(.vertical, 8)
                                     .background(Color.cyan, in: Capsule())
                             }
                         }
+                        .padding(.top, 10)
+                        .shadow(color: .black.opacity(0.55), radius: 8)
+                    } else {
+                        VStack(spacing: 8) {
+                            HStack {
+                                Image(systemName: "slider.horizontal.below.square.and.square.filled")
+                                    .foregroundStyle(.cyan)
+                                Text("EDITOR DE BOTONES HUD")
+                                    .font(.system(size: 12, weight: .black, design: .rounded))
+                                    .foregroundStyle(.white)
 
-                        Text("Arrastra cualquier grupo de botones con el dedo para moverlo, o tócalo para ajustar su tamaño abajo.")
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.8))
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                                Spacer()
 
-                        let groupNames = [
-                            "🕹️ Joystick",
-                            "🔦 Armas",
-                            "⬆️ Saltar",
-                            "⏳ Slow-Mo",
-                            "⚡ Warp",
-                            "🗺️ Radar",
-                            "⚙️ Menú",
-                            "❤️ Salud"
-                        ]
+                                Button {
+                                    model.centerSelectedHUDElement(index: model.selectedHUDGroup)
+                                } label: {
+                                    Label("Centrar", systemImage: "scope")
+                                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                                        .foregroundStyle(.yellow)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.yellow.opacity(0.18), in: Capsule())
+                                }
 
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(0..<groupNames.count, id: \.self) { idx in
-                                    Button {
-                                        model.selectedHUDGroup = idx
-                                    } label: {
-                                        Text(groupNames[idx])
-                                            .font(.system(size: 11, weight: .bold, design: .rounded))
-                                            .foregroundStyle(model.selectedHUDGroup == idx ? .black : .white)
-                                            .padding(.horizontal, 10)
-                                            .padding(.vertical, 5)
-                                            .background(
-                                                model.selectedHUDGroup == idx ? Color.cyan : Color.white.opacity(0.14),
-                                                in: Capsule()
-                                            )
+                                Button {
+                                    model.resetHUDLayout()
+                                } label: {
+                                    Label("Restaurar Todo", systemImage: "arrow.counterclockwise")
+                                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                                        .foregroundStyle(.orange)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.orange.opacity(0.18), in: Capsule())
+                                }
+
+                                Button {
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                        isHUDBarMinimized = true
+                                    }
+                                } label: {
+                                    Image(systemName: "chevron.up.circle.fill")
+                                        .font(.system(size: 16, weight: .bold))
+                                        .foregroundStyle(.white.opacity(0.85))
+                                }
+
+                                Button {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        model.isEditingHUDLayout = false
+                                    }
+                                } label: {
+                                    Label("Guardar", systemImage: "checkmark.circle.fill")
+                                        .font(.system(size: 11, weight: .black, design: .rounded))
+                                        .foregroundStyle(.black)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background(Color.cyan, in: Capsule())
+                                }
+                            }
+
+                            let groupNames = [
+                                "🕹️ Joystick",
+                                "🔦 Linterna",
+                                "⚡ Láser",
+                                "🛡️ Escudo",
+                                "⬆️ Saltar",
+                                "🎯 Acción",
+                                "⏳ Slow-Mo",
+                                "⚡ Warp",
+                                "🗺️ Radar",
+                                "⚙️ Menú",
+                                "❤️ Salud"
+                            ]
+
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 6) {
+                                    ForEach(0..<groupNames.count, id: \.self) { idx in
+                                        Button {
+                                            model.selectedHUDGroup = idx
+                                        } label: {
+                                            Text(groupNames[idx])
+                                                .font(.system(size: 10, weight: .bold, design: .rounded))
+                                                .foregroundStyle(model.selectedHUDGroup == idx ? .black : .white)
+                                                .padding(.horizontal, 8)
+                                                .padding(.vertical, 4)
+                                                .background(
+                                                    model.selectedHUDGroup == idx ? Color.cyan : Color.white.opacity(0.14),
+                                                    in: Capsule()
+                                                )
+                                        }
                                     }
                                 }
                             }
-                            .padding(.horizontal, 2)
+
+                            HStack(spacing: 12) {
+                                Text("Ajustando: \(groupNames[min(max(model.selectedHUDGroup, 0), groupNames.count - 1)])")
+                                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.cyan)
+
+                                Spacer()
+
+                                let currentScaleBinding = Binding<Double>(
+                                    get: {
+                                        switch model.selectedHUDGroup {
+                                        case 0: return model.hudJoystickScale
+                                        case 1: return model.hudFlashlightScale
+                                        case 2: return model.hudLaserScale
+                                        case 3: return model.hudShieldScale
+                                        case 4: return model.hudJumpScale
+                                        case 5: return model.hudActionScale
+                                        case 6: return model.hudSlowMoScale
+                                        case 7: return model.hudWarpScale
+                                        case 8: return model.hudMinimapScale
+                                        case 9: return model.hudMenuScale
+                                        default: return model.hudHealthScale
+                                        }
+                                    },
+                                    set: { newVal in
+                                        switch model.selectedHUDGroup {
+                                        case 0: model.hudJoystickScale = newVal
+                                        case 1: model.hudFlashlightScale = newVal
+                                        case 2: model.hudLaserScale = newVal
+                                        case 3: model.hudShieldScale = newVal
+                                        case 4: model.hudJumpScale = newVal
+                                        case 5: model.hudActionScale = newVal
+                                        case 6: model.hudSlowMoScale = newVal
+                                        case 7: model.hudWarpScale = newVal
+                                        case 8: model.hudMinimapScale = newVal
+                                        case 9: model.hudMenuScale = newVal
+                                        default: model.hudHealthScale = newVal
+                                        }
+                                    }
+                                )
+
+                                let currentOpacityBinding = Binding<Double>(
+                                    get: {
+                                        switch model.selectedHUDGroup {
+                                        case 0: return model.hudJoystickOpacity
+                                        case 1: return model.hudFlashlightOpacity
+                                        case 2: return model.hudLaserOpacity
+                                        case 3: return model.hudShieldOpacity
+                                        case 4: return model.hudJumpOpacity
+                                        case 5: return model.hudActionOpacity
+                                        case 6: return model.hudSlowMoOpacity
+                                        case 7: return model.hudWarpOpacity
+                                        case 8: return model.hudMinimapOpacity
+                                        case 9: return model.hudMenuOpacity
+                                        default: return model.hudHealthOpacity
+                                        }
+                                    },
+                                    set: { newVal in
+                                        switch model.selectedHUDGroup {
+                                        case 0: model.hudJoystickOpacity = newVal
+                                        case 1: model.hudFlashlightOpacity = newVal
+                                        case 2: model.hudLaserOpacity = newVal
+                                        case 3: model.hudShieldOpacity = newVal
+                                        case 4: model.hudJumpOpacity = newVal
+                                        case 5: model.hudActionOpacity = newVal
+                                        case 6: model.hudSlowMoOpacity = newVal
+                                        case 7: model.hudWarpOpacity = newVal
+                                        case 8: model.hudMinimapOpacity = newVal
+                                        case 9: model.hudMenuOpacity = newVal
+                                        default: model.hudHealthOpacity = newVal
+                                        }
+                                    }
+                                )
+
+                                Text("Tamaño: \(Int(currentScaleBinding.wrappedValue * 100))%")
+                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(.white)
+                                Slider(value: currentScaleBinding, in: 0.60...1.50, step: 0.05)
+                                    .tint(.cyan)
+                                    .frame(width: 110)
+
+                                Text("Opacidad: \(Int(currentOpacityBinding.wrappedValue * 100))%")
+                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(.white)
+                                Slider(value: currentOpacityBinding, in: 0.15...1.0, step: 0.05)
+                                    .tint(.yellow)
+                                    .frame(width: 85)
+                            }
                         }
-
-                        HStack(spacing: 12) {
-                            Text("Ajustando: \(groupNames[min(max(model.selectedHUDGroup, 0), 7)])")
-                                .font(.system(size: 12, weight: .bold, design: .rounded))
-                                .foregroundStyle(.cyan)
-
-                            Spacer()
-
-                            let currentScaleBinding = Binding<Double>(
-                                get: {
-                                    switch model.selectedHUDGroup {
-                                    case 0: return model.hudJoystickScale
-                                    case 1: return model.hudWeaponsScale
-                                    case 2: return model.hudJumpScale
-                                    case 3: return model.hudSlowMoScale
-                                    case 4: return model.hudWarpScale
-                                    case 5: return model.hudMinimapScale
-                                    case 6: return model.hudMenuScale
-                                    default: return model.hudHealthScale
-                                    }
-                                },
-                                set: { newVal in
-                                    switch model.selectedHUDGroup {
-                                    case 0: model.hudJoystickScale = newVal
-                                    case 1: model.hudWeaponsScale = newVal
-                                    case 2: model.hudJumpScale = newVal
-                                    case 3: model.hudSlowMoScale = newVal
-                                    case 4: model.hudWarpScale = newVal
-                                    case 5: model.hudMinimapScale = newVal
-                                    case 6: model.hudMenuScale = newVal
-                                    default: model.hudHealthScale = newVal
-                                    }
-                                }
-                            )
-
-                            let currentOpacityBinding = Binding<Double>(
-                                get: {
-                                    switch model.selectedHUDGroup {
-                                    case 0: return model.hudJoystickOpacity
-                                    case 1: return model.hudWeaponsOpacity
-                                    case 2: return model.hudJumpOpacity
-                                    case 3: return model.hudSlowMoOpacity
-                                    case 4: return model.hudWarpOpacity
-                                    case 5: return model.hudMinimapOpacity
-                                    case 6: return model.hudMenuOpacity
-                                    default: return model.hudHealthOpacity
-                                    }
-                                },
-                                set: { newVal in
-                                    switch model.selectedHUDGroup {
-                                    case 0: model.hudJoystickOpacity = newVal
-                                    case 1: model.hudWeaponsOpacity = newVal
-                                    case 2: model.hudJumpOpacity = newVal
-                                    case 3: model.hudSlowMoOpacity = newVal
-                                    case 4: model.hudWarpOpacity = newVal
-                                    case 5: model.hudMinimapOpacity = newVal
-                                    case 6: model.hudMenuOpacity = newVal
-                                    default: model.hudHealthOpacity = newVal
-                                    }
-                                }
-                            )
-
-                            Text("Tamaño: \(Int(currentScaleBinding.wrappedValue * 100))%")
-                                .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                .foregroundStyle(.white)
-                            Slider(value: currentScaleBinding, in: 0.60...1.50, step: 0.05)
-                                .tint(.cyan)
-                                .frame(width: 140)
-
-                            Text("Opacidad: \(Int(currentOpacityBinding.wrappedValue * 100))%")
-                                .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                .foregroundStyle(.white)
-                            Slider(value: currentOpacityBinding, in: 0.15...1.0, step: 0.05)
-                                .tint(.yellow)
-                                .frame(width: 100)
-                        }
+                        .padding(12)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .background(Color.black.opacity(0.85), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .stroke(Color.cyan.opacity(0.75), lineWidth: 1.5)
+                        )
+                        .shadow(color: .black.opacity(0.55), radius: 14, y: 6)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 10)
                     }
-                    .padding(14)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(Color.cyan.opacity(0.75), lineWidth: 1.5)
-                    )
-                    .shadow(color: .black.opacity(0.55), radius: 14, y: 6)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 10)
 
                     Spacer()
                 }
@@ -1693,6 +1650,12 @@ struct ContentView: View {
                     AchievementsView(model: model)
                 }
             }
+            .fullScreenCover(isPresented: $model.showsPrologueScreen) {
+                CinematicPrologueView(model: model)
+            }
+            .fullScreenCover(isPresented: $model.showsPrologueScreen) {
+                CinematicPrologueView(model: model)
+            }
             .onAppear {
                 UIApplication.shared.isIdleTimerDisabled = true
             }
@@ -1712,7 +1675,7 @@ final class GameModel: ObservableObject {
     @Published var multiplayer = LocalMultiplayerSession()
     @Published var gameCenter = GameCenterManager()
     func updateAudioPauseState() {
-        let shouldPause = (gameState != .playing) || showsSettingsSheet || showsMultiplayerSheet || isEditingHUDLayout
+        let shouldPause = (gameState != .playing) || showsSettingsSheet || showsMultiplayerSheet || isEditingHUDLayout || showsPrologueScreen
         audio.setPaused(shouldPause)
     }
 
@@ -1834,6 +1797,22 @@ final class GameModel: ObservableObject {
     @AppStorage("hudJoystickY") var hudJoystickY: Double = 0
     @AppStorage("hudJoystickScale") var hudJoystickScale: Double = 1.0
     @AppStorage("hudJoystickOpacity") var hudJoystickOpacity: Double = 0.85
+    @AppStorage("hudFlashlightX") var hudFlashlightX: Double = 0
+    @AppStorage("hudFlashlightY") var hudFlashlightY: Double = 0
+    @AppStorage("hudFlashlightScale") var hudFlashlightScale: Double = 1.0
+    @AppStorage("hudFlashlightOpacity") var hudFlashlightOpacity: Double = 0.85
+    @AppStorage("hudLaserX") var hudLaserX: Double = 0
+    @AppStorage("hudLaserY") var hudLaserY: Double = 0
+    @AppStorage("hudLaserScale") var hudLaserScale: Double = 1.0
+    @AppStorage("hudLaserOpacity") var hudLaserOpacity: Double = 0.85
+    @AppStorage("hudShieldX") var hudShieldX: Double = 0
+    @AppStorage("hudShieldY") var hudShieldY: Double = 0
+    @AppStorage("hudShieldScale") var hudShieldScale: Double = 1.0
+    @AppStorage("hudShieldOpacity") var hudShieldOpacity: Double = 0.85
+    @AppStorage("hudActionX") var hudActionX: Double = 0
+    @AppStorage("hudActionY") var hudActionY: Double = 0
+    @AppStorage("hudActionScale") var hudActionScale: Double = 1.0
+    @AppStorage("hudActionOpacity") var hudActionOpacity: Double = 0.85
     @AppStorage("hudWeaponsX") var hudWeaponsX: Double = 0
     @AppStorage("hudWeaponsY") var hudWeaponsY: Double = 0
     @AppStorage("hudWeaponsScale") var hudWeaponsScale: Double = 1.0
@@ -1866,6 +1845,8 @@ final class GameModel: ObservableObject {
     @AppStorage("hudHealthY") var hudHealthY: Double = 0
     @AppStorage("hudHealthScale") var hudHealthScale: Double = 1.0
     @AppStorage("hudHealthOpacity") var hudHealthOpacity: Double = 0.90
+    @AppStorage("hasSeenIntroPrologue") var hasSeenIntroPrologue: Bool = false
+    @Published var showsPrologueScreen: Bool = false
     @Published var isGameControllerConnected: Bool = false
     @Published var gameControllerName: String = ""
     @AppStorage("duoScreenModeRaw") var duoScreenModeRaw: Int = 0
@@ -1972,15 +1953,35 @@ final class GameModel: ObservableObject {
 
     func resetHUDLayout() {
         hudJoystickX = 0; hudJoystickY = 0; hudJoystickScale = 1.0; hudJoystickOpacity = 0.85
-        hudWeaponsX = 0; hudWeaponsY = 0; hudWeaponsScale = 1.0; hudWeaponsOpacity = 0.85
+        hudFlashlightX = 0; hudFlashlightY = 0; hudFlashlightScale = 1.0; hudFlashlightOpacity = 0.85
+        hudLaserX = 0; hudLaserY = 0; hudLaserScale = 1.0; hudLaserOpacity = 0.85
+        hudShieldX = 0; hudShieldY = 0; hudShieldScale = 1.0; hudShieldOpacity = 0.85
         hudJumpX = 0; hudJumpY = 0; hudJumpScale = 1.0; hudJumpOpacity = 0.85
-        hudSkillsX = 0; hudSkillsY = 0; hudSkillsScale = 1.0; hudSkillsOpacity = 0.85
+        hudActionX = 0; hudActionY = 0; hudActionScale = 1.0; hudActionOpacity = 0.85
         hudSlowMoX = 0; hudSlowMoY = 0; hudSlowMoScale = 1.0; hudSlowMoOpacity = 0.85
         hudWarpX = 0; hudWarpY = 0; hudWarpScale = 1.0; hudWarpOpacity = 0.85
         hudMinimapX = 0; hudMinimapY = 0; hudMinimapScale = 1.0; hudMinimapOpacity = 0.90
         hudMenuX = 0; hudMenuY = 0; hudMenuScale = 1.0; hudMenuOpacity = 0.90
         hudHealthX = 0; hudHealthY = 0; hudHealthScale = 1.0; hudHealthOpacity = 0.90
+        hudWeaponsX = 0; hudWeaponsY = 0; hudWeaponsScale = 1.0; hudWeaponsOpacity = 0.85
+        hudSkillsX = 0; hudSkillsY = 0; hudSkillsScale = 1.0; hudSkillsOpacity = 0.85
         touchControlsOpacity = 0.85
+    }
+
+    func centerSelectedHUDElement(index: Int) {
+        switch index {
+        case 0: hudJoystickX = 0; hudJoystickY = 0
+        case 1: hudFlashlightX = 0; hudFlashlightY = 0
+        case 2: hudLaserX = 0; hudLaserY = 0
+        case 3: hudShieldX = 0; hudShieldY = 0
+        case 4: hudJumpX = 0; hudJumpY = 0
+        case 5: hudActionX = 0; hudActionY = 0
+        case 6: hudSlowMoX = 0; hudSlowMoY = 0
+        case 7: hudWarpX = 0; hudWarpY = 0
+        case 8: hudMinimapX = 0; hudMinimapY = 0
+        case 9: hudMenuX = 0; hudMenuY = 0
+        default: hudHealthX = 0; hudHealthY = 0
+        }
     }
 
     // Duelo de Luces (Luz vs Sombra / Captura del Núcleo en el Gran Salón Arcoíris)
@@ -2492,6 +2493,14 @@ final class GameModel: ObservableObject {
         broadcastLocalState()
     }
 
+    func startSinglePlayerOrPrologue() {
+        if !hasSeenIntroPrologue {
+            showsPrologueScreen = true
+        } else {
+            startGame()
+        }
+    }
+
     func startGame(fromNetwork: Bool = false) {
         playerHealth = 100.0
         playerShield = 100.0
@@ -2596,6 +2605,8 @@ final class GameModel: ObservableObject {
         heldTool = .none
         remotePlayerHeldTool = .none
         isSlowMotionActive = false
+        lightStates.turnOffAllLights()
+        broadcastLocalState()
 
         let spawnPos = isHost ? SIMD3<Float>(3.8, 0, 3.8) : SIMD3<Float>(-3.8, 0, -3.8)
         let spawnYaw = isHost ? Float.pi * 1.25 : Float.pi * 0.25
@@ -3173,6 +3184,8 @@ final class GameModel: ObservableObject {
         remotePlayerHeldTool = .none
         joystick = .zero
         isSlowMotionActive = false
+        lightStates.turnOffAllLights()
+        broadcastLocalState()
         resetRequestID &+= 1
         respawnRequestID &+= 1
         updateAudioPauseState()
@@ -3204,6 +3217,8 @@ final class GameModel: ObservableObject {
         botsRemainingInWave = 2
         totalBotsInWave = 2
         isWaveIntermission = false
+        lightStates.turnOffAllLights()
+        broadcastLocalState()
         resetRequestID &+= 1
         respawnRequestID &+= 1
         updateAudioPauseState()
@@ -3298,165 +3313,7 @@ struct LightDimmerPopover: View {
     }
 }
 
-private struct ContextualEnvironmentActionButton: View {
-    @ObservedObject var model: GameModel
-    @Binding var dimmerFixture: GameLightFixture?
 
-    var body: some View {
-        let hasLight = model.nearbyLight != nil && !model.isDefeated && !model.isRecoveringInChamber
-        let hasCover = model.isNearCoverRock || model.isCoverActive
-
-        if hasCover && hasLight, let light = model.nearbyLight {
-            // 🎯 Caso 1: Cerca de roca Y de luz (ej. Piscina Neón + Roca) -> UN SOLO BOTÓN DE ACCIÓN COMPACTO
-            let isLightOn = model.lightStates.isEnabled(light)
-            HStack(spacing: 6) {
-                Button {
-                    model.toggleCover()
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: model.isCoverActive ? "shield.fill" : "shield")
-                            .font(.system(size: 12, weight: .bold))
-                        Text(model.isCoverActive ? "En Cobertura" : "Cobertura")
-                            .font(.system(size: 11, weight: .bold))
-                    }
-                    .foregroundStyle(model.isCoverActive ? .black : Color.green)
-                }
-                .buttonStyle(.plain)
-
-                Divider()
-                    .frame(height: 12)
-                    .overlay(Color.white.opacity(0.40))
-
-                Button {
-                    model.toggleNearbyLight()
-                } label: {
-                    Image(systemName: isLightOn ? "lightbulb.fill" : "lightbulb.slash.fill")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(isLightOn ? Color.cyan : Color.white.opacity(0.70))
-                }
-                .buttonStyle(.plain)
-                .simultaneousGesture(
-                    LongPressGesture(minimumDuration: 0.45).onEnded { _ in
-                        dimmerFixture = light
-                    }
-                )
-            }
-            .padding(.horizontal, 9)
-            .padding(.vertical, 5)
-            .background(
-                model.isCoverActive
-                    ? AnyShapeStyle(Color.green)
-                    : AnyShapeStyle(Color.black.opacity(0.65)),
-                in: Capsule()
-            )
-            .overlay(
-                Capsule().stroke(
-                    model.isCoverActive ? Color.green : Color.cyan.opacity(0.85),
-                    lineWidth: 1.4
-                )
-            )
-            .popover(
-                isPresented: Binding(
-                    get: { dimmerFixture != nil },
-                    set: { if !$0 { dimmerFixture = nil } }
-                ),
-                arrowEdge: .bottom
-            ) {
-                if let fixture = dimmerFixture {
-                    LightDimmerPopover(fixture: fixture, model: model)
-                }
-            }
-            .transition(.scale.combined(with: .opacity))
-        } else if hasCover {
-            // 🎯 Caso 2: Solo cerca de roca de cobertura
-            Button {
-                model.toggleCover()
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: model.isCoverActive ? "shield.fill" : "shield")
-                        .font(.system(size: 12, weight: .bold))
-                    Text(model.isCoverActive ? "En Cobertura" : "Cobertura")
-                        .font(.system(size: 11, weight: .bold))
-                }
-                .foregroundStyle(model.isCoverActive ? .black : Color.green)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 5)
-                .background(
-                    model.isCoverActive
-                        ? AnyShapeStyle(Color.green)
-                        : AnyShapeStyle(Color.black.opacity(0.65)),
-                    in: Capsule()
-                )
-                .overlay(Capsule().stroke(Color.green.opacity(0.85), lineWidth: 1.4))
-            }
-            .buttonStyle(.plain)
-            .transition(.scale.combined(with: .opacity))
-        } else if hasLight, let light = model.nearbyLight {
-            // 🎯 Caso 3: Solo cerca de una luminaria (ej. Neón o Poste)
-            let isLightOn = model.lightStates.isEnabled(light)
-            Button {
-                model.toggleNearbyLight()
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: isLightOn ? "lightbulb.fill" : "lightbulb.slash.fill")
-                        .font(.system(size: 12, weight: .bold))
-                    Text(light.label)
-                        .font(.system(size: 11, weight: .bold))
-                }
-                .foregroundStyle(isLightOn ? Color.cyan : Color.white.opacity(0.85))
-                .padding(.horizontal, 9)
-                .padding(.vertical, 5)
-                .background(
-                    isLightOn ? AnyShapeStyle(Color.cyan.opacity(0.25)) : AnyShapeStyle(Color.black.opacity(0.65)),
-                    in: Capsule()
-                )
-                .overlay(
-                    Capsule().stroke(
-                        isLightOn ? Color.cyan.opacity(0.90) : Color.white.opacity(0.35),
-                        lineWidth: 1.4
-                    )
-                )
-            }
-            .buttonStyle(.plain)
-            .simultaneousGesture(
-                LongPressGesture(minimumDuration: 0.45).onEnded { _ in
-                    dimmerFixture = light
-                }
-            )
-            .popover(
-                isPresented: Binding(
-                    get: { dimmerFixture != nil },
-                    set: { if !$0 { dimmerFixture = nil } }
-                ),
-                arrowEdge: .bottom
-            ) {
-                if let fixture = dimmerFixture {
-                    LightDimmerPopover(fixture: fixture, model: model)
-                }
-            }
-            .transition(.scale.combined(with: .opacity))
-        } else if model.isUnderwater {
-            // 🎯 Caso 4: Bucear
-            Button {
-                model.requestDive()
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.down.circle.fill")
-                        .font(.system(size: 12, weight: .bold))
-                    Text("Bucear")
-                        .font(.system(size: 11, weight: .bold))
-                }
-                .foregroundStyle(.cyan)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 5)
-                .background(Color.black.opacity(0.65), in: Capsule())
-                .overlay(Capsule().stroke(Color.cyan.opacity(0.8), lineWidth: 1.4))
-            }
-            .buttonStyle(.plain)
-            .transition(.scale.combined(with: .opacity))
-        }
-    }
-}
 
 #if LEGACY_SCENEKIT_RENDERER
 struct GameSceneView: UIViewRepresentable {
@@ -5857,9 +5714,9 @@ final class ChiptuneAudioEngine {
         return buffer
     }
 
-    // 🏊‍♂️ Brazada Hidrodinámica de Buceo (Impulso suave de agua + estela de burbujas)
+    // 🏊‍♂️ Brazada Acuática Mario 64: Impulso alegre con burbuja profunda ("BLU-OOSH!")
     private func makeSwimStrokeBuffer() -> AVAudioPCMBuffer? {
-        let duration = 0.38
+        let duration = 0.42
         let frameCount = AVAudioFrameCount(format.sampleRate * duration)
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
               let channels = buffer.floatChannelData else {
@@ -5871,17 +5728,18 @@ final class ChiptuneAudioEngine {
         for frame in 0..<Int(frameCount) {
             let t = Double(frame) / format.sampleRate
             let progress = t / duration
-            let env = sin(progress * .pi) * exp(-progress * 1.8)
+            let env = sin(progress * .pi) * exp(-progress * 1.6)
             let raw = Double.random(in: -1.0...1.0)
-            lowPass = lowPass * 0.88 + raw * 0.12
+            lowPass = lowPass * 0.85 + raw * 0.15
 
-            let sweepFreq = 110.0 + 65.0 * sin(progress * .pi)
-            let body = sin(2.0 * .pi * sweepFreq * t) * 0.52
-            let bubble = sin(2.0 * .pi * (320.0 + 80.0 * sin(t * 32.0)) * t) * exp(-t * 7.5) * 0.16
-            let sample = Float(tanh((lowPass * 1.1 + body + bubble) * env * 1.25) * 0.85)
+            // Subida de frecuencia tipo Mario ("scoop" ascendente de 135Hz a 280Hz)
+            let sweepFreq = 135.0 + 145.0 * sin(progress * .pi * 0.85)
+            let body = sin(2.0 * .pi * sweepFreq * t) * 0.62
+            let bubble = sin(2.0 * .pi * (380.0 + 120.0 * sin(t * 38.0)) * t) * exp(-t * 6.5) * 0.22
+            let sample = Float(tanh((lowPass * 1.15 + body + bubble) * env * 1.35) * 0.90)
 
             channels[0][frame] = sample
-            channels[1][frame] = sample * 0.96
+            channels[1][frame] = sample * 0.95
         }
         return buffer
     }
@@ -6173,8 +6031,11 @@ final class ChiptuneAudioEngine {
         return buffer
     }
 
+    // 🌊 Sonido Acuático Estilo Super Mario 64 (Dire Dire Docks / Jolly Roger Bay):
+    // Resonancia armónica subacuática en quintas puras, burbujas procedurales saltarinas ("glug-blup")
+    // y ondulación suave de fluido que hace emocionante y reconfortante nadar
     private func makeWaterBuffer() -> AVAudioPCMBuffer? {
-        let duration = 8.0
+        let duration = 10.0
         let frameCount = AVAudioFrameCount(format.sampleRate * duration)
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
               let channels = buffer.floatChannelData else {
@@ -6185,28 +6046,58 @@ final class ChiptuneAudioEngine {
         var seed = UInt32(0x72A4_91C3)
         var middleNoise = 0.0
         var lowNoise = 0.0
+
         for frame in 0..<Int(frameCount) {
             seed = seed &* 1_664_525 &+ 1_013_904_223
             let noise = Double(seed & 0xFFFF) / 32_767.5 - 1.0
-            middleNoise = middleNoise * 0.86 + noise * 0.14
-            lowNoise = lowNoise * 0.982 + noise * 0.018
+            middleNoise = middleNoise * 0.88 + noise * 0.12
+            lowNoise = lowNoise * 0.985 + noise * 0.015
+
             let time = Double(frame) / format.sampleRate
-            let edgeFade = min(1.0, min(time, duration - time) / 0.08)
-            let surge = 0.82 +
-                sin(2 * Double.pi * 0.375 * time) * 0.11 +
-                sin(2 * Double.pi * 0.625 * time + 0.8) * 0.07
-            let flowingWater = (middleNoise - lowNoise) * 0.34 + lowNoise * 0.52
-            let smallBubbles = sin(2 * Double.pi * 286.0 * time + lowNoise * 1.8) * 0.012
-            let sample = Float((flowingWater * 0.52 * surge + smallBubbles) * edgeFade)
-            channels[0][frame] = sample * 0.92
-            channels[1][frame] = sample
+            let edgeFade = min(1.0, min(time, duration - time) / 0.12)
+
+            // 1. Resonancia Armónica Acuática Mario 64 (Acorde Mayor abierto: D3 146.8Hz, A3 220Hz, D4 293.7Hz, F#4 370Hz)
+            let aquaticPhase = sin(2.0 * .pi * 0.22 * time) * 0.35
+            let aquaticTone1 = sin(2.0 * .pi * (146.83 + aquaticPhase * 2.0) * time) * 0.024
+            let aquaticTone2 = sin(2.0 * .pi * (220.00 + aquaticPhase * 1.5) * time) * 0.018
+            let aquaticTone3 = sin(2.0 * .pi * (293.66 + aquaticPhase * 3.0) * time) * 0.015
+            let aquaticTone4 = sin(2.0 * .pi * (369.99 + aquaticPhase * 1.0) * time) * 0.010
+            let marioHarmonics = aquaticTone1 + aquaticTone2 + aquaticTone3 + aquaticTone4
+
+            // 2. Oleaje de agua cristalina envolvente
+            let surge = 0.85 +
+                sin(2 * Double.pi * 0.35 * time) * 0.12 +
+                sin(2 * Double.pi * 0.58 * time + 1.2) * 0.08
+            let flowingWater = (middleNoise - lowNoise) * 0.26 + lowNoise * 0.44
+
+            // 3. Burbujas saltarinas rítmicas de Mario 64 ("blup... gloop... blup-blup")
+            let bPeriod1 = time.truncatingRemainder(dividingBy: 0.95)
+            let bubble1 = (bPeriod1 < 0.08) ? (sin(2.0 * .pi * (320.0 + bPeriod1 * 950.0) * bPeriod1) * exp(-bPeriod1 * 55.0) * 0.038) : 0.0
+
+            let bPeriod2 = (time + 0.45).truncatingRemainder(dividingBy: 1.35)
+            let bubble2 = (bPeriod2 < 0.07) ? (sin(2.0 * .pi * (280.0 + bPeriod2 * 820.0) * bPeriod2) * exp(-bPeriod2 * 60.0) * 0.032) : 0.0
+
+            let bPeriod3 = (time + 0.80).truncatingRemainder(dividingBy: 1.80)
+            let bubble3 = (bPeriod3 < 0.06) ? (sin(2.0 * .pi * (410.0 + bPeriod3 * 1100.0) * bPeriod3) * exp(-bPeriod3 * 65.0) * 0.028) : 0.0
+
+            let bubbleGurgles = bubble1 + bubble2 + bubble3
+
+            // 4. Muestra final estéreo
+            let sampleL = Float((flowingWater * surge + marioHarmonics + bubbleGurgles) * edgeFade)
+            let sampleR = Float((flowingWater * surge * 0.95 + marioHarmonics * 0.92 - bubble1 * 0.5 + bubble2 * 0.8 + bubble3 * 0.6) * edgeFade)
+
+            channels[0][frame] = sampleL
+            if format.channelCount > 1 {
+                channels[1][frame] = sampleR
+            }
         }
         return buffer
     }
 
-    // 💦 Chapuzón Realista y Orgánico (Impacto de agua + burbuja de cavitación "ker-plunk" + estela de gotas)
+    // 💦 Chapuzón Estilo Mario 64: Entrada alegre al agua ("KER-SPLASH / BLOOP-WOOSH!")
+    // Transitorio acústico nítido de ruptura de superficie + cavitación efervescente que rebota hacia arriba
     private func makeSplashBuffer(variant: Int) -> AVAudioPCMBuffer? {
-        let duration = 0.46
+        let duration = 0.52
         let frameCount = AVAudioFrameCount(format.sampleRate * duration)
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
               let channels = buffer.floatChannelData else {
@@ -6218,7 +6109,7 @@ final class ChiptuneAudioEngine {
         var lowPass = 0.0
         var midBand = 0.0
 
-        let baseCavityFreq = variant == 0 ? 175.0 : 225.0
+        let baseCavityFreq = variant == 0 ? 190.0 : 240.0
 
         for frame in 0..<Int(frameCount) {
             let t = Double(frame) / format.sampleRate
@@ -6227,29 +6118,29 @@ final class ChiptuneAudioEngine {
             seed = seed &* 1_664_525 &+ 1_013_904_223
             let rawNoise = Double(seed & 0xFFFF) / 32_767.5 - 1.0
 
-            // 1. Slap inicial de superficie (transitorio cortante pero acuoso en los primeros 12ms)
-            let slapAttack = min(1.0, t / 0.003)
-            let slapDecay = exp(-t * 62.0)
-            let slap = rawNoise * slapAttack * slapDecay * 0.52
+            // 1. Slap inicial de superficie (el "plup" brillante de Mario entrando a la alberca)
+            let slapAttack = min(1.0, t / 0.0025)
+            let slapDecay = exp(-t * 68.0)
+            let slap = rawNoise * slapAttack * slapDecay * 0.58
 
-            // 2. Cavitación / Resonancia líquida ("ker-plunk" / burbuja profunda)
-            let cavityFreq = baseCavityFreq * (1.0 + 0.85 * exp(-t * 22.0))
-            let cavityEnv = min(1.0, t * 110.0) * exp(-t * 9.2)
-            let cavityTone = sin(2.0 * .pi * cavityFreq * t) * cavityEnv * 0.68
+            // 2. Cavitación flotante ascendente ("WWOO-OOP" - elevación de tono que transmite alegría y emoción)
+            let pitchSweep = baseCavityFreq * (1.15 - 0.35 * exp(-t * 18.0) + 0.45 * sin(t * 24.0))
+            let cavityEnv = min(1.0, t * 140.0) * exp(-t * 8.5)
+            let cavityTone = sin(2.0 * .pi * pitchSweep * t) * cavityEnv * 0.72
 
-            // 3. Efervescencia y turbulencia de agua en movimiento
-            lowPass = lowPass * 0.84 + rawNoise * 0.16
-            midBand = midBand * 0.68 + (rawNoise - lowPass) * 0.32
-            let washEnv = min(1.0, t * 45.0) * exp(-t * 6.0)
-            let waterWash = (lowPass * 0.45 + midBand * 0.28) * washEnv
+            // 3. Efervescencia acuosa Mario 64 (resplandor de gotas y rocío)
+            lowPass = lowPass * 0.82 + rawNoise * 0.18
+            midBand = midBand * 0.65 + (rawNoise - lowPass) * 0.35
+            let washEnv = min(1.0, t * 50.0) * exp(-t * 5.8)
+            let waterWash = (lowPass * 0.50 + midBand * 0.32) * washEnv
 
-            // 4. Micro-burbujas burbujeantes en la estela
-            let b1 = sin(2.0 * .pi * (460.0 + 130.0 * sin(t * 38.0)) * t) * exp(-t * 11.0) * 0.14
-            let b2 = sin(2.0 * .pi * (700.0 + 160.0 * cos(t * 32.0)) * t) * exp(-t * 13.0) * 0.10
+            // 4. Clúster de burbujas sonoras que explotan al sumergirse
+            let b1 = sin(2.0 * .pi * (480.0 + 180.0 * sin(t * 42.0)) * t) * exp(-t * 10.0) * 0.18
+            let b2 = sin(2.0 * .pi * (720.0 + 220.0 * cos(t * 36.0)) * t) * exp(-t * 12.0) * 0.14
 
             let combined = (slap + cavityTone + waterWash + b1 + b2)
             let fadeOut = min(1.0, (1.0 - progress) * 6.5)
-            let sample = Float(tanh(combined * 1.35) * fadeOut * 0.92)
+            let sample = Float(tanh(combined * 1.40) * fadeOut * 0.95)
 
             channels[0][frame] = sample
             channels[1][frame] = sample * (variant == 1 ? 0.88 : 0.95)
@@ -7583,8 +7474,14 @@ struct GameOptionsSheet: View {
                                     set: { newVal in
                                         model.touchControlsOpacity = newVal
                                         model.hudJoystickOpacity = newVal
-                                        model.hudWeaponsOpacity = newVal
+                                        model.hudFlashlightOpacity = newVal
+                                        model.hudLaserOpacity = newVal
+                                        model.hudShieldOpacity = newVal
                                         model.hudJumpOpacity = newVal
+                                        model.hudActionOpacity = newVal
+                                        model.hudSlowMoOpacity = newVal
+                                        model.hudWarpOpacity = newVal
+                                        model.hudWeaponsOpacity = newVal
                                         model.hudSkillsOpacity = newVal
                                     }
                                 ), in: 0.2...1.0, step: 0.05)
@@ -7764,6 +7661,25 @@ struct GameOptionsSheet: View {
                         }
 
                     case .system:
+                        Section("🎬 Historia y Lore del Juego") {
+                            Button {
+                                dismiss()
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                    model.showsPrologueScreen = true
+                                }
+                            } label: {
+                                HStack {
+                                    Label("Ver Prólogo: El Secreto de Lumina", systemImage: "film.stack.fill")
+                                        .font(.subheadline.bold())
+                                        .foregroundStyle(Color.yellow)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+
                         Section("ℹ️ Información del Sistema") {
                             HStack {
                                 Text("Versión")
@@ -7936,55 +7852,306 @@ struct HUDDraggableModifier: ViewModifier {
     let scale: Double
     let onSelect: () -> Void
 
-    @State private var dragStartOffset: CGSize? = nil
+    @GestureState private var dragTranslation: CGSize = .zero
 
     func body(content: Content) -> some View {
+        let currentX = offsetX + Double(dragTranslation.width)
+        let currentY = offsetY + Double(dragTranslation.height)
+
         content
             .allowsHitTesting(!isEditing)
             .scaleEffect(CGFloat(scale))
             .overlay {
                 if isEditing {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(isSelected ? Color.cyan.opacity(0.22) : Color.black.opacity(0.28))
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(isSelected ? Color.cyan.opacity(0.24) : Color.black.opacity(0.28))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
                                 .strokeBorder(
-                                    isSelected ? Color.cyan : Color.white.opacity(0.75),
-                                    style: StrokeStyle(lineWidth: isSelected ? 2.5 : 1.5, dash: [6, 4])
+                                    isSelected ? Color.cyan : Color.white.opacity(0.70),
+                                    style: StrokeStyle(lineWidth: isSelected ? 2.5 : 1.5, dash: [5, 4])
                                 )
                         )
                         .overlay(alignment: .top) {
                             Text("\(label) • \(Int(scale * 100))%")
-                                .font(.system(size: 10, weight: .black, design: .rounded))
+                                .font(.system(size: 9, weight: .black, design: .rounded))
                                 .foregroundStyle(isSelected ? .black : .white)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(isSelected ? Color.cyan : Color.black.opacity(0.8), in: Capsule())
-                                .offset(y: -12)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2.5)
+                                .background(isSelected ? Color.cyan : Color.black.opacity(0.85), in: Capsule())
+                                .offset(y: -11)
                         }
                         .contentShape(Rectangle())
                         .onTapGesture {
                             onSelect()
                         }
                         .gesture(
-                            DragGesture(minimumDistance: 1)
-                                .onChanged { value in
-                                    onSelect()
-                                    if dragStartOffset == nil {
-                                        dragStartOffset = CGSize(width: offsetX, height: offsetY)
-                                    }
-                                    if let start = dragStartOffset {
-                                        offsetX = min(max(start.width + value.translation.width, -360), 360)
-                                        offsetY = min(max(start.height + value.translation.height, -260), 260)
-                                    }
+                            DragGesture(minimumDistance: 0)
+                                .updating($dragTranslation) { value, state, _ in
+                                    state = value.translation
                                 }
-                                .onEnded { _ in
-                                    dragStartOffset = nil
+                                .onEnded { value in
+                                    onSelect()
+                                    offsetX = min(max(offsetX + Double(value.translation.width), -420), 420)
+                                    offsetY = min(max(offsetY + Double(value.translation.height), -280), 280)
                                 }
                         )
                 }
             }
-            .offset(x: CGFloat(offsetX), y: CGFloat(offsetY))
+            .offset(x: CGFloat(currentX), y: CGFloat(currentY))
+    }
+}
+
+struct FlashlightButton: View {
+    @ObservedObject var model: GameModel
+
+    var body: some View {
+        Button {
+            guard model.flashlightBattery > 0.02 else { return }
+            model.heldTool = (model.heldTool == .flashlight ? .none : .flashlight)
+        } label: {
+            ZStack {
+                Circle()
+                    .stroke(Color.white.opacity(0.15), lineWidth: 2.5)
+                Circle()
+                    .trim(from: 0, to: CGFloat(model.flashlightBattery))
+                    .stroke(
+                        model.flashlightBattery > 0.35 ? Color.yellow : (model.flashlightBattery > 0.15 ? Color.orange : Color.red),
+                        style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
+                    )
+                    .rotationEffect(.degrees(-90))
+
+                VStack(spacing: 1) {
+                    Image(systemName: model.flashlightBattery <= 0.02 ? "battery.0percent" : "flashlight.on.fill")
+                        .font(.system(size: 15, weight: .bold))
+                    Text("\(Int((model.flashlightBattery * 100).rounded()))%")
+                        .font(.system(size: 8, weight: .heavy, design: .monospaced))
+                }
+                .foregroundStyle(model.heldTool == .flashlight ? .black : (model.flashlightBattery > 0.20 ? .yellow : .orange))
+            }
+            .frame(width: 48, height: 48)
+            .background(
+                model.heldTool == .flashlight
+                    ? AnyShapeStyle(model.flashlightBattery > 0.20 ? Color.yellow : Color.orange)
+                    : AnyShapeStyle(Color.black.opacity(0.65)),
+                in: Circle()
+            )
+            .overlay(Circle().stroke(Color.yellow.opacity(model.heldTool == .flashlight ? 0.90 : 0.40), lineWidth: 1.5))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Linterna")
+    }
+}
+
+struct LaserButton: View {
+    @ObservedObject var model: GameModel
+
+    var body: some View {
+        Button {
+            guard model.laserBattery > 0.02 else { return }
+            model.heldTool = (model.heldTool == .laser ? .none : .laser)
+        } label: {
+            ZStack {
+                Circle()
+                    .stroke(Color.white.opacity(0.15), lineWidth: 2.5)
+                Circle()
+                    .trim(from: 0, to: CGFloat(model.laserBattery))
+                    .stroke(
+                        model.laserBattery > 0.35 ? Color.cyan : (model.laserBattery > 0.15 ? Color.orange : Color.red),
+                        style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
+                    )
+                    .rotationEffect(.degrees(-90))
+
+                VStack(spacing: 1) {
+                    Image(systemName: model.laserBattery <= 0.02 ? "bolt.slash.fill" : "bolt.fill")
+                        .font(.system(size: 15, weight: .bold))
+                    Text("\(Int((model.laserBattery * 100).rounded()))%")
+                        .font(.system(size: 8, weight: .heavy, design: .monospaced))
+                }
+                .foregroundStyle(model.heldTool == .laser ? .white : (model.laserBattery > 0.20 ? .cyan : .red))
+            }
+            .frame(width: 48, height: 48)
+            .background(
+                model.heldTool == .laser
+                    ? AnyShapeStyle(model.laserBattery > 0.02 ? Color.red : Color.gray.opacity(0.6))
+                    : AnyShapeStyle(Color.black.opacity(0.65)),
+                in: Circle()
+            )
+            .overlay(Circle().stroke(Color.cyan.opacity(model.heldTool == .laser ? 0.90 : 0.40), lineWidth: 1.5))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Láser")
+    }
+}
+
+struct JumpButton: View {
+    @ObservedObject var model: GameModel
+
+    var body: some View {
+        Button {
+            guard !model.isDefeated, model.gameState == .playing else { return }
+            model.requestJump()
+        } label: {
+            Image(systemName: "arrow.up")
+                .font(.system(size: 24, weight: .heavy))
+                .foregroundStyle(.black)
+                .frame(width: 50, height: 50)
+                .background(.white.opacity(0.95), in: Circle())
+                .overlay(Circle().stroke(Color.yellow, lineWidth: 2.5))
+                .shadow(color: .black.opacity(0.35), radius: 4, x: 0, y: 2)
+        }
+        .buttonStyle(.plain)
+        .contentShape(Circle())
+        .accessibilityLabel("Saltar")
+        .accessibilityIdentifier("jumpButton")
+    }
+}
+
+struct SlowMoCircleButton: View {
+    @ObservedObject var model: GameModel
+
+    var body: some View {
+        Button {
+            model.toggleSlowMotion()
+        } label: {
+            VStack(spacing: 1) {
+                Image(systemName: "hourglass")
+                    .font(.system(size: 16, weight: .bold))
+                Text("SLOW")
+                    .font(.system(size: 7, weight: .black, design: .monospaced))
+            }
+            .foregroundStyle(model.isSlowMotionActive ? .black : Color.pink)
+            .frame(width: 48, height: 48)
+            .background(
+                model.isSlowMotionActive
+                    ? AnyShapeStyle(Color.pink)
+                    : AnyShapeStyle(Color.black.opacity(0.65)),
+                in: Circle()
+            )
+            .overlay(Circle().stroke(Color.pink.opacity(model.isSlowMotionActive ? 0.95 : 0.60), lineWidth: 1.5))
+            .shadow(color: Color.pink.opacity(model.isSlowMotionActive ? 0.6 : 0.15), radius: 6)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Cámara Lenta Slow Motion")
+    }
+}
+
+struct WarpCircleButton: View {
+    @ObservedObject var model: GameModel
+
+    var body: some View {
+        Button {
+            model.showsLightRadialMenu.toggle()
+        } label: {
+            VStack(spacing: 1) {
+                Image(systemName: "bolt.shield.fill")
+                    .font(.system(size: 16, weight: .bold))
+                Text("WARP")
+                    .font(.system(size: 7, weight: .black, design: .monospaced))
+            }
+            .foregroundStyle(model.showsLightRadialMenu ? .black : Color.cyan)
+            .frame(width: 48, height: 48)
+            .background(
+                model.showsLightRadialMenu
+                    ? AnyShapeStyle(Color.cyan)
+                    : AnyShapeStyle(Color.black.opacity(0.65)),
+                in: Circle()
+            )
+            .overlay(Circle().stroke(Color.cyan.opacity(model.showsLightRadialMenu ? 0.95 : 0.60), lineWidth: 1.5))
+            .shadow(color: Color.cyan.opacity(model.showsLightRadialMenu ? 0.6 : 0.15), radius: 6)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Menú Radial de Teletransporte")
+    }
+}
+
+struct ContextualActionCircleButton: View {
+    @ObservedObject var model: GameModel
+    @Binding var dimmerFixture: GameLightFixture?
+
+    var body: some View {
+        let inWater = model.localPlayerPosition.y < -0.15 || (model.localPlayerPosition.x > -5.0 && model.localPlayerPosition.x < 3.0 && model.localPlayerPosition.z > -6.0 && model.localPlayerPosition.z < 2.5)
+        let hasCover = model.isNearCoverRock || model.isCoverActive
+        let hasLight = model.nearbyLight != nil && !model.isDefeated && !model.isRecoveringInChamber
+
+        if model.isEditingHUDLayout || inWater || hasCover || hasLight {
+            Button {
+                if hasCover {
+                    model.toggleCover()
+                } else if hasLight {
+                    model.toggleNearbyLight()
+                }
+            } label: {
+                ZStack {
+                    if hasCover {
+                        VStack(spacing: 1) {
+                            Image(systemName: model.isCoverActive ? "shield.fill" : "shield")
+                                .font(.system(size: 16, weight: .bold))
+                            Text(model.isCoverActive ? "CUBIERTO" : "CUBRIR")
+                                .font(.system(size: 6.5, weight: .black, design: .monospaced))
+                        }
+                        .foregroundStyle(model.isCoverActive ? .black : Color.green)
+                    } else if let light = model.nearbyLight {
+                        let isOn = model.lightStates.isEnabled(light)
+                        VStack(spacing: 1) {
+                            Image(systemName: isOn ? "lightbulb.fill" : "lightbulb.slash.fill")
+                                .font(.system(size: 16, weight: .bold))
+                            Text(isOn ? "ON" : "OFF")
+                                .font(.system(size: 7, weight: .black, design: .monospaced))
+                        }
+                        .foregroundStyle(isOn ? (light == .sheeritNeon ? .orange : (light == .piscinaNeon ? .cyan : .yellow)) : .white.opacity(0.85))
+                    } else if inWater {
+                        VStack(spacing: 1) {
+                            Image(systemName: "arrow.down.circle.fill")
+                                .font(.system(size: 16, weight: .bold))
+                            Text("BUCEAR")
+                                .font(.system(size: 6.5, weight: .black, design: .monospaced))
+                        }
+                        .foregroundStyle(.cyan)
+                    } else {
+                        VStack(spacing: 1) {
+                            Image(systemName: "hand.tap.fill")
+                                .font(.system(size: 16, weight: .bold))
+                            Text("ACCIÓN")
+                                .font(.system(size: 6.5, weight: .black, design: .monospaced))
+                        }
+                        .foregroundStyle(.white)
+                    }
+                }
+                .frame(width: 48, height: 48)
+                .background(
+                    (model.isCoverActive ? Color.green : Color.black.opacity(0.65)),
+                    in: Circle()
+                )
+                .overlay(
+                    Circle().stroke(
+                        hasCover ? (model.isCoverActive ? Color.green : Color.green.opacity(0.60)) :
+                        (hasLight ? Color.cyan.opacity(0.80) : Color.white.opacity(0.40)),
+                        lineWidth: 1.5
+                    )
+                )
+                .shadow(color: (model.isCoverActive ? Color.green : Color.cyan).opacity(0.35), radius: 6)
+            }
+            .buttonStyle(.plain)
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+                    if let light = model.nearbyLight {
+                        dimmerFixture = light
+                    }
+                }
+            )
+            .popover(
+                isPresented: Binding(
+                    get: { dimmerFixture != nil },
+                    set: { if !$0 { dimmerFixture = nil } }
+                ),
+                arrowEdge: .bottom
+            ) {
+                if let fixture = dimmerFixture {
+                    LightDimmerPopover(fixture: fixture, model: model)
+                }
+            }
+        }
     }
 }
 
@@ -8077,6 +8244,467 @@ struct MirrorShieldJoystickButton: View {
     }
 }
 
+struct StoryChapter: Identifiable {
+    let id: Int
+    let title: String
+    let subtitle: String
+    let badge: String
+    let scriptES: String
+    let scriptEN: String
+    let scriptPT: String
+    let scriptFR: String
+
+    func script(for lang: String) -> String {
+        switch lang {
+        case "en": return scriptEN
+        case "pt": return scriptPT
+        case "fr": return scriptFR
+        default: return scriptES
+        }
+    }
+}
+
+final class StoryPrologueManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
+    @Published var currentChapterIndex: Int = 0
+    @Published var isSpeaking: Bool = false
+    @Published var isMuted: Bool = false
+    @Published var selectedLanguage: String = "es"
+    @Published var displayedChars: Int = 0
+    @Published var isStoryCompleted: Bool = false
+
+    private let synthesizer = AVSpeechSynthesizer()
+    private var typewriterTimer: Timer?
+
+    static let chapters: [StoryChapter] = [
+        StoryChapter(
+            id: 0,
+            title: "Capítulo I • El Reino de Lumina",
+            subtitle: "La armonía de los Slimes y el secreto cuántico de la luz",
+            badge: "ORIGEN ANCESTRAL",
+            scriptES: "Registro de emergencia cuántica cero siete. Si recibes esta frecuencia... el Gran Salón de Lumina ha caído. No siempre fuimos soldados. Éramos una pacífica civilización de slimes de gelatina bioluminiscente, guardianes del secreto cósmico de la luz pura.",
+            scriptEN: "Quantum emergency log zero seven. If you are receiving this frequency... the Great Hall of Lumina has fallen. We were never soldiers. We were a peaceful civilization of bioluminescent jelly slimes, guardians of the cosmic secret of pure light.",
+            scriptPT: "Registro de emergência quântica zero sete. Se você está recebendo esta frequência... o Grande Salão de Lumina caiu. Nunca fomos soldados. Éramos uma civilização pacífica de slimes de gelatina bioluminescente, guardiões do segredo cósmico da luz pura.",
+            scriptFR: "Rapport d'urgence quantique zéro sept. Si vous recevez cette fréquence... la Grande Salle de Lumina est tombée. Nous n'avons jamais été des soldats. Nous étions une paisible civilisation de slimes bioluminescents, gardiens du secret cosmique de la lumière pure."
+        ),
+        StoryChapter(
+            id: 1,
+            title: "Capítulo II • La Invasión Fotófaga",
+            subtitle: "Autómatas biomecánicos descendiendo del vacío estelar",
+            badge: "AMENAZA CÓSMICA",
+            scriptES: "Pero en la noche del Eclipse Eterno, ellos descendieron de las estrellas... Los Fotófagos. Autómatas biomecánicos colosales devoradores de energía, decididos a saquear nuestra tecnología de iluminación para saciar el frío vacío de sus mundos muertos.",
+            scriptEN: "Until the night of the Eternal Eclipse, when they descended from the stars... The Photophages. Colossal biomechanical automatons seeking our illumination technology to feed the cold void of their dying worlds.",
+            scriptPT: "Mas na noite do Eclipse Eterno, eles desceram das estrelas... Os Fotófagos. Autômatos biomecânicos colossais devoradores de energia, determinados a saquear nossa tecnologia de iluminação para saciar o vazio frio de seus mundos mortos.",
+            scriptFR: "Mais dans la nuit de l'Éclipse Éternelle, ils sont descendus des étoiles... Les Photophages. Des automates biomécaniques colossaux dévoreurs d'énergie, déterminés à piller notre technologie d'éclairage pour combler le vide glacial de leurs mondes mourants."
+        ),
+        StoryChapter(
+            id: 2,
+            title: "Capítulo III • La Arena y los 4 Beacons",
+            subtitle: "Poste, Piscina, Sheerit y el Borde Prismático al 100%",
+            badge: "OBJETIVO TÁCTICO",
+            scriptES: "Nos confinaron en esta arena de pruebas holográfica. Drenaron el cien por ciento de las luces para debilitarnos. Tu misión es sagrada: debes reactivar las cuatro luminarias maestras: el Poste, el Neón de la Piscina, el Neón Sheerit y el Borde Prismático. Cada luz devuelve la energía al sistema.",
+            scriptEN: "They locked us inside this holographic test arena, draining one hundred percent of the lights to weaken us. Your mission is sacred: reactivate the four master light beacons: the Post, the Pool Neon, the Sheerit Neon, and the Prism Rim. Every light restores power to the system.",
+            scriptPT: "Eles nos confinaram nesta arena de testes holográfica. Drenaram cem por cento das luzes para nos enfraquecer. Sua missão é sagrada: reative as quatro luminárias mestras: o Poste, o Neon da Piscina, o Neon Sheerit e a Borda Prismática. Cada luz devolve a energia ao sistema.",
+            scriptFR: "Ils nous ont enfermés dans cette arène d'entraînement holographique, drainant cent pour cent des lumières pour nous affaiblir. Votre mission est sacrée : réactivez les quatre balises maîtresses : le Poteau, le Néon de la Piscine, le Néon Sheerit et le Bord Prismatique. Chaque lumière restaure l'énergie du système."
+        ),
+        StoryChapter(
+            id: 3,
+            title: "Capítulo IV • La Refracción y el Salón Arcoíris",
+            subtitle: "Espejos, fluidos cuánticos y el tobogán subterráneo",
+            badge: "MECÁNICA FOTÓNICA",
+            scriptES: "La piscina no es agua ordinaria: es un condensador cuántico de refracción. Usa tu linterna y tu láser reflectante para doblar los haces contra los espejos. Cuando alcances la saturación total de luz, el tobogán abrirá el portal subterráneo hacia el legendario Gran Salón Arcoíris.",
+            scriptEN: "The pool is no ordinary water: it is a quantum refraction capacitor. Use your flashlight and reflective laser against mirrors to bend beams. When total light saturation is reached, the water slide unlocks the subterranean portal into the legendary Rainbow Hall.",
+            scriptPT: "A piscina não é água comum: é um condensador quântico de refração. Use sua lanterna e laser refletivo para dobrar feixes contra os espelhos. Quando alcançar a saturação total de luz, o toboágua abrirá o portal subterrâneo para o lendário Grande Salão Arco-Íris.",
+            scriptFR: "La piscine n'est pas de l'eau ordinaire : c'est un condensateur quantique de réfraction. Utilisez votre lampe torche et votre laser réfléchissant pour dévier les faisceaux contre les miroirs. Quand la saturation lumineuse totale sera atteinte, le toboggan débloquera le portail souterrain vers la légendaire Grande Salle Arc-en-ciel."
+        ),
+        StoryChapter(
+            id: 4,
+            title: "Capítulo V • La Revelación Final",
+            subtitle: "El secreto que cambiará el destino del cosmos para siempre",
+            badge: "GIRO DE GUIÓN // SPOILER",
+            scriptES: "Pero escucha la verdad oculta que nadie te dijo... Los invasores contra los que luchas no son monstruos de otra galaxia. Son NUESTROS PROPIOS HERMANOS. Son los slimes del futuro lejano, que renunciaron a su cuerpo orgánico y se transformaron en titanio para no morir de frío. No vienen a destruirnos... vienen desesperados a buscar la luz que perdieron al deshumanizarse. ¡No luches con odio! Enciende las luces, alcanza el cien por ciento... ¡y devuélveles la vida a través del Arcoíris!",
+            scriptEN: "Now listen to the ultimate truth... The invaders you are fighting are not alien monsters. They are OUR OWN KIND. Slimes from a distant future who surrendered their organic souls, turning into titanium to escape the cosmic cold. They did not come to destroy us... they are desperate to reclaim the light they lost when they cast away their humanity. Do not fight with hatred! Ignite the lights, reach one hundred percent... and restore their souls through the Rainbow!",
+            scriptPT: "Mas ouça a verdade oculta... Os invasores contra os quais você luta não são monstros alienígenas. São NOSSOS PRÓPRIOS IRMÃOS. São os slimes do futuro distante que renunciaram à sua alma orgânica e viraram titânio para fugir do frio estelar. Eles não vieram nos destruir... vieram desesperados recuperar a luz que perderam ao se desumanizar. Não lute com ódio! Acenda as luzes, atinja cem por cento... e devolva a vida a eles através do Arco-Íris!",
+            scriptFR: "Écoutez maintenant l'ultime vérité... Les envahisseurs que vous combattez ne sont pas des monstres extraterrestres. Ce sont NOS PROPRES FRÈRES. Des slimes d'un futur lointain qui ont abandonné leur âme organique pour devenir du titane face au froid stellaire. Ils ne viennent pas pour nous anéantir... ils cherchent désespérément à retrouver la lumière perdue en perdant leur humanité. Ne combattez pas avec haine ! Allumez les lumières, atteignez cent pour cent... et rendez-leur la vie à travers l'Arc-en-ciel !"
+        )
+    ]
+
+    override init() {
+        super.init()
+        synthesizer.delegate = self
+        let preferred = Locale.current.language.languageCode?.identifier ?? "es"
+        if ["es", "en", "pt", "fr"].contains(preferred) {
+            selectedLanguage = preferred
+        } else {
+            selectedLanguage = "es"
+        }
+    }
+
+    func startPrologue() {
+        currentChapterIndex = 0
+        isStoryCompleted = false
+        playCurrentChapter()
+    }
+
+    func playCurrentChapter() {
+        stopTypewriter()
+        synthesizer.stopSpeaking(at: .immediate)
+        displayedChars = 0
+
+        guard currentChapterIndex < Self.chapters.count else {
+            isStoryCompleted = true
+            isSpeaking = false
+            return
+        }
+
+        let chapter = Self.chapters[currentChapterIndex]
+        let text = chapter.script(for: selectedLanguage)
+
+        let charDelay = 0.035
+        typewriterTimer = Timer.scheduledTimer(withTimeInterval: charDelay, repeats: true) { [weak self] timer in
+            guard let self = self else { timer.invalidate(); return }
+            if self.displayedChars < text.count {
+                self.displayedChars += 1
+            } else {
+                timer.invalidate()
+            }
+        }
+
+        if !isMuted {
+            let utterance = AVSpeechUtterance(string: text)
+            let voiceCode: String
+            switch selectedLanguage {
+            case "en": voiceCode = "en-US"
+            case "pt": voiceCode = "pt-BR"
+            case "fr": voiceCode = "fr-FR"
+            default: voiceCode = "es-ES"
+            }
+            utterance.voice = AVSpeechSynthesisVoice(language: voiceCode) ?? AVSpeechSynthesisVoice(language: "en-US")
+            utterance.rate = 0.49
+            utterance.pitchMultiplier = 0.88
+            utterance.volume = 1.0
+            isSpeaking = true
+            synthesizer.speak(utterance)
+        } else {
+            isSpeaking = false
+        }
+    }
+
+    func nextChapter() {
+        if currentChapterIndex + 1 < Self.chapters.count {
+            currentChapterIndex += 1
+            playCurrentChapter()
+        } else {
+            isStoryCompleted = true
+            synthesizer.stopSpeaking(at: .immediate)
+        }
+    }
+
+    func previousChapter() {
+        if currentChapterIndex > 0 {
+            currentChapterIndex -= 1
+            playCurrentChapter()
+        }
+    }
+
+    func toggleMute() {
+        isMuted.toggle()
+        if isMuted {
+            synthesizer.stopSpeaking(at: .immediate)
+            isSpeaking = false
+        } else {
+            playCurrentChapter()
+        }
+    }
+
+    func changeLanguage(_ lang: String) {
+        selectedLanguage = lang
+        playCurrentChapter()
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.85) { [weak self] in
+            guard let self = self, self.isSpeaking else { return }
+            if self.currentChapterIndex + 1 < Self.chapters.count {
+                self.nextChapter()
+            } else {
+                self.isStoryCompleted = true
+                self.isSpeaking = false
+            }
+        }
+    }
+
+    private func stopTypewriter() {
+        typewriterTimer?.invalidate()
+        typewriterTimer = nil
+    }
+
+    func stopAll() {
+        stopTypewriter()
+        synthesizer.stopSpeaking(at: .immediate)
+        isSpeaking = false
+    }
+}
+
+struct CinematicPrologueView: View {
+    @ObservedObject var model: GameModel
+    @StateObject private var prologue = StoryPrologueManager()
+    @Environment(\.dismiss) private var dismiss
+    @State private var kenBurnsScale: CGFloat = 1.05
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            GeometryReader { geo in
+                ZStack {
+                    if let image = UIImage(named: "PrologueCover") {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: geo.size.width, height: geo.size.height)
+                            .scaleEffect(kenBurnsScale)
+                            .clipped()
+                    } else {
+                        LinearGradient(
+                            colors: [Color(red: 0.05, green: 0.02, blue: 0.12), Color(red: 0.02, green: 0.10, blue: 0.22), .black],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        .ignoresSafeArea()
+                    }
+
+                    LinearGradient(
+                        colors: [.black.opacity(0.35), .clear, .black.opacity(0.65), .black.opacity(0.95)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .ignoresSafeArea()
+                }
+            }
+            .ignoresSafeArea()
+            .onAppear {
+                withAnimation(.easeInOut(duration: 24).repeatForever(autoreverses: true)) {
+                    kenBurnsScale = 1.18
+                }
+                prologue.startPrologue()
+            }
+            .onDisappear {
+                prologue.stopAll()
+            }
+
+            VStack(spacing: 0) {
+                HStack(spacing: 10) {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 8, height: 8)
+                            .shadow(color: .red, radius: 4)
+                        Text("TRANSMISIÓN CUÁNTICA // FRECUENCIA LUMINA 0-7")
+                            .font(.system(size: 11, weight: .black, design: .monospaced))
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color.black.opacity(0.65), in: Capsule())
+                    .overlay(Capsule().stroke(Color.red.opacity(0.7), lineWidth: 1))
+
+                    Spacer()
+
+                    HStack(spacing: 4) {
+                        ForEach(["es", "en", "pt", "fr"], id: \.self) { lang in
+                            Button {
+                                prologue.changeLanguage(lang)
+                            } label: {
+                                Text(flagForLang(lang))
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundStyle(prologue.selectedLanguage == lang ? .white : .white.opacity(0.55))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 4)
+                                    .background(
+                                        prologue.selectedLanguage == lang ? Color.cyan.opacity(0.40) : Color.clear,
+                                        in: RoundedRectangle(cornerRadius: 6)
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .stroke(prologue.selectedLanguage == lang ? Color.cyan : Color.clear, lineWidth: 1)
+                                    )
+                            }
+                        }
+                    }
+                    .padding(3)
+                    .background(Color.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 8))
+
+                    Button {
+                        prologue.toggleMute()
+                    } label: {
+                        Image(systemName: prologue.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(prologue.isMuted ? Color.pink : Color.cyan)
+                            .frame(width: 32, height: 32)
+                            .background(Color.black.opacity(0.65), in: Circle())
+                            .overlay(Circle().stroke((prologue.isMuted ? Color.pink : Color.cyan).opacity(0.8), lineWidth: 1))
+                    }
+
+                    Button {
+                        completeAndClose()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text("OMITIR")
+                                .font(.system(size: 11, weight: .black, design: .rounded))
+                            Image(systemName: "forward.end.fill")
+                                .font(.system(size: 10, weight: .bold))
+                        }
+                        .foregroundStyle(.white.opacity(0.9))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.white.opacity(0.18), in: Capsule())
+                        .overlay(Capsule().stroke(Color.white.opacity(0.35), lineWidth: 1))
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 14)
+
+                Spacer()
+
+                HStack(spacing: 6) {
+                    ForEach(0..<StoryPrologueManager.chapters.count, id: \.self) { idx in
+                        Capsule()
+                            .fill(idx <= prologue.currentChapterIndex ? Color.cyan : Color.white.opacity(0.25))
+                            .frame(height: 3.5)
+                            .shadow(color: idx == prologue.currentChapterIndex ? Color.cyan.opacity(0.8) : Color.clear, radius: 3)
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 10)
+
+                let currentChapter = StoryPrologueManager.chapters[min(prologue.currentChapterIndex, StoryPrologueManager.chapters.count - 1)]
+                let fullScript = currentChapter.script(for: prologue.selectedLanguage)
+                let visibleText = String(fullScript.prefix(prologue.displayedChars))
+
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text(currentChapter.badge)
+                            .font(.system(size: 9, weight: .black, design: .monospaced))
+                            .foregroundStyle(.yellow)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(Color.yellow.opacity(0.20), in: Capsule())
+                            .overlay(Capsule().stroke(Color.yellow.opacity(0.7), lineWidth: 1))
+
+                        Text(currentChapter.title)
+                            .font(.system(size: 13, weight: .black, design: .rounded))
+                            .foregroundStyle(.white)
+
+                        Spacer()
+
+                        Text("PARTE \(prologue.currentChapterIndex + 1) / \(StoryPrologueManager.chapters.count)")
+                            .font(.system(size: 10, weight: .black, design: .monospaced))
+                            .foregroundStyle(Color.cyan)
+                    }
+
+                    Text(visibleText)
+                        .font(.system(size: 13.5, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.95))
+                        .lineSpacing(4)
+                        .frame(maxWidth: .infinity, minHeight: 64, alignment: .topLeading)
+
+                    HStack(spacing: 12) {
+                        Button {
+                            prologue.previousChapter()
+                        } label: {
+                            Image(systemName: "backward.fill")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(prologue.currentChapterIndex > 0 ? .white : .white.opacity(0.25))
+                                .frame(width: 34, height: 34)
+                                .background(Color.white.opacity(0.12), in: Circle())
+                        }
+                        .disabled(prologue.currentChapterIndex == 0)
+
+                        Button {
+                            prologue.playCurrentChapter()
+                        } label: {
+                            Image(systemName: "arrow.counterclockwise")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 34, height: 34)
+                                .background(Color.white.opacity(0.12), in: Circle())
+                        }
+
+                        Button {
+                            prologue.nextChapter()
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text(prologue.currentChapterIndex < StoryPrologueManager.chapters.count - 1 ? "SIGUIENTE PARTE" : "FINALIZAR HISTORIA")
+                                    .font(.system(size: 11, weight: .black, design: .rounded))
+                                Image(systemName: "forward.fill")
+                                    .font(.system(size: 10, weight: .bold))
+                            }
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(Color.cyan, in: Capsule())
+                            .shadow(color: Color.cyan.opacity(0.6), radius: 6)
+                        }
+
+                        Spacer()
+
+                        Button {
+                            completeAndClose()
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 14, weight: .bold))
+                                Text("ENTRAR A LA ARENA")
+                                    .font(.system(size: 12, weight: .black, design: .rounded))
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 10)
+                            .background(
+                                LinearGradient(colors: [Color.cyan, Color.pink], startPoint: .leading, endPoint: .trailing),
+                                in: Capsule()
+                            )
+                            .overlay(Capsule().stroke(Color.white.opacity(0.8), lineWidth: 1.5))
+                            .shadow(color: Color.pink.opacity(0.6), radius: 10)
+                        }
+                    }
+                }
+                .padding(16)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .background(Color.black.opacity(0.78), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(
+                            LinearGradient(colors: [Color.cyan.opacity(0.8), Color.pink.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                            lineWidth: 1.5
+                        )
+                )
+                .shadow(color: .black.opacity(0.7), radius: 20)
+                .padding(.horizontal, 18)
+                .padding(.bottom, 18)
+            }
+        }
+    }
+
+    private func flagForLang(_ lang: String) -> String {
+        switch lang {
+        case "en": return "🇺🇸 EN"
+        case "pt": return "🇧🇷 PT"
+        case "fr": return "🇫🇷 FR"
+        default: return "🇪🇸 ES"
+        }
+    }
+
+    private func completeAndClose() {
+        model.hasSeenIntroPrologue = true
+        prologue.stopAll()
+        dismiss()
+        if model.gameState != .playing {
+            model.startGame()
+        }
+    }
+}
+
 struct MainMenuView: View {
     @ObservedObject var model: GameModel
 
@@ -8141,7 +8769,11 @@ struct MainMenuView: View {
                         //  iOS 18 Control Center Liquid Glass Action Tiles (Paleta Unificada Cyan & Pink)
                         VStack(spacing: isCompactLandscape ? 9 : 14) {
                             Button {
-                                model.startGame()
+                                if model.isAnyMultiplayerConnected {
+                                    model.startGame()
+                                } else {
+                                    model.startSinglePlayerOrPrologue()
+                                }
                             } label: {
                                 HStack(spacing: 12) {
                                     Image(systemName: model.isAnyMultiplayerConnected ? "bolt.horizontal.circle.fill" : "play.fill")
@@ -8172,6 +8804,41 @@ struct MainMenuView: View {
                                     }
                                 )
                                 .shadow(color: Color(red: 1.0, green: 0.28, blue: 0.65).opacity(0.55), radius: 12)
+                            }
+                            .buttonStyle(.plain)
+
+                            // 🎬 Lore & Prólogo Cinematográfico (Narrado con IA y Concept Art)
+                            Button {
+                                model.showsPrologueScreen = true
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "film.stack.fill")
+                                        .font(isCompactLandscape ? .subheadline.bold() : .title3.bold())
+                                        .foregroundStyle(Color.yellow)
+                                    Text("LORE & PRÓLOGO: EL SECRETO DE LUMINA")
+                                        .font(isCompactLandscape ? .subheadline.bold() : .headline.bold())
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.80)
+                                }
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: isCompactLandscape ? 360 : 390, minHeight: isCompactLandscape ? 44 : 52)
+                                .background(
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: isCompactLandscape ? 16 : 22)
+                                            .fill(Color.white.opacity(0.14))
+                                            .background(Color.black.opacity(0.40), in: RoundedRectangle(cornerRadius: isCompactLandscape ? 16 : 22))
+                                        RoundedRectangle(cornerRadius: isCompactLandscape ? 16 : 22)
+                                            .stroke(
+                                                LinearGradient(
+                                                    colors: [Color.yellow.opacity(0.85), Color.orange.opacity(0.85)],
+                                                    startPoint: .leading,
+                                                    endPoint: .trailing
+                                                ),
+                                                lineWidth: 1.4
+                                            )
+                                    }
+                                )
+                                .shadow(color: Color.yellow.opacity(0.35), radius: 8)
                             }
                             .buttonStyle(.plain)
 
