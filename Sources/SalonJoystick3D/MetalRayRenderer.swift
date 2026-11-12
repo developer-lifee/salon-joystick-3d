@@ -219,7 +219,7 @@ private struct RTMeshBuilder {
         addTriangle(a, c, d, material: material)
     }
 
-    mutating func addBox(center: SIMD3<Float>, size: SIMD3<Float>, material: RTMaterial) {
+    mutating func addBox(center: SIMD3<Float>, size: SIMD3<Float>, material: RTMaterial, doubleSided: Bool = false) {
         let h = size * 0.5
         let p: [SIMD3<Float>] = [
             center + SIMD3<Float>(-h.x, -h.y, -h.z),
@@ -237,6 +237,14 @@ private struct RTMeshBuilder {
         addQuad(p[5], p[1], p[2], p[6], material: material)
         addQuad(p[3], p[7], p[6], p[2], material: material)
         addQuad(p[0], p[1], p[5], p[4], material: material)
+        if doubleSided {
+            addQuad(p[7], p[6], p[5], p[4], material: material)
+            addQuad(p[2], p[3], p[0], p[1], material: material)
+            addQuad(p[3], p[7], p[4], p[0], material: material)
+            addQuad(p[6], p[2], p[1], p[5], material: material)
+            addQuad(p[2], p[6], p[7], p[3], material: material)
+            addQuad(p[4], p[5], p[1], p[0], material: material)
+        }
     }
 
     mutating func addSphere(
@@ -3642,17 +3650,17 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if position.z > 18.0 {
             var highestPlatform: Float = 0.0
             for box in rtRainbowParkourBoxes {
-                let halfX = box.size.x * 0.5 + 0.26
-                let halfZ = box.size.z * 0.5 + 0.26
+                let halfX = box.size.x * 0.5 + 0.16
+                let halfZ = box.size.z * 0.5 + 0.16
                 if abs(position.x - box.center.x) <= halfX && abs(position.z - box.center.z) <= halfZ {
                     let topY = box.center.y + box.size.y * 0.5
                     let bottomY = box.center.y - box.size.y * 0.5
-                    // Solo aterriza en el techo de la cabaña o plataforma si los pies están cerca o por encima del borde superior
+                    // Si es un techo alto de cabaña (bottomY > 1.8), solo pararse si los pies están sobre el techo
                     if bottomY > 1.8 {
-                        if position.y >= topY - 0.55 {
+                        if position.y >= topY - 0.25 {
                             highestPlatform = max(highestPlatform, topY)
                         }
-                    } else if position.y >= topY - 0.58 {
+                    } else if position.y >= topY - 0.25 {
                         highestPlatform = max(highestPlatform, topY)
                     }
                 }
@@ -3878,15 +3886,29 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             if bottomY > 1.8 && position.y + 1.55 < bottomY {
                 continue
             }
-            // Si los pies del jugador ya están sobre o subiendo el escalón superior, no bloquear horizontalmente
-            if position.y >= topY - 0.48 {
+            // Si los pies del jugador están realmente sobre la superficie del cubo o escalón, permitir caminar libremente sobre él
+            if position.y >= topY - 0.05 {
                 continue
             }
+
             let halfX = box.size.x * 0.5 + playerRadius
             let halfZ = box.size.z * 0.5 + playerRadius
             let dx = position.x - box.center.x
             let dz = position.z - box.center.z
+
             if abs(dx) < halfX && abs(dz) < halfZ {
+                // Auto-step up para bordes o escalones bajos transitables (altura del escalón <= 0.45m sobre los pies del jugador):
+                let stepDiff = topY - position.y
+                if stepDiff > 0.0 && stepDiff <= 0.45 {
+                    let innerX = box.size.x * 0.5 + 0.12
+                    let innerZ = box.size.z * 0.5 + 0.12
+                    if abs(dx) < innerX && abs(dz) < innerZ {
+                        position.y = topY
+                        continue
+                    }
+                }
+
+                // Para paredes o bloques más altos que un escalón: ¡colisión sólida impenetrable que expulsa al jugador hacia afuera!
                 let overlapX = halfX - abs(dx)
                 let overlapZ = halfZ - abs(dz)
                 if overlapX < overlapZ {
@@ -4336,12 +4358,12 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 if tMin > 0.05 && tMin < closestHit {
                     closestHit = tMin
                 } else if tMax > 0.05 && tMin < 0 && tMax < closestHit {
-                    closestHit = min(closestHit, 0.20)
+                    closestHit = min(closestHit, 0.08)
                 }
             }
         }
 
-        let finalDist = max(0.35, min(maxDist, closestHit - cameraBumper))
+        let finalDist = max(0.08, min(maxDist, closestHit - cameraBumper))
         return origin + rayDir * finalDist
     }
 
@@ -5540,7 +5562,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 reflectivity: 0.0,
                 kind: 0
             )
-            builder.addBox(center: box.center, size: box.size, material: mat)
+            builder.addBox(center: box.center, size: box.size, material: mat, doubleSided: true)
         }
 
         return builder
