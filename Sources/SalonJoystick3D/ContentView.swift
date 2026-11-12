@@ -4,6 +4,7 @@ import Metal
 import StoreKit
 import Combine
 import GameController
+import GameKit
 
 enum GameCameraMode: Int {
     case thirdPerson
@@ -9410,12 +9411,12 @@ struct CinematicPrologueView: View {
                         .overlay(Capsule().stroke(Color.white.opacity(0.35), lineWidth: 1))
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 10)
+                .padding(.horizontal, 28)
+                .padding(.top, 16)
 
                 // Layout en Modo Paisaje: Viñeta Completa a la Izquierda | Subtítulos y Controles a la Derecha
                 HStack(spacing: 16) {
-                    // 🖼️ Panel Izquierdo: Viñeta Limpia y Completa sin Cortes ni Texto Encima
+                    // 🖼️ Panel Izquierdo: Viñeta Limpia y Completa sin Cortes ni Texto Encima (Touch & Hold para TikTok 2X)
                     GeometryReader { geo in
                         if let uiImg = UIImage(named: imgName) ?? UIImage(named: "PrologueCover") {
                             ZStack {
@@ -9439,6 +9440,22 @@ struct CinematicPrologueView: View {
                                     )
                             )
                             .shadow(color: Color.cyan.opacity(0.25), radius: 10)
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { _ in
+                                        if !prologue.isSpeedingUp {
+                                            prologue.setSpeedingUp(true)
+                                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                        }
+                                    }
+                                    .onEnded { _ in
+                                        if prologue.isSpeedingUp {
+                                            prologue.setSpeedingUp(false)
+                                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                        }
+                                    }
+                            )
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -9562,28 +9579,9 @@ struct CinematicPrologueView: View {
                     .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.white.opacity(0.20), lineWidth: 1))
                     .shadow(color: .black.opacity(0.4), radius: 10)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 12)
+                .padding(.horizontal, 28)
+                .padding(.bottom, 14)
             }
-
-            // Gesto TikTok 2X en toda la pantalla
-            Color.clear
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { _ in
-                            if !prologue.isSpeedingUp {
-                                prologue.setSpeedingUp(true)
-                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                            }
-                        }
-                        .onEnded { _ in
-                            if prologue.isSpeedingUp {
-                                prologue.setSpeedingUp(false)
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            }
-                        }
-                )
 
             // Indicador TikTok 2X
             if prologue.isSpeedingUp {
@@ -9606,9 +9604,11 @@ struct CinematicPrologueView: View {
                     Spacer()
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                .allowsHitTesting(false)
             }
         }
         .onAppear {
+            GKAccessPoint.shared.isActive = false
             prologue.startPrologue()
         }
         .onDisappear {
@@ -9627,6 +9627,7 @@ struct CinematicPrologueView: View {
 
     private func completeAndClose() {
         model.hasSeenIntroPrologue = true
+        model.showsPrologueScreen = false
         prologue.stopAll()
         dismiss()
         if model.gameState != .playing {

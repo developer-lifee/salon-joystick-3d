@@ -171,8 +171,8 @@ final class GameCenterManager: NSObject, ObservableObject {
 
     func configureAccessPoint() {
         GKAccessPoint.shared.location = .topLeading
-        GKAccessPoint.shared.showHighlights = true
-        GKAccessPoint.shared.isActive = true
+        GKAccessPoint.shared.showHighlights = false
+        GKAccessPoint.shared.isActive = false
     }
 
     func triggerGameCenterLogin() {
@@ -194,7 +194,7 @@ final class GameCenterManager: NSObject, ObservableObject {
             self.isAuthenticated = true
             self.localPlayerAlias = localPlayer.alias
             self.lastError = nil
-            GKAccessPoint.shared.isActive = true
+            GKAccessPoint.shared.isActive = false
             return
         }
         localPlayer.authenticateHandler = { [weak self] vc, error in
@@ -209,7 +209,7 @@ final class GameCenterManager: NSObject, ObservableObject {
                     self.isAuthenticated = true
                     self.localPlayerAlias = localPlayer.alias
                     self.lastError = nil
-                    GKAccessPoint.shared.isActive = true
+                    GKAccessPoint.shared.isActive = false
                 } else {
                     self.isAuthenticated = false
                     if let error {
