@@ -2622,6 +2622,18 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
     }
 
+    // 🛸 Centinelas Aéreos / Drones Voladores con Láser (Aparecen a partir de la Oleada 7)
+    private func isBotFlyingDrone(index: Int) -> Bool {
+        guard currentWave >= 7 else { return false }
+        if currentWave == 7 {
+            return index == 0
+        } else if currentWave == 8 {
+            return index == 0 || index == 1
+        } else {
+            return index == 0 || index == 1 || index == 2
+        }
+    }
+
     private func updateNPCSimulation(dt: Float, rawDt: Float) {
         if isVersusMode {
             // En modo Versus no hay bots; es un combate 1 vs 1 directo entre jugadores
@@ -2936,8 +2948,15 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             let distance = simd_length(offset)
             let rawDirection = distance > 0.001 ? offset / distance : SIMD2<Float>(0, 1)
 
+            let isFlying = isBotFlyingDrone(index: index)
+
             // Dynamic difficulty scaling per wave
-            let speed: Float = min(3.8, 1.4 + Float(currentWave) * 0.25 + Float(index == 0 ? 0.35 : 0.10))
+            let speed: Float
+            if isFlying {
+                speed = min(4.8, 2.4 + Float(currentWave) * 0.28)
+            } else {
+                speed = min(3.8, 1.4 + Float(currentWave) * 0.25 + Float(index == 0 ? 0.35 : 0.10))
+            }
             let botCooldown: Float = max(2.2, 5.5 - Float(currentWave) * 0.50)
             let aimSpeedScale: Float = min(10.0, 3.5 + Float(currentWave) * 0.75)
 
@@ -2960,7 +2979,19 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
             let botInRainbow = npcPositions[index].z > 17.8
             let playerInRainbow = targetPos.z > 17.8
-            if botInRainbow != playerInRainbow && abs(npcPositions[index].x) > 3.6 {
+            if isFlying {
+                // 🛸 Comportamiento táctico aéreo: órbita circular flotante y pasadas de ataque desde las alturas
+                let flyOrbitSign: Float = (index % 2 == 0) ? 1.0 : -1.0
+                let flyTangent = SIMD2<Float>(-rawDirection.y * flyOrbitSign, rawDirection.x * flyOrbitSign)
+                let idealFlyDist: Float = (index == 0) ? 7.2 : 9.5
+                if distance > idealFlyDist + 2.0 {
+                    tacticalDesiredDir = simd_normalize(rawDirection * 0.65 + flyTangent * 0.75)
+                } else if distance < idealFlyDist - 1.5 {
+                    tacticalDesiredDir = simd_normalize(-rawDirection * 0.70 + flyTangent * 0.70)
+                } else {
+                    tacticalDesiredDir = flyTangent
+                }
+            } else if botInRainbow != playerInRainbow && abs(npcPositions[index].x) > 3.6 {
                 // 🌈 Si el jugador cruzó al otro salón (Piscina <-> Salón Arcoíris), el bot se dirige primero al Gran Pórtico (X = 0, Z = 17.8)
                 let portalTarget = SIMD2<Float>(0.0, playerInRainbow ? 20.5 : 15.0)
                 let toPortal = portalTarget - SIMD2<Float>(npcPositions[index].x, npcPositions[index].z)
@@ -3137,10 +3168,24 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 }
             }
 
-            // Apply Scenario Rock, Cabin & Arena Collisions to NPCs
+            // 🛸 Vuelo aéreo dinámico (3.5m a 4.8m sobre el suelo) o contacto con suelo
+            if isFlying {
+                let hoverBase: Float = (index == 0) ? 3.8 : ((index == 1) ? 4.3 : 3.5)
+                let targetHoverY: Float = hoverBase + sin(elapsedTime * 2.5 + Float(index) * 1.8) * 0.45
+                npcPositions[index].y += (targetHoverY - npcPositions[index].y) * min(1.0, dt * 3.5)
+            } else {
+                let inPool = isInsidePoolXZ(npcPositions[index]) && npcPositions[index].y <= 0.35
+                let isSub = npcPositions[index].y <= -4.75
+                let groundY = isSub ? -11.0 : groundHeight(at: npcPositions[index], insidePool: inPool)
+                npcPositions[index].y += (groundY - npcPositions[index].y) * min(1.0, dt * 8.0)
+            }
+
+            // Apply Scenario Rock, Cabin & Arena Collisions to NPCs (los drones voladores planean por encima)
             var npcPos = SIMD3<Float>(proposedX, npcPositions[index].y, proposedZ)
-            resolveRockCollisions(position: &npcPos)
-            resolveParkourAndCabinCollisions(position: &npcPos)
+            if !isFlying {
+                resolveRockCollisions(position: &npcPos)
+                resolveParkourAndCabinCollisions(position: &npcPos)
+            }
             clampToArenaBounds(position: &npcPos, previousPosition: npcPositions[index], margin: 1.15)
 
             // Si el bot fue frenado por un muro, roca o estructura, anular la velocidad de empuje residual
@@ -3193,7 +3238,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
 
             let isTargetAlive = isTargetingRemote ? !remotePlayerIsRecovering : !isPlayerDead
-            let botHandOrigin = npcPositions[index] + SIMD3<Float>(0.42, 0.88, 0.20)
+            let botHandOrigin = npcPositions[index] + SIMD3<Float>(0.42, isFlying ? 0.35 : 0.88, 0.20)
             let targetCenter = targetPos + SIMD3<Float>(0, 1.10, 0)
             let bTotalDist = max(0.001, simd_distance(botHandOrigin, targetCenter))
             let bDir = simd_normalize(targetCenter - botHandOrigin)
@@ -4887,7 +4932,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
     private func makeNPCInstanceDescriptor(index: Int) -> MTLAccelerationStructureInstanceDescriptor {
         let isColossalGolem = (index == 4 && currentWave >= 3)
-        let baseScale: Float = isColossalGolem ? 1.65 : npcBaseScales[index]
+        let isFlying = isBotFlyingDrone(index: index)
+        let baseScale: Float = isColossalGolem ? 1.65 : (isFlying ? npcBaseScales[index] * 0.90 : npcBaseScales[index])
         let isFotofago = index >= 2
         let asIndex: UInt32 = isFotofago ? 11 : 4
         let isAlive = npcHealths[index] > 0 && npcRespawnTimers[index] <= 0 && !isWaveIntermission
@@ -4895,14 +4941,14 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let isMelting = !isAlive && melt > 0.005 && melt < 1.0 && !isWaveIntermission && !isVersusMode
 
         if isAlive {
-            // Animación pesada de respiración, gravitación de cristales y zancada del Fotófago / Gólem Colosal
-            let bobFreq: Float = isColossalGolem ? 2.4 : (isFotofago ? 3.4 : 5.8)
-            let bobAmp: Float = isColossalGolem ? 0.068 : (isFotofago ? 0.048 : 0.024)
-            let strideBob = abs(sin(elapsedTime * bobFreq + Float(index) * 1.4)) * bobAmp
+            // Animación pesada de respiración, gravitación de cristales y zancada del Fotófago / Gólem Colosal / Drones Aéreos
+            let bobFreq: Float = isFlying ? 4.2 : (isColossalGolem ? 2.4 : (isFotofago ? 3.4 : 5.8))
+            let bobAmp: Float = isFlying ? 0.085 : (isColossalGolem ? 0.068 : (isFotofago ? 0.048 : 0.024))
+            let strideBob = isFlying ? (sin(elapsedTime * bobFreq + Float(index) * 1.5) * bobAmp) : (abs(sin(elapsedTime * bobFreq + Float(index) * 1.4)) * bobAmp)
             let breathe = 1.0 + sin(elapsedTime * 2.6 + Float(index)) * 0.028
-            let swayPitch = sin(elapsedTime * (bobFreq * 0.5) + Float(index)) * (isFotofago ? 0.042 : 0.020)
+            let swayPitch: Float = isFlying ? -0.18 : sin(elapsedTime * (bobFreq * 0.5) + Float(index)) * (isFotofago ? 0.042 : 0.020)
             let pos = npcPositions[index] + SIMD3<Float>(0, strideBob, 0)
-            let scale = SIMD3<Float>(baseScale * breathe, baseScale, baseScale * breathe)
+            let scale = SIMD3<Float>(baseScale * breathe, isFlying ? baseScale * 0.85 : baseScale, baseScale * breathe)
             return Self.makeInstanceDescriptor(
                 translation: pos,
                 yaw: npcYaws[index],

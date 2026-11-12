@@ -845,6 +845,25 @@ struct ContentView: View {
                         .overlay(Capsule().stroke(Color.red.opacity(0.8), lineWidth: 1.2))
                         .padding(.top, 2)
                     }
+
+                    if model.currentWave >= 7 && (0..<min(2, model.npcHealths.count)).contains(where: { model.npcHealths[$0] > 0 }) {
+                        HStack(spacing: 6) {
+                            Text("🛸 AMENAZA AÉREA")
+                                .font(.system(size: 9, weight: .black, design: .monospaced))
+                                .foregroundStyle(Color.cyan)
+
+                            Text("DRONE LÁSER EN VUELO")
+                                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                .foregroundStyle(.white)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .background(Color.black.opacity(0.6), in: Capsule())
+                        .overlay(Capsule().stroke(Color.cyan.opacity(0.85), lineWidth: 1.2))
+                        .shadow(color: Color.cyan.opacity(0.4), radius: 6)
+                        .padding(.top, 2)
+                    }
                 }
 
                 if let achievement = model.recentlyUnlockedAchievement {
