@@ -611,6 +611,86 @@ private struct RTMeshBuilder {
         }
     }
 
+    // 👑 Cofre del Tesoro Ancestral Cuántico (Madera oscura, herrajes de oro macizo, tapa curvada abovedada y cerradura de gema)
+    mutating func addDetailedTreasureChest(
+        center: SIMD3<Float>,
+        woodMaterial: RTMaterial,
+        goldMaterial: RTMaterial,
+        gemMaterial: RTMaterial,
+        jewelMaterial: RTMaterial
+    ) {
+        let w: Float = 1.25 // Ancho
+        let h: Float = 0.60 // Alto de la base
+        let d: Float = 0.85 // Profundidad
+
+        // 1. Cuerpo principal del cofre (Madera antigua reforzada)
+        let bodyCenter = center + SIMD3<Float>(0, h * 0.5, 0)
+        addBox(center: bodyCenter, size: SIMD3<Float>(w, h, d), material: woodMaterial)
+
+        // 2. Tapa abovedada escalonada (Arched domed lid)
+        let lidBaseY = center.y + h
+        addBox(center: SIMD3<Float>(center.x, lidBaseY + 0.08, center.z), size: SIMD3<Float>(w * 1.02, 0.16, d * 1.02), material: goldMaterial)
+        addBox(center: SIMD3<Float>(center.x, lidBaseY + 0.20, center.z), size: SIMD3<Float>(w * 0.94, 0.12, d * 0.86), material: woodMaterial)
+        addBox(center: SIMD3<Float>(center.x, lidBaseY + 0.30, center.z), size: SIMD3<Float>(w * 0.82, 0.10, d * 0.65), material: woodMaterial)
+        addBox(center: SIMD3<Float>(center.x, lidBaseY + 0.37, center.z), size: SIMD3<Float>(w * 0.65, 0.06, d * 0.40), material: goldMaterial)
+
+        // 3. Bandas de refuerzo de oro reforzadas (Cinchas metálicas izquierda, derecha y centro)
+        let bandThickness: Float = 0.09
+        for xOffset: Float in [-w * 0.36, 0.0, w * 0.36] {
+            // Banda vertical en el cuerpo
+            addBox(center: bodyCenter + SIMD3<Float>(xOffset, 0, 0), size: SIMD3<Float>(bandThickness, h + 0.02, d + 0.03), material: goldMaterial)
+            // Banda en el arco de la tapa
+            addBox(center: SIMD3<Float>(center.x + xOffset, lidBaseY + 0.20, center.z), size: SIMD3<Float>(bandThickness, 0.28, d * 0.92), material: goldMaterial)
+        }
+
+        // 4. Cerrojo frontal dorado y Gema Cuántica Radiante
+        let lockY = center.y + h * 0.72
+        let lockZ = center.z + d * 0.5 + 0.025
+        addBox(center: SIMD3<Float>(center.x, lockY, lockZ), size: SIMD3<Float>(0.26, 0.28, 0.05), material: goldMaterial)
+        // Gema cuántica cian radiante incrustada en el candado
+        addSphere(center: SIMD3<Float>(center.x, lockY, lockZ + 0.025), radii: SIMD3<Float>(0.075, 0.075, 0.055), material: gemMaterial, segments: 10, rings: 6)
+
+        // 5. Destello de oro y gemas desbordantes en la ranura de la tapa
+        addBox(center: SIMD3<Float>(center.x, lidBaseY + 0.02, center.z + d * 0.46), size: SIMD3<Float>(w * 0.60, 0.05, 0.06), material: jewelMaterial)
+    }
+
+    // 🏛️ Gran Obelisco Ancestral de Lumina (Base escalonada, fuste estilizado, piramidión y runas de neón)
+    mutating func addDetailedObelisk(
+        center: SIMD3<Float>,
+        height: Float,
+        width: Float,
+        stoneMaterial: RTMaterial,
+        runeMaterial: RTMaterial,
+        tipMaterial: RTMaterial
+    ) {
+        // 1. Pedestal escalonado
+        addBox(center: center + SIMD3<Float>(0, 0.15, 0), size: SIMD3<Float>(width * 1.6, 0.30, width * 1.6), material: stoneMaterial)
+        addBox(center: center + SIMD3<Float>(0, 0.42, 0), size: SIMD3<Float>(width * 1.3, 0.26, width * 1.3), material: stoneMaterial)
+
+        // 2. Fuste principal del obelisco
+        let shaftBaseY = center.y + 0.55
+        let shaftHeight = height - 1.2
+        let shaftCenterY = shaftBaseY + shaftHeight * 0.5
+        addBox(center: SIMD3<Float>(center.x, shaftCenterY, center.z), size: SIMD3<Float>(width, shaftHeight, width), material: stoneMaterial)
+
+        // 3. Piramidión en la cúspide (Pyramidion Cap)
+        let capBaseY = shaftBaseY + shaftHeight
+        addBox(center: SIMD3<Float>(center.x, capBaseY + 0.16, center.z), size: SIMD3<Float>(width * 0.85, 0.32, width * 0.85), material: stoneMaterial)
+        addBox(center: SIMD3<Float>(center.x, capBaseY + 0.38, center.z), size: SIMD3<Float>(width * 0.60, 0.24, width * 0.60), material: stoneMaterial)
+        addBox(center: SIMD3<Float>(center.x, capBaseY + 0.54, center.z), size: SIMD3<Float>(width * 0.35, 0.20, width * 0.35), material: tipMaterial)
+
+        // 4. Runas bioluminiscentes grabadas en las 4 caras verticales (Bandas de luz cian empotradas)
+        let runeWidth: Float = width * 0.22
+        let runeHeight: Float = shaftHeight * 0.70
+        let runeY: Float = shaftCenterY
+        // Cara Norte y Sur
+        addBox(center: SIMD3<Float>(center.x, runeY, center.z + width * 0.505), size: SIMD3<Float>(runeWidth, runeHeight, 0.03), material: runeMaterial)
+        addBox(center: SIMD3<Float>(center.x, runeY, center.z - width * 0.505), size: SIMD3<Float>(runeWidth, runeHeight, 0.03), material: runeMaterial)
+        // Cara Este y Oeste
+        addBox(center: SIMD3<Float>(center.x + width * 0.505, runeY, center.z), size: SIMD3<Float>(0.03, runeHeight, runeWidth), material: runeMaterial)
+        addBox(center: SIMD3<Float>(center.x - width * 0.505, runeY, center.z), size: SIMD3<Float>(0.03, runeHeight, runeWidth), material: runeMaterial)
+    }
+
     enum CharacterPose {
         case stand
         case walk
@@ -1921,13 +2001,14 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     ladderCooldown = 0.50
                     verticalVelocity = 4.2
                     horizontalVelocity = SIMD2<Float>(0, 4.4)
-                    audio.playLanding(intensity: 0.35)
+                    audio.playLanding(intensity: 0.16)
                 } else if wantsUp {
                     verticalVelocity = 2.4 * max(0.5, magnitude)
                     ladderClimbTimer -= dt
                     if ladderClimbTimer <= 0 {
-                        audio.playLanding(intensity: 0.28)
-                        ladderClimbTimer = 0.26
+                        // Paso suave en peldaño metálico
+                        audio.playWaterDisturbance(intensity: 0.08)
+                        ladderClimbTimer = 0.32
                     }
                     if playerPosition.y >= 5.50 {
                         // Desembarco suave en la plataforma del tobogán
@@ -1936,14 +2017,15 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                         verticalVelocity = 0
                         isClimbingLadder = false
                         ladderCooldown = 0.35
-                        audio.playLanding(intensity: 0.45)
+                        audio.playLanding(intensity: 0.18)
                     }
                 } else if wantsDown {
                     verticalVelocity = -2.4 * max(0.5, magnitude)
                     ladderClimbTimer -= dt
                     if ladderClimbTimer <= 0 {
-                        audio.playLanding(intensity: 0.24)
-                        ladderClimbTimer = 0.28
+                        // Paso suave en peldaño metálico
+                        audio.playWaterDisturbance(intensity: 0.08)
+                        ladderClimbTimer = 0.32
                     }
                     if playerPosition.y <= 0.15 {
                         // Desembarco en el suelo
@@ -1951,7 +2033,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                         verticalVelocity = 0
                         isClimbingLadder = false
                         ladderCooldown = 0.30
-                        audio.playLanding(intensity: 0.35)
+                        audio.playLanding(intensity: 0.18)
                     }
                 } else {
                     verticalVelocity = 0
@@ -2159,8 +2241,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 if isSwimming {
                     swimStrokeTimer -= dt
                     if swimStrokeTimer <= 0 {
-                        audio.playSwimStrokeSound(intensity: 0.38 * magnitude)
-                        swimStrokeTimer = 0.50
+                        audio.playSwimStrokeSound(intensity: 0.20 * magnitude)
+                        swimStrokeTimer = 0.65
                     }
                 } else {
                     swimStrokeTimer = min(swimStrokeTimer, 0.12)
@@ -3877,32 +3959,29 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
         }
 
-        // 🌊 Lógica del pozo profundo y posito de 14 cm:
-        // EXCLUSIVO DEL TOBOGÁN: Si el jugador NO entró por el tobogán, el posito de agua
-        // es una superficie sólida intranspasable en Y = -0.14m en todas partes (incluyendo esquinas y bordes).
-        if enteredEasterEggViaToboggan {
-            if position.y < -0.30 {
+        // 🌊 Lógica del pozo profundo y buceo acuático en la piscina:
+        let floatCenter = SIMD2<Float>(floatPosition.x, floatPosition.z)
+        let distance = simd_distance(SIMD2<Float>(position.x, position.z), floatCenter)
+        let floatTop = floatPosition.y + 0.13
+        if distance < 0.84 && position.y >= floatTop - 0.10 {
+            return floatTop
+        }
+
+        if insidePool {
+            // Pedestal del cofre sumergido de la piscina (X: 0.2, Z: -1.5, Y = -2.10)
+            if position.x >= -0.7 && position.x <= 1.1 && position.z >= -2.2 && position.z <= -0.8 {
+                if position.y >= -2.05 {
+                    return -2.10
+                }
+            }
+            // Si el jugador bucea hacia abajo o nada sumergido, se sumerge libremente al abismo (-11.0m)
+            if position.y < -0.22 || enteredEasterEggViaToboggan {
                 return -11.0
             }
-            guard insidePool else { return 0 }
-            let floatCenter = SIMD2<Float>(floatPosition.x, floatPosition.z)
-            let distance = simd_distance(SIMD2<Float>(position.x, position.z), floatCenter)
-            let floatTop = floatPosition.y + 0.13
-            if distance < 0.84 && position.y >= floatTop - 0.10 {
-                return floatTop
-            }
-            return -11.0
-        } else {
-            // 🛡️ SIN TOBOGÁN: Imposible sumergirse o caer al vacío. El fondo es un suelo cerámico firme a -0.14m
-            guard insidePool else { return 0 }
-            let floatCenter = SIMD2<Float>(floatPosition.x, floatPosition.z)
-            let distance = simd_distance(SIMD2<Float>(position.x, position.z), floatCenter)
-            let floatTop = floatPosition.y + 0.13
-            if distance < 0.84 && position.y >= floatTop - 0.10 {
-                return floatTop
-            }
+            // En la superficie, el agua lo sostiene suavemente a -0.14m
             return -0.14
         }
+        return 0.0
     }
 
     private func clampToArenaBounds(
@@ -4307,11 +4386,42 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
     }
 
-    // 🌊 Colisión física subacuática sólida con obeliscos, turbinas, cofre y faroles cuánticos
+    // 🌊 Colisión física subacuática sólida con obeliscos, turbinas, cofres y faroles cuánticos
     private func resolveSubterraneanCollisions(position: inout SIMD3<Float>) {
-        guard enteredEasterEggViaToboggan && position.y < -0.20 else { return }
+        guard position.y < -0.20 else { return }
         let playerRadius: Float = 0.38
         var hitObstacle = false
+
+        // 0. Cofre del Tesoro Sumergido en la Piscina Superficial: (0.2, -2.10, -1.5), size: (1.35, 0.90, 0.95)
+        let poolChestCenter = SIMD3<Float>(0.2, -2.10, -1.5)
+        let poolChestHalf = SIMD3<Float>(0.68 + playerRadius, 0.50, 0.48 + playerRadius)
+        if position.y >= poolChestCenter.y - poolChestHalf.y && position.y <= poolChestCenter.y + poolChestHalf.y + 0.25 {
+            let dx = position.x - poolChestCenter.x
+            let dz = position.z - poolChestCenter.z
+            if abs(dx) < poolChestHalf.x && abs(dz) < poolChestHalf.z {
+                hitObstacle = true
+                let overlapX = poolChestHalf.x - abs(dx)
+                let overlapZ = poolChestHalf.z - abs(dz)
+                if overlapX < overlapZ {
+                    position.x += dx >= 0 ? overlapX : -overlapX
+                    horizontalVelocity.x *= 0.15
+                } else {
+                    position.z += dz >= 0 ? overlapZ : -overlapZ
+                    horizontalVelocity.y *= 0.15
+                }
+            }
+        }
+
+        // Si no ha bajado al abismo profundo mediante el tobogán o caída libre profunda, no evaluar obstáculos del piso -11m
+        guard enteredEasterEggViaToboggan || position.y < -3.0 else {
+            if hitObstacle {
+                let speed = simd_length(horizontalVelocity)
+                if speed > 0.45 {
+                    audio.playWaterDisturbance(intensity: 0.12)
+                }
+            }
+            return
+        }
 
         // 1. 3 Obeliscos Ancestrales Sumergidos
         struct SubObelisk {
@@ -4379,10 +4489,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
         }
 
-        // 3. Cofre del Tesoro Sumergido: (2.8, -9.5, -1.8), size: (1.2, 0.75, 0.85)
-        let chestCenter = SIMD3<Float>(2.8, -9.5, -1.8)
-        let chestHalfSize = SIMD3<Float>(0.60 + playerRadius, 0.45, 0.425 + playerRadius)
-        if position.y >= chestCenter.y - chestHalfSize.y && position.y <= chestCenter.y + chestHalfSize.y + 0.20 {
+        // 3. Gran Cofre Cuántico Abisal: (2.8, -11.38, -1.8), size: (1.35, 0.90, 0.95)
+        let chestCenter = SIMD3<Float>(2.8, -11.38, -1.8)
+        let chestHalfSize = SIMD3<Float>(0.68 + playerRadius, 0.50, 0.48 + playerRadius)
+        if position.y >= chestCenter.y - chestHalfSize.y && position.y <= chestCenter.y + chestHalfSize.y + 0.30 {
             let dx = position.x - chestCenter.x
             let dz = position.z - chestCenter.z
             if abs(dx) < chestHalfSize.x && abs(dz) < chestHalfSize.z {
@@ -4513,9 +4623,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             if inwardSpeed > 0 {
                 horizontalVelocity += normal * (inwardSpeed * 0.78)
                 if inwardSpeed > 1.6 && characterBumpAudioCooldown <= 0 {
-                    characterBumpAudioCooldown = 0.28
-                    let bumpIntensity = min(0.75, max(0.22, inwardSpeed / 4.5))
-                    audio.playLanding(intensity: bumpIntensity)
+                    characterBumpAudioCooldown = 0.35
+                    if playerPos.y < -0.20 {
+                        audio.playWaterDisturbance(intensity: 0.16)
+                    } else {
+                        // Suave rebote gelatinoso / elástico de slime
+                        audio.playLaserReflectionSound()
+                    }
                 }
             }
         }
@@ -5691,8 +5805,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let subWallNeonCyan = RTMaterial(color: SIMD3<Float>(0.0, 0.95, 1.0), roughness: 0.05, emission: SIMD3<Float>(0.6, 4.8, 7.5), reflectivity: 0.85, kind: 5)
         let subWallNeonEmerald = RTMaterial(color: SIMD3<Float>(0.0, 1.0, 0.6), roughness: 0.05, emission: SIMD3<Float>(0.4, 6.2, 3.8), reflectivity: 0.85, kind: 5)
         let bioCrystal = RTMaterial(color: SIMD3<Float>(0.10, 0.95, 0.85), roughness: 0.10, emission: SIMD3<Float>(0.20, 2.8, 3.8), reflectivity: 0.60)
-        let sunkenObelisk = RTMaterial(color: SIMD3<Float>(0.12, 0.18, 0.22), roughness: 0.65, reflectivity: 0.12)
-        let treasureGold = RTMaterial(color: SIMD3<Float>(0.98, 0.82, 0.12), roughness: 0.15, emission: SIMD3<Float>(0.45, 0.35, 0.05), reflectivity: 0.50)
+        let chestWood = RTMaterial(color: SIMD3<Float>(0.14, 0.09, 0.06), roughness: 0.70, reflectivity: 0.08)
+        let chestGold = RTMaterial(color: SIMD3<Float>(0.98, 0.82, 0.15), roughness: 0.18, emission: SIMD3<Float>(0.35, 0.28, 0.04), reflectivity: 0.72)
+        let chestGem = RTMaterial(color: SIMD3<Float>(0.05, 0.95, 1.0), roughness: 0.02, emission: SIMD3<Float>(0.8, 5.5, 7.5), reflectivity: 0.90, kind: 5)
+        let chestJewels = RTMaterial(color: SIMD3<Float>(1.0, 0.88, 0.25), roughness: 0.10, emission: SIMD3<Float>(1.8, 1.3, 0.3), reflectivity: 0.80, kind: 5)
+        let sunkenObeliskStone = RTMaterial(color: SIMD3<Float>(0.15, 0.20, 0.25), roughness: 0.60, reflectivity: 0.15)
+        let obeliskRuneCyan = RTMaterial(color: SIMD3<Float>(0.0, 0.95, 1.0), roughness: 0.02, emission: SIMD3<Float>(0.9, 5.5, 8.0), reflectivity: 0.90, kind: 5)
+        let obeliskTipGold = RTMaterial(color: SIMD3<Float>(0.98, 0.85, 0.20), roughness: 0.12, emission: SIMD3<Float>(1.5, 1.0, 0.25), reflectivity: 0.85, kind: 5)
         let generatorMetal = RTMaterial(color: SIMD3<Float>(0.25, 0.32, 0.38), roughness: 0.22, reflectivity: 0.70)
         let bubbleMat = RTMaterial(color: SIMD3<Float>(0.75, 0.95, 1.0), roughness: 0.02, emission: SIMD3<Float>(0.15, 0.65, 0.95), reflectivity: 0.85, kind: 5)
 
@@ -5746,10 +5865,31 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
         }
 
-        // Sunken Ancient Obelisks & Pillars
-        builder.addBox(center: SIMD3<Float>(-4.2, -7.5, -3.8), size: SIMD3<Float>(0.85, 5.0, 0.85), material: sunkenObelisk)
-        builder.addBox(center: SIMD3<Float>(3.8, -7.5, 2.8), size: SIMD3<Float>(0.85, 5.0, 0.85), material: sunkenObelisk)
-        builder.addBox(center: SIMD3<Float>(-3.2, -8.0, 3.2), size: SIMD3<Float>(0.75, 4.0, 0.75), material: sunkenObelisk)
+        // 🏛️ 1. Grandes Obeliscos Ancestrales con Pedestales Escalonados, Piramidiones y Runas Neón
+        builder.addDetailedObelisk(
+            center: SIMD3<Float>(-4.2, -11.45, -3.8),
+            height: 5.6,
+            width: 0.95,
+            stoneMaterial: sunkenObeliskStone,
+            runeMaterial: obeliskRuneCyan,
+            tipMaterial: obeliskTipGold
+        )
+        builder.addDetailedObelisk(
+            center: SIMD3<Float>(3.8, -11.45, 2.8),
+            height: 5.6,
+            width: 0.95,
+            stoneMaterial: sunkenObeliskStone,
+            runeMaterial: obeliskRuneCyan,
+            tipMaterial: obeliskTipGold
+        )
+        builder.addDetailedObelisk(
+            center: SIMD3<Float>(-3.2, -11.45, 3.2),
+            height: 4.8,
+            width: 0.85,
+            stoneMaterial: sunkenObeliskStone,
+            runeMaterial: obeliskRuneCyan,
+            tipMaterial: obeliskTipGold
+        )
 
         // Glowing Bioluminescent Crystals & Subterranean Illuminating Lamps
         let subLampEmitter = RTMaterial(color: SIMD3<Float>(0.10, 0.90, 0.98), roughness: 0.05, emission: SIMD3<Float>(0.85, 3.8, 5.5), reflectivity: 0.75)
@@ -5762,8 +5902,27 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         builder.addSphere(center: SIMD3<Float>(3.5, -9.2, 2.2), radii: SIMD3<Float>(repeating: 0.45), material: bioCrystal, segments: 8, rings: 5)
         builder.addSphere(center: SIMD3<Float>(1.8, -9.2, -4.2), radii: SIMD3<Float>(repeating: 0.40), material: bioCrystal, segments: 8, rings: 5)
 
-        // Sunken Treasure Chest
-        builder.addBox(center: SIMD3<Float>(2.8, -9.5, -1.8), size: SIMD3<Float>(1.2, 0.75, 0.85), material: treasureGold)
+        // 👑 2. Gran Cofre del Tesoro Abisal (Y = -11.6m en el piso de la cámara subterránea)
+        builder.addBox(center: SIMD3<Float>(2.8, -11.50, -1.8), size: SIMD3<Float>(2.0, 0.22, 1.6), material: poolTile)
+        builder.addDetailedTreasureChest(
+            center: SIMD3<Float>(2.8, -11.38, -1.8),
+            woodMaterial: chestWood,
+            goldMaterial: chestGold,
+            gemMaterial: chestGem,
+            jewelMaterial: chestJewels
+        )
+        builder.addSphere(center: SIMD3<Float>(2.8, -10.2, -1.8), radii: SIMD3<Float>(repeating: 0.35), material: chestGem, segments: 10, rings: 6)
+
+        // 💎 3. Cofre del Tesoro Sumergido en la Piscina Superficial (Visible claramente desde el deck y la superficie)
+        builder.addBox(center: SIMD3<Float>(0.2, -2.25, -1.5), size: SIMD3<Float>(1.8, 0.30, 1.4), material: poolTile)
+        builder.addDetailedTreasureChest(
+            center: SIMD3<Float>(0.2, -2.10, -1.5),
+            woodMaterial: chestWood,
+            goldMaterial: chestGold,
+            gemMaterial: chestGem,
+            jewelMaterial: chestJewels
+        )
+        builder.addSphere(center: SIMD3<Float>(0.2, -1.35, -1.5), radii: SIMD3<Float>(repeating: 0.28), material: chestGem, segments: 8, rings: 5)
 
         // 🏊‍♂️ Pozo de Agua / Piscina Profunda Subterránea
         // En la superficie se comporta como un posito de 10 cm, pero conecta directamente con la piscina abisal
