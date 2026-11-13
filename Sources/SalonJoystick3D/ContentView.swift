@@ -8571,7 +8571,8 @@ struct GameOptionsSheet: View {
                         Section("🖥️ Calidad Visual y Tasa de Cuadros") {
                             Picker("Límite de Fotogramas (FPS)", selection: $model.targetFPS) {
                                 Text("30 FPS (Ahorra Batería y Calor)").tag(30)
-                                Text("60 FPS (Fluidez Máxima)").tag(60)
+                                Text("60 FPS (Fluidez)").tag(60)
+                                Text("120 FPS (ProMotion, mejor con resolución Ligera)").tag(120)
                             }
 
                             Picker("Resolución interna 3D", selection: $model.renderResolution) {
