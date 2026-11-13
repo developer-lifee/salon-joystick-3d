@@ -306,6 +306,9 @@ struct MetalGameView: UIViewRepresentable {
     /// Con MetalFX el drawable va a resolución de salida y el ray tracing a la resolución interna elegida.
     private func applyResolution(to view: MTKView, renderer: MetalRayRenderer?) {
         let usesMetalFX = model.metalFXUpscalingEnabled && renderer?.supportsMetalFXUpscaling == true
+        renderer?.upscalingEnabled = usesMetalFX
+        renderer?.temporalUpscalingEnabled = model.metalFXTemporalEnabled
+        renderer?.dynamicResolutionEnabled = model.dynamicResolutionEnabled
         let tv = ExternalDisplayOutput.shared
         if model.isTVConnected, tv.screenPixelSize.height > 0 {
             // 📺 TV: ray tracing a la altura elegida (p. ej. 720p) y MetalFX hasta 2x sin pasar del TV

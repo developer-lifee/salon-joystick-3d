@@ -2104,6 +2104,8 @@ final class GameModel: ObservableObject {
     @AppStorage("adaptiveThermalScaling") var adaptiveThermalScaling: Bool = true
     @AppStorage("metalFXUpscalingEnabled") var metalFXUpscalingEnabled: Bool = true
     @AppStorage("tvRenderHeight") var tvRenderHeight: Int = 720
+    @AppStorage("metalFXTemporalEnabled") var metalFXTemporalEnabled: Bool = true
+    @AppStorage("dynamicResolutionEnabled") var dynamicResolutionEnabled: Bool = true
     @Published private(set) var isTVConnected = ExternalDisplayOutput.shared.isConnected
     @Published private(set) var thermalState = ProcessInfo.processInfo.thermalState
 
@@ -8627,6 +8629,10 @@ struct GameOptionsSheet: View {
                             Toggle("Mostrar Radar Minimapa Táctico", isOn: $model.showsMinimap)
                             Toggle("Mostrar contador de FPS", isOn: $model.showsFPS)
                             Toggle("Escalado MetalFX (más FPS, misma nitidez)", isOn: $model.metalFXUpscalingEnabled)
+                            if model.metalFXUpscalingEnabled {
+                                Toggle("MetalFX temporal (sin titileo)", isOn: $model.metalFXTemporalEnabled)
+                                Toggle("Resolución dinámica (FPS estables)", isOn: $model.dynamicResolutionEnabled)
+                            }
                             Toggle("Ajuste automático por calor", isOn: $model.adaptiveThermalScaling)
                             Picker("Resolución en TV (ray tracing)", selection: $model.tvRenderHeight) {
                                 Text("720p (60 FPS)").tag(720)

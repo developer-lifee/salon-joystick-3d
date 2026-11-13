@@ -4,6 +4,7 @@ import MetalFX
 import MetalKit
 import QuartzCore
 import simd
+import UIKit
 
 struct RTTriangleData {
     var normalRoughness: SIMD4<Float>
@@ -32,6 +33,11 @@ private struct RTUniforms {
     var chestCrystal0: SIMD4<Float>
     var chestCrystal1: SIMD4<Float>
     var chestCrystal2: SIMD4<Float>
+    var temporalParams: SIMD4<Float> = .zero
+    var prevCameraPosition: SIMD4<Float> = .zero
+    var prevCameraRight: SIMD4<Float> = .zero
+    var prevCameraUp: SIMD4<Float> = .zero
+    var prevCameraForward: SIMD4<Float> = .zero
 }
 
 private struct RTLaserResult {
@@ -1371,12 +1377,46 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     }
     private let frameSemaphore = DispatchSemaphore(value: maxFramesInFlight)
 
-    // 🔍 MetalFX: ray tracing a resolución interna y escalado espacial a la del drawable
+    // 🔍 MetalFX: ray tracing a resolución interna y escalado (temporal o espacial) a la del drawable
     var internalRenderRatio: Float = 1
+    var upscalingEnabled = false
+    var temporalUpscalingEnabled = true
+    var dynamicResolutionEnabled = true
     private(set) lazy var supportsMetalFXUpscaling = MTLFXSpatialScalerDescriptor.supportsDevice(device)
-    private var upscaler: MTLFXSpatialScaler?
-    private var upscaleInputTexture: MTLTexture?
-    private var upscaleOutputTexture: MTLTexture?
+    private lazy var supportsTemporalUpscaling = MTLFXTemporalScalerDescriptor.supportsDevice(device)
+    private var upscaleTargets: UpscaleTargets?
+    private var temporalNeedsReset = true
+    private var jitterIndex = 0
+    private var currentJitter = SIMD2<Float>.zero
+    private var writesTemporalData = false
+
+    // ⚖️ Resolución dinámica: fracción de la resolución interna según el tiempo de GPU
+    private var dynamicScale: Float = 1
+    private var lastGPUFrameTime: Double = 0
+    private var smoothedGPUFrameTime: Double = 0
+    private var framesSinceScaleChange = 0
+    private let depthCopyPipeline: MTLRenderPipelineState
+    private let depthCopyState: MTLDepthStencilState
+    private let placeholderDepthTexture: MTLTexture
+    private let placeholderMotionTexture: MTLTexture
+    // 🌌 Cielo HDR horneado al iniciar y materiales PBR (piso de pizarra, muros de concreto)
+    private let environmentTexture: MTLTexture
+    private let floorAlbedoTexture: MTLTexture
+    private let floorNormalTexture: MTLTexture
+    private let wallAlbedoTexture: MTLTexture
+    private let wallNormalTexture: MTLTexture
+
+    private struct UpscaleTargets {
+        let input: MTLTexture
+        let output: MTLTexture
+        let spatial: MTLFXSpatialScaler?
+        let temporal: MTLFXTemporalScaler?
+        let rawDepth: MTLTexture?
+        let depth: MTLTexture?
+        let motion: MTLTexture?
+        let minDynamicScale: Float
+        let key: [Int]
+    }
     private let audio: ChiptuneAudioEngine
 
     private var joystick = CGVector.zero
@@ -1496,9 +1536,42 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
               let function = library.makeFunction(name: "raytracePatio"),
               let waterFunction = library.makeFunction(name: "updateWaterHeight"),
               let waterVertexFunction = library.makeFunction(name: "updateWaterVertices"),
-              let laserFunction = library.makeFunction(name: "traceToolLaser") else {
+              let laserFunction = library.makeFunction(name: "traceToolLaser"),
+              let depthVertexFunction = library.makeFunction(name: "fullscreenTriangleVertex"),
+              let depthFragmentFunction = library.makeFunction(name: "copyDepthFragment") else {
             throw MetalRayRendererError.shaderMissing
         }
+        let depthCopyDescriptor = MTLRenderPipelineDescriptor()
+        depthCopyDescriptor.vertexFunction = depthVertexFunction
+        depthCopyDescriptor.fragmentFunction = depthFragmentFunction
+        depthCopyDescriptor.depthAttachmentPixelFormat = .depth32Float
+        let depthStateDescriptor = MTLDepthStencilDescriptor()
+        depthStateDescriptor.depthCompareFunction = .always
+        depthStateDescriptor.isDepthWriteEnabled = true
+        let placeholderDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r32Float, width: 1, height: 1, mipmapped: false)
+        placeholderDescriptor.usage = [.shaderWrite, .shaderRead]
+        placeholderDescriptor.storageMode = .private
+        let placeholderMotionDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rg16Float, width: 1, height: 1, mipmapped: false)
+        placeholderMotionDescriptor.usage = [.shaderWrite, .shaderRead]
+        placeholderMotionDescriptor.storageMode = .private
+        guard let depthCopyState = device.makeDepthStencilState(descriptor: depthStateDescriptor),
+              let placeholderDepthTexture = device.makeTexture(descriptor: placeholderDescriptor),
+              let placeholderMotionTexture = device.makeTexture(descriptor: placeholderMotionDescriptor) else {
+            throw MetalRayRendererError.resourceCreationFailed
+        }
+        self.depthCopyPipeline = try device.makeRenderPipelineState(descriptor: depthCopyDescriptor)
+        self.environmentTexture = try Self.bakeEnvironment(device: device, queue: commandQueue, library: library)
+        self.floorAlbedoTexture = Self.loadPBRTexture("PBRFloorAlbedoRough", srgb: true, device: device)
+            ?? Self.solidTexture(device: device, rgba: [90, 95, 100, 170])
+        self.floorNormalTexture = Self.loadPBRTexture("PBRFloorNormalHeight", srgb: false, device: device)
+            ?? Self.solidTexture(device: device, rgba: [128, 128, 255, 128])
+        self.wallAlbedoTexture = Self.loadPBRTexture("PBRWallAlbedoRough", srgb: true, device: device)
+            ?? Self.solidTexture(device: device, rgba: [172, 172, 170, 210])
+        self.wallNormalTexture = Self.loadPBRTexture("PBRWallNormalHeight", srgb: false, device: device)
+            ?? Self.solidTexture(device: device, rgba: [128, 128, 255, 128])
+        self.depthCopyState = depthCopyState
+        self.placeholderDepthTexture = placeholderDepthTexture
+        self.placeholderMotionTexture = placeholderMotionTexture
 
         self.device = device
         self.commandQueue = commandQueue
@@ -1863,16 +1936,29 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             // Conserva láseres de bots escritos entre frames (p. ej. sync multijugador)
             copyBotLasers(from: cpuLaserSlot, to: newestCompletedSlot)
             cpuLaserSlot = newestCompletedSlot
-            commandBuffer.addCompletedHandler { [weak self, frameSemaphore] _ in
+            commandBuffer.addCompletedHandler { [weak self, frameSemaphore] buffer in
                 if let self {
                     self.completedSlotLock.lock()
                     self.lastCompletedSlot = slot
+                    if buffer.gpuEndTime > buffer.gpuStartTime {
+                        self.lastGPUFrameTime = buffer.gpuEndTime - buffer.gpuStartTime
+                    }
                     self.completedSlotLock.unlock()
                 }
                 frameSemaphore.signal()
             }
-            let upscale = prepareUpscaler(for: drawable.texture)
+            let upscale = prepareUpscaleTargets(for: drawable.texture)
             let renderTarget = upscale?.input ?? drawable.texture
+            if let upscale {
+                updateDynamicScale(targets: upscale, preferredFPS: view.preferredFramesPerSecond)
+            } else {
+                dynamicScale = 1
+            }
+            let contentScale = upscale == nil ? 1 : dynamicScale
+            let contentWidth = max(1, Int((Float(renderTarget.width) * contentScale).rounded()))
+            let contentHeight = max(1, Int((Float(renderTarget.height) * contentScale).rounded()))
+            writesTemporalData = upscale?.temporal != nil
+            currentJitter = writesTemporalData ? nextJitter() : .zero
 
             let now = CACurrentMediaTime()
             // Ajusta el dt a múltiplos del refresco de pantalla: el ruido de timing hacía vibrar la cámara al avanzar
@@ -1889,7 +1975,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 audio.setWaterMovementIntensity(0)
             }
             writeInstanceDescriptors()
-            writeUniforms(texture: renderTarget, dt: effectiveDt)
+            writeUniforms(width: contentWidth, height: contentHeight, dt: effectiveDt)
             copyBotLasers(from: cpuLaserSlot, to: slot)
 
             var renderedWaterTexture = waterTextures[waterStateIndex]
@@ -1973,6 +2059,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 }
                 encoder.setBuffer(laserResultBuffers[slot], offset: 0, index: 3)
                 encoder.setTexture(renderTarget, index: 0)
+                encoder.setTexture(upscale?.rawDepth ?? placeholderDepthTexture, index: 2)
+                encoder.setTexture(upscale?.motion ?? placeholderMotionTexture, index: 3)
+                encoder.setTexture(floorAlbedoTexture, index: 4)
+                encoder.setTexture(floorNormalTexture, index: 5)
+                encoder.setTexture(wallAlbedoTexture, index: 6)
+                encoder.setTexture(wallNormalTexture, index: 7)
+                encoder.setTexture(environmentTexture, index: 8)
                 encoder.setTexture(renderedWaterTexture, index: 1)
                 if let staticAS = staticMesh.accelerationStructure { encoder.useResource(staticAS, usage: .read) }
                 if let playerAS = playerMesh.accelerationStructure { encoder.useResource(playerAS, usage: .read) }
@@ -1990,18 +2083,38 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 if let airPumpAS = airPumpMesh.accelerationStructure { encoder.useResource(airPumpAS, usage: .read) }
                 if let subDoorAS = subterraneanDoorMesh.accelerationStructure { encoder.useResource(subDoorAS, usage: .read) }
                 encoder.dispatchThreads(
-                    MTLSize(width: renderTarget.width, height: renderTarget.height, depth: 1),
+                    MTLSize(width: contentWidth, height: contentHeight, depth: 1),
                     threadsPerThreadgroup: MTLSize(width: 8, height: 8, depth: 1)
                 )
                 encoder.endEncoding()
             }
 
             if let upscale {
-                upscale.scaler.colorTexture = upscale.input
-                upscale.scaler.outputTexture = upscale.output
-                upscale.scaler.inputContentWidth = upscale.input.width
-                upscale.scaler.inputContentHeight = upscale.input.height
-                upscale.scaler.encode(commandBuffer: commandBuffer)
+                if let temporal = upscale.temporal, let rawDepth = upscale.rawDepth,
+                   let depth = upscale.depth, let motion = upscale.motion {
+                    encodeDepthCopy(from: rawDepth, to: depth, commandBuffer: commandBuffer)
+                    temporal.colorTexture = upscale.input
+                    temporal.depthTexture = depth
+                    temporal.motionTexture = motion
+                    temporal.outputTexture = upscale.output
+                    temporal.inputContentWidth = contentWidth
+                    temporal.inputContentHeight = contentHeight
+                    // El shader desplaza la muestra +jitter; MetalFX quiere el desplazamiento que deshace eso
+                    temporal.jitterOffsetX = -currentJitter.x
+                    temporal.jitterOffsetY = -currentJitter.y
+                    temporal.motionVectorScaleX = 1
+                    temporal.motionVectorScaleY = 1
+                    temporal.isDepthReversed = true
+                    temporal.reset = temporalNeedsReset
+                    temporalNeedsReset = false
+                    temporal.encode(commandBuffer: commandBuffer)
+                } else if let spatial = upscale.spatial {
+                    spatial.colorTexture = upscale.input
+                    spatial.outputTexture = upscale.output
+                    spatial.inputContentWidth = contentWidth
+                    spatial.inputContentHeight = contentHeight
+                    spatial.encode(commandBuffer: commandBuffer)
+                }
                 if let blit = commandBuffer.makeBlitCommandEncoder() {
                     blit.copy(from: upscale.output, to: drawable.texture)
                     blit.endEncoding()
@@ -2036,44 +2149,190 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             .copyMemory(from: laserResultBuffers[source].contents() + start, byteCount: length)
     }
 
-    private func prepareUpscaler(for drawable: MTLTexture) -> (scaler: MTLFXSpatialScaler, input: MTLTexture, output: MTLTexture)? {
-        guard supportsMetalFXUpscaling, internalRenderRatio < 0.99 else { return nil }
-        let inputWidth = max(1, Int((Float(drawable.width) * internalRenderRatio).rounded()))
-        let inputHeight = max(1, Int((Float(drawable.height) * internalRenderRatio).rounded()))
-        if let scaler = upscaler, let input = upscaleInputTexture, let output = upscaleOutputTexture,
-           input.width == inputWidth, input.height == inputHeight,
-           output.width == drawable.width, output.height == drawable.height,
-           output.pixelFormat == drawable.pixelFormat {
-            return (scaler, input, output)
+    private func prepareUpscaleTargets(for drawable: MTLTexture) -> UpscaleTargets? {
+        guard upscalingEnabled, supportsMetalFXUpscaling else {
+            upscaleTargets = nil
+            return nil
+        }
+        let ratio = min(1, max(0.1, internalRenderRatio))
+        let inputWidth = max(1, Int((Float(drawable.width) * ratio).rounded()))
+        let inputHeight = max(1, Int((Float(drawable.height) * ratio).rounded()))
+        let wantsTemporal = temporalUpscalingEnabled && supportsTemporalUpscaling && !isSplitScreenMode
+        let wantsDynamic = dynamicResolutionEnabled
+        let key = [inputWidth, inputHeight, drawable.width, drawable.height,
+                   Int(drawable.pixelFormat.rawValue), wantsTemporal ? 1 : 0, wantsDynamic ? 1 : 0]
+        if let targets = upscaleTargets, targets.key == key {
+            return targets
         }
 
-        let descriptor = MTLFXSpatialScalerDescriptor()
-        descriptor.inputWidth = inputWidth
-        descriptor.inputHeight = inputHeight
-        descriptor.outputWidth = drawable.width
-        descriptor.outputHeight = drawable.height
-        descriptor.colorTextureFormat = drawable.pixelFormat
-        descriptor.outputTextureFormat = drawable.pixelFormat
-        descriptor.colorProcessingMode = .perceptual
-        guard let scaler = descriptor.makeSpatialScaler(device: device) else { return nil }
+        let format = drawable.pixelFormat
+        let outputScale = Float(drawable.width) / Float(inputWidth)
+        var temporal: MTLFXTemporalScaler?
+        var minDynamicScale: Float = wantsDynamic ? 0.5 : 1
+        if wantsTemporal {
+            let maxSupported = MTLFXTemporalScalerDescriptor.supportedInputContentMaxScale(device: device)
+            minDynamicScale = wantsDynamic ? max(0.5, outputScale / maxSupported) : 1
+            let descriptor = MTLFXTemporalScalerDescriptor()
+            descriptor.inputWidth = inputWidth
+            descriptor.inputHeight = inputHeight
+            descriptor.outputWidth = drawable.width
+            descriptor.outputHeight = drawable.height
+            descriptor.colorTextureFormat = format
+            descriptor.outputTextureFormat = format
+            descriptor.depthTextureFormat = .depth32Float
+            descriptor.motionTextureFormat = .rg16Float
+            descriptor.isAutoExposureEnabled = false
+            descriptor.isInputContentPropertiesEnabled = true
+            descriptor.inputContentMinScale = outputScale
+            descriptor.inputContentMaxScale = min(maxSupported, outputScale / minDynamicScale)
+            temporal = descriptor.makeTemporalScaler(device: device)
+        }
+        var spatial: MTLFXSpatialScaler?
+        if temporal == nil {
+            let descriptor = MTLFXSpatialScalerDescriptor()
+            descriptor.inputWidth = inputWidth
+            descriptor.inputHeight = inputHeight
+            descriptor.outputWidth = drawable.width
+            descriptor.outputHeight = drawable.height
+            descriptor.colorTextureFormat = format
+            descriptor.outputTextureFormat = format
+            descriptor.colorProcessingMode = .perceptual
+            spatial = descriptor.makeSpatialScaler(device: device)
+            guard spatial != nil else { return nil }
+        }
 
-        let inputDescriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: drawable.pixelFormat, width: inputWidth, height: inputHeight, mipmapped: false
-        )
-        inputDescriptor.usage = scaler.colorTextureUsage.union([.shaderRead, .shaderWrite])
-        inputDescriptor.storageMode = .private
-        let outputDescriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: drawable.pixelFormat, width: drawable.width, height: drawable.height, mipmapped: false
-        )
-        outputDescriptor.usage = scaler.outputTextureUsage.union(.shaderRead)
-        outputDescriptor.storageMode = .private
-        guard let input = device.makeTexture(descriptor: inputDescriptor),
-              let output = device.makeTexture(descriptor: outputDescriptor) else { return nil }
+        func makeTexture(_ pixelFormat: MTLPixelFormat, _ width: Int, _ height: Int, _ usage: MTLTextureUsage) -> MTLTexture? {
+            let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: pixelFormat, width: width, height: height, mipmapped: false)
+            descriptor.usage = usage
+            descriptor.storageMode = .private
+            return device.makeTexture(descriptor: descriptor)
+        }
+        let colorUsage = temporal?.colorTextureUsage ?? spatial?.colorTextureUsage ?? []
+        let outputUsage = temporal?.outputTextureUsage ?? spatial?.outputTextureUsage ?? []
+        guard let input = makeTexture(format, inputWidth, inputHeight, colorUsage.union([.shaderRead, .shaderWrite])),
+              let output = makeTexture(format, drawable.width, drawable.height, outputUsage.union(.shaderRead)) else {
+            return nil
+        }
+        var rawDepth: MTLTexture?
+        var depth: MTLTexture?
+        var motion: MTLTexture?
+        if let temporal {
+            rawDepth = makeTexture(.r32Float, inputWidth, inputHeight, [.shaderWrite, .shaderRead])
+            depth = makeTexture(.depth32Float, inputWidth, inputHeight, temporal.depthTextureUsage.union(.renderTarget))
+            motion = makeTexture(.rg16Float, inputWidth, inputHeight, temporal.motionTextureUsage.union([.shaderWrite, .shaderRead]))
+            guard rawDepth != nil, depth != nil, motion != nil else { return nil }
+        }
 
-        upscaler = scaler
-        upscaleInputTexture = input
-        upscaleOutputTexture = output
-        return (scaler, input, output)
+        let targets = UpscaleTargets(
+            input: input, output: output, spatial: spatial, temporal: temporal,
+            rawDepth: rawDepth, depth: depth, motion: motion,
+            minDynamicScale: minDynamicScale, key: key
+        )
+        upscaleTargets = targets
+        temporalNeedsReset = true
+        dynamicScale = 1
+        return targets
+    }
+
+    /// Baja la resolución interna si la GPU no llega al presupuesto del frame y la sube cuando sobra tiempo.
+    /// Promedia el tiempo de GPU y cambia en pasos de 5 % con pausa entre cambios: si cambia cada frame la imagen "respira".
+    private func updateDynamicScale(targets: UpscaleTargets, preferredFPS: Int) {
+        guard dynamicResolutionEnabled, targets.minDynamicScale < 1 else {
+            dynamicScale = 1
+            return
+        }
+        completedSlotLock.lock()
+        let gpuTime = lastGPUFrameTime
+        completedSlotLock.unlock()
+        guard gpuTime > 0 else { return }
+        smoothedGPUFrameTime = smoothedGPUFrameTime == 0 ? gpuTime : smoothedGPUFrameTime * 0.9 + gpuTime * 0.1
+        framesSinceScaleChange += 1
+        guard framesSinceScaleChange >= 20 else { return }
+
+        let budget = 0.9 / Double(max(30, preferredFPS))
+        var newScale = dynamicScale
+        if smoothedGPUFrameTime > budget {
+            // El costo escala con el área: corregimos con la raíz y bajamos al menos un paso
+            let target = dynamicScale * Float((budget / smoothedGPUFrameTime).squareRoot())
+            newScale = min(dynamicScale - 0.05, (target / 0.05).rounded(.down) * 0.05)
+        } else if smoothedGPUFrameTime < budget * 0.7 {
+            newScale = ((dynamicScale + 0.05) / 0.05).rounded() * 0.05
+        }
+        newScale = min(1, max(targets.minDynamicScale, newScale))
+        if newScale != dynamicScale {
+            dynamicScale = newScale
+            framesSinceScaleChange = 0
+        }
+    }
+
+    private func nextJitter() -> SIMD2<Float> {
+        func halton(_ index: Int, _ base: Int) -> Float {
+            var result: Float = 0
+            var fraction: Float = 1
+            var i = index
+            while i > 0 {
+                fraction /= Float(base)
+                result += fraction * Float(i % base)
+                i /= base
+            }
+            return result
+        }
+        jitterIndex = jitterIndex % 32 + 1
+        return SIMD2<Float>(halton(jitterIndex, 2) - 0.5, halton(jitterIndex, 3) - 0.5)
+    }
+
+    private static func bakeEnvironment(device: MTLDevice, queue: MTLCommandQueue, library: MTLLibrary) throws -> MTLTexture {
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba16Float, width: 2048, height: 1024, mipmapped: true)
+        descriptor.usage = [.shaderRead, .shaderWrite]
+        descriptor.storageMode = .private
+        guard let function = library.makeFunction(name: "bakeNightEnvironment"),
+              let texture = device.makeTexture(descriptor: descriptor),
+              let commandBuffer = queue.makeCommandBuffer(),
+              let encoder = commandBuffer.makeComputeCommandEncoder() else {
+            throw MetalRayRendererError.resourceCreationFailed
+        }
+        encoder.setComputePipelineState(try device.makeComputePipelineState(function: function))
+        encoder.setTexture(texture, index: 0)
+        encoder.dispatchThreads(MTLSize(width: texture.width, height: texture.height, depth: 1),
+                                threadsPerThreadgroup: MTLSize(width: 8, height: 8, depth: 1))
+        encoder.endEncoding()
+        if let blit = commandBuffer.makeBlitCommandEncoder() {
+            blit.generateMipmaps(for: texture)
+            blit.endEncoding()
+        }
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+        return texture
+    }
+
+    private static func loadPBRTexture(_ name: String, srgb: Bool, device: MTLDevice) -> MTLTexture? {
+        guard let asset = NSDataAsset(name: name) else { return nil }
+        return try? MTKTextureLoader(device: device).newTexture(data: asset.data, options: [
+            .SRGB: srgb,
+            .generateMipmaps: true,
+            .textureUsage: MTLTextureUsage.shaderRead.rawValue,
+            .textureStorageMode: MTLStorageMode.private.rawValue
+        ])
+    }
+
+    private static func solidTexture(device: MTLDevice, rgba: [UInt8]) -> MTLTexture {
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba8Unorm, width: 1, height: 1, mipmapped: false)
+        let texture = device.makeTexture(descriptor: descriptor)!
+        texture.replace(region: MTLRegionMake2D(0, 0, 1, 1), mipmapLevel: 0, withBytes: rgba, bytesPerRow: 4)
+        return texture
+    }
+
+    private func encodeDepthCopy(from source: MTLTexture, to destination: MTLTexture, commandBuffer: MTLCommandBuffer) {
+        let pass = MTLRenderPassDescriptor()
+        pass.depthAttachment.texture = destination
+        pass.depthAttachment.loadAction = .dontCare
+        pass.depthAttachment.storeAction = .store
+        guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) else { return }
+        encoder.setRenderPipelineState(depthCopyPipeline)
+        encoder.setDepthStencilState(depthCopyState)
+        encoder.setFragmentTexture(source, index: 0)
+        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+        encoder.endEncoding()
     }
 
     private var pendingDamageAccumulator: Float = 0
@@ -5352,7 +5611,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         return origin + rayDir * finalDist
     }
 
-    private func writeUniforms(texture: MTLTexture, dt: Float) {
+    private func writeUniforms(width: Int, height: Int, dt: Float) {
         let currentlyInPool = isInsidePoolXZ(playerPosition) && playerPosition.y <= 0.35
         let inGeyserShaft = enteredEasterEggViaToboggan && playerPosition.z > 18.0 && playerPosition.y < 0.25
         let isSubterraneanTarget = enteredEasterEggViaToboggan && (playerPosition.y <= -4.75 || inGeyserShaft)
@@ -5561,7 +5820,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if simd_length_squared(right) < 0.0001 { right = SIMD3<Float>(1, 0, 0) }
         right = simd_normalize(right)
         let up = simd_normalize(simd_cross(right, cameraForward))
-        let aspect = Float(texture.width) / max(1, Float(texture.height))
+        let aspect = Float(width) / max(1, Float(height))
         let imagePlaneHeight = tan(fieldOfView * .pi / 360)
         let toolOrigin: SIMD3<Float>
         var toolDirection: SIMD3<Float>
@@ -5683,7 +5942,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         let crystals = active3DChestID.map { currentChestCrystalPositions(chestID: $0) } ?? [.zero, .zero, .zero]
         var uniforms = RTUniforms(
-            viewport: SIMD4<Float>(Float(texture.width), Float(texture.height), elapsedTime, rayBouncesEnabled ? 1 : 0),
+            viewport: SIMD4<Float>(Float(width), Float(height), elapsedTime, rayBouncesEnabled ? 1 : 0),
             cameraPosition: SIMD4<Float>(cameraPosition, 1),
             cameraRight: SIMD4<Float>(right * aspect * imagePlaneHeight, 0),
             cameraUp: SIMD4<Float>(up * imagePlaneHeight, 0),
@@ -5709,6 +5968,15 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             chestCrystal1: SIMD4<Float>(crystals[1], active3DChestCrystals[1] ? 1.0 : 0.0),
             chestCrystal2: SIMD4<Float>(crystals[2], active3DChestCrystals[2] ? 1.0 : 0.0)
         )
+        uniforms.temporalParams = SIMD4<Float>(currentJitter.x, currentJitter.y, writesTemporalData ? 1 : 0, 0)
+        uniforms.prevCameraPosition = SIMD4<Float>(lastCameraPosition, 1)
+        uniforms.prevCameraRight = SIMD4<Float>(lastCameraRight, 0)
+        uniforms.prevCameraUp = SIMD4<Float>(lastCameraUp, 0)
+        uniforms.prevCameraForward = SIMD4<Float>(lastCameraForward, 0)
+        // Saltos de cámara (warp, respawn) invalidan el historial temporal
+        if simd_distance(cameraPosition, lastCameraPosition) > 2.5 {
+            temporalNeedsReset = true
+        }
         lastCameraPosition = cameraPosition
         lastCameraRight = right * aspect * imagePlaneHeight
         lastCameraUp = up * imagePlaneHeight

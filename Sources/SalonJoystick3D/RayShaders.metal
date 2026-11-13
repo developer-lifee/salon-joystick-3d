@@ -25,6 +25,12 @@ struct RTUniforms {
     float4 chestCrystal0;
     float4 chestCrystal1;
     float4 chestCrystal2;
+    // MetalFX temporal: xy = jitter en píxeles, z = escribir profundidad/movimiento
+    float4 temporalParams;
+    float4 prevCameraPosition;
+    float4 prevCameraRight;
+    float4 prevCameraUp;
+    float4 prevCameraForward;
 };
 
 struct RTLaserResult {
@@ -70,6 +76,107 @@ inline float3 toneMap(float3 color) {
     color = max(color * 1.28f, 0.0f);
     color = color / (1.0f + color);
     return pow(color, float3(1.0f / 2.2f));
+}
+
+// MARK: - 🌌 Entorno HDR y materiales PBR
+
+constexpr sampler pbrSampler(address::repeat, filter::linear, mip_filter::linear);
+constexpr sampler environmentSampler(s_address::repeat, t_address::clamp_to_edge, filter::linear, mip_filter::linear);
+
+inline float2 equirectUV(float3 direction) {
+    return float2(atan2(direction.z, direction.x) * (0.5f / M_PI_F) + 0.5f,
+                  acos(clamp(direction.y, -1.0f, 1.0f)) / M_PI_F);
+}
+
+inline float3 sampleEnvironment(texture2d<half> environment, float3 direction, float lod) {
+    return float3(environment.sample(environmentSampler, equirectUV(direction), level(lod)).rgb);
+}
+
+/// En compute no hay derivadas: el mip sale del tamaño del píxel proyectado sobre la superficie.
+inline float textureLOD(float distance, float3 rayDirection, float3 normal, float texelsPerMeter, float pixelAngle) {
+    float cosTheta = max(0.25f, abs(dot(rayDirection, normal)));
+    float footprint = distance * pixelAngle / cosTheta;
+    return max(0.0f, log2(max(footprint * texelsPerMeter, 1e-4f)));
+}
+
+struct PBRSample {
+    float3 albedo;
+    float roughness;
+    float3 normal;
+};
+
+inline PBRSample samplePBR(texture2d<half> albedoRough, texture2d<half> normalHeight, float2 uv, float lod,
+                           float3 tangent, float3 bitangent, float3 normal) {
+    half4 ar = albedoRough.sample(pbrSampler, uv, level(lod));
+    half4 nh = normalHeight.sample(pbrSampler, uv, level(lod));
+    float3 tangentNormal = float3(nh.xyz) * 2.0f - 1.0f;
+    PBRSample result;
+    result.albedo = float3(ar.rgb);
+    result.roughness = float(ar.a);
+    result.normal = normalize(tangent * tangentNormal.x + bitangent * tangentNormal.y + normal * tangentNormal.z);
+    return result;
+}
+
+inline float envHash(float3 p) {
+    p = fract(p * 0.1031f);
+    p += dot(p, p.zyx + 31.32f);
+    return fract((p.x + p.y) * p.z);
+}
+
+inline float envValueNoise(float3 p) {
+    float3 i = floor(p);
+    float3 f = fract(p);
+    f = f * f * (3.0f - 2.0f * f);
+    float n000 = envHash(i), n100 = envHash(i + float3(1, 0, 0));
+    float n010 = envHash(i + float3(0, 1, 0)), n110 = envHash(i + float3(1, 1, 0));
+    float n001 = envHash(i + float3(0, 0, 1)), n101 = envHash(i + float3(1, 0, 1));
+    float n011 = envHash(i + float3(0, 1, 1)), n111 = envHash(i + float3(1, 1, 1));
+    return mix(mix(mix(n000, n100, f.x), mix(n010, n110, f.x), f.y),
+               mix(mix(n001, n101, f.x), mix(n011, n111, f.x), f.y), f.z);
+}
+
+/// Se ejecuta una sola vez al iniciar: cielo nocturno HDR equirectangular (luna, estrellas, nubes, resplandor urbano).
+kernel void bakeNightEnvironment(texture2d<half, access::write> environment [[texture(0)]],
+                                 uint2 gid [[thread_position_in_grid]]) {
+    if (gid.x >= environment.get_width() || gid.y >= environment.get_height()) {
+        return;
+    }
+    float2 uv = (float2(gid) + 0.5f) / float2(environment.get_width(), environment.get_height());
+    float phi = (uv.x - 0.5f) * 2.0f * M_PI_F;
+    float theta = uv.y * M_PI_F;
+    float3 d = float3(sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi));
+    float up = d.y;
+
+    float3 zenith = float3(0.05f, 0.07f, 0.14f);
+    float3 horizon = float3(0.24f, 0.27f, 0.36f);
+    float3 sky = mix(horizon, zenith, pow(saturate(up), 0.45f));
+    sky += float3(0.30f, 0.17f, 0.08f) * exp(-max(up, 0.0f) * 9.0f) * 0.55f;
+
+    float3 moonDirection = normalize(float3(0.42f, 0.38f, -0.82f));
+    float moonCos = dot(d, moonDirection);
+    float moonAngle = acos(clamp(moonCos, -1.0f, 1.0f));
+    float moonDisc = smoothstep(0.034f, 0.030f, moonAngle);
+    float maria = envValueNoise(d * 220.0f) * 0.6f + envValueNoise(d * 520.0f) * 0.4f;
+    float3 moon = float3(1.0f, 0.96f, 0.88f) * 14.0f * (0.72f + 0.28f * maria) * moonDisc;
+    sky += float3(0.55f, 0.60f, 0.75f) * (exp(-moonAngle * 9.0f) * 0.35f + exp(-moonAngle * 40.0f) * 0.6f);
+
+    float3 starCell = floor(d * 380.0f);
+    float3 starLocal = fract(d * 380.0f) - 0.5f;
+    float star = step(0.9965f, envHash(starCell)) * pow(envHash(starCell + 7.1f), 6.0f) * 6.0f;
+    star *= smoothstep(0.5f, 0.1f, length(starLocal)) * smoothstep(0.02f, 0.25f, up);
+
+    float3 cloudPos = d / max(up + 0.12f, 0.05f) * 1.4f + float3(3.1f, 0.0f, 1.7f);
+    float cloudNoise = envValueNoise(cloudPos) * 0.5f + envValueNoise(cloudPos * 2.1f) * 0.27f +
+                       envValueNoise(cloudPos * 4.3f) * 0.15f + envValueNoise(cloudPos * 8.7f) * 0.08f;
+    float cloud = smoothstep(0.52f, 0.78f, cloudNoise) * smoothstep(0.0f, 0.15f, up);
+    float3 cloudColor = float3(0.16f, 0.17f, 0.22f) + float3(0.50f, 0.52f, 0.60f) * pow(saturate(moonCos * 0.5f + 0.5f), 6.0f);
+
+    sky = mix(sky + star * (1.0f - cloud), cloudColor, cloud * 0.85f);
+    sky += moon * (1.0f - cloud * 0.7f);
+    if (up < 0.0f) {
+        sky = mix(sky, float3(0.035f, 0.035f, 0.04f), saturate(-up * 6.0f));
+    }
+    environment.write(half4(half3(min(sky, 60.0f)), 1.0h), gid);
 }
 
 inline float3 simulatedWaterNormal(
@@ -1140,7 +1247,14 @@ kernel void raytracePatio(
     instance_acceleration_structure accelerationStructure [[buffer(2)]],
     constant RTLaserResult &laserResult [[buffer(3)]],
     texture2d<half, access::write> output [[texture(0)]],
-    texture2d<float, access::read> waterState [[texture(1)]]) {
+    texture2d<float, access::read> waterState [[texture(1)]],
+    texture2d<float, access::write> depthOut [[texture(2)]],
+    texture2d<float, access::write> motionOut [[texture(3)]],
+    texture2d<half> floorAlbedoRough [[texture(4)]],
+    texture2d<half> floorNormalHeight [[texture(5)]],
+    texture2d<half> wallAlbedoRough [[texture(6)]],
+    texture2d<half> wallNormalHeight [[texture(7)]],
+    texture2d<half> environment [[texture(8)]]) {
 
     uint width = uint(uniforms.viewport.x);
     uint height = uint(uniforms.viewport.y);
@@ -1150,7 +1264,7 @@ kernel void raytracePatio(
 
     bool rayBouncesEnabled = uniforms.viewport.w > 0.5f;
     bool firstPerson = uniforms.waterSimulation.z > 0.5f;
-    float2 pixel = float2(tid) + 0.5f;
+    float2 pixel = float2(tid) + 0.5f + uniforms.temporalParams.xy;
     float2 uv = pixel / float2(width, height) * 2.0f - 1.0f;
     uv.y = -uv.y;
 
@@ -1240,6 +1354,8 @@ kernel void raytracePatio(
     }
 
     currentRay.max_distance = 145.0f;
+    // Ángulo que cubre un píxel: base para elegir el mip de las texturas PBR
+    float pixelAngle = 2.0f * length(uniforms.cameraUp.xyz) / float(height);
     float3 primaryOrigin = currentRay.origin;
     float3 primaryDirection = currentRay.direction;
     float firstSurfaceDistance = currentRay.max_distance;
@@ -1369,7 +1485,7 @@ kernel void raytracePatio(
             float totalLights = uniforms.lightStates.x + uniforms.lightStates.y + uniforms.lightStates.z + uniforms.lightStates.w;
             float lightScale = clamp(totalLights / 0.8f, 0.0f, 1.0f);
             if (isHardwareRT) {
-                accumulated += throughput * nightSky(currentRay.direction) * lightScale;
+                accumulated += throughput * sampleEnvironment(environment, currentRay.direction, bounce > 0 ? 1.5f : 0.0f) * lightScale;
                 break;
             }
 
@@ -1439,7 +1555,7 @@ kernel void raytracePatio(
             if (!analytical.hit) {
                 float totalLights = uniforms.lightStates.x + uniforms.lightStates.y + uniforms.lightStates.z + uniforms.lightStates.w;
                 float lightScale = clamp(totalLights / 0.8f, 0.0f, 1.0f);
-                accumulated += throughput * nightSky(currentRay.direction) * lightScale;
+                accumulated += throughput * sampleEnvironment(environment, currentRay.direction, bounce > 0 ? 1.5f : 0.0f) * lightScale;
                 break;
             }
             if (bounce == 0) {
@@ -1502,9 +1618,11 @@ kernel void raytracePatio(
         } else if (kind > 2.5f && kind < 3.5f) {
             if (position.y > -0.15f && position.y < 0.06f && normal.y > 0.88f) {
                 // 💧 Zonas orgánicas de piso húmedo vs. losa seca (charcos realistas por zonas, no en todo el piso)
-                float2 grid = fract(position.xz * 2.2f);
-                float grout = step(0.04f, grid.x) * step(0.04f, grid.y);
-                float3 groutBump = float3((1.0f - grout) * 0.09f, 0.0f, (1.0f - grout) * 0.09f);
+                // 🪨 Losas de pizarra PBR: 2 losas por textura, alineadas con la rejilla de 1/2.2 m
+                float floorLod = textureLOD(length(position - uniforms.cameraPosition.xyz), currentRay.direction,
+                                            float3(0.0f, 1.0f, 0.0f), 1126.4f, pixelAngle) + float(bounce);
+                PBRSample slate = samplePBR(floorAlbedoRough, floorNormalHeight, position.xz * 1.1f, floorLod,
+                                            float3(1.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 1.0f), float3(0.0f, 1.0f, 0.0f));
 
                 float2 pWet = position.xz;
                 float wetWave1 = sin(pWet.x * 0.42f + cos(pWet.y * 0.38f) * 1.6f) * cos(pWet.y * 0.45f - sin(pWet.x * 0.34f) * 1.4f);
@@ -1514,12 +1632,11 @@ kernel void raytracePatio(
                 float wetMask = smoothstep(0.14f, 0.46f, wetField);
 
                 float3 wetRipple = shallowPuddleNormal(position * 0.85f, uniforms.waterSimulation.y * 0.55f) * (0.14f * wetMask);
-                normal = normalize(normal + groutBump * (1.0f - wetMask * 0.72f) + float3(wetRipple.x, 0.0f, wetRipple.z));
+                normal = normalize(mix(slate.normal, normal, wetMask * 0.72f) + float3(wetRipple.x, 0.0f, wetRipple.z));
 
-                float3 dryAlbedo = float3(0.11f, 0.14f, 0.16f) * (0.82f + 0.18f * grout);
                 float3 wetAlbedo = float3(0.022f, 0.032f, 0.044f);
-                albedo = mix(dryAlbedo, wetAlbedo, wetMask);
-                roughness = mix(0.76f, 0.015f, wetMask);
+                albedo = mix(slate.albedo, wetAlbedo, wetMask);
+                roughness = mix(slate.roughness, 0.015f, wetMask);
 
                 float viewCosine = saturate(dot(-currentRay.direction, normal));
                 float fresnel = pow(1.0f - viewCosine, 2.2f);
@@ -1557,8 +1674,16 @@ kernel void raytracePatio(
             // 🧱 Muros Perimetrales: Paneles Modulares Cyber / Titanio con Juntas Biseladas Suaves
             float distToCam = length(position - uniforms.cameraPosition.xyz);
             float distDetailFade = smoothstep(8.0f, 3.0f, distToCam);
+            float wallCoordH = (abs(normal.x) > 0.5f) ? position.z : position.x;
+            // 🧱 Concreto de encofrado PBR (tile de 2 m); el color del muro se conserva y la textura aporta el detalle
+            float3 wallTangent = (abs(normal.x) > 0.5f) ? float3(0.0f, 0.0f, 1.0f) : float3(1.0f, 0.0f, 0.0f);
+            float wallLod = textureLOD(distToCam, currentRay.direction, normal, 512.0f, pixelAngle) + float(bounce);
+            PBRSample concrete = samplePBR(wallAlbedoRough, wallNormalHeight, float2(wallCoordH, -position.y) * 0.5f, wallLod,
+                                           wallTangent, float3(0.0f, -1.0f, 0.0f), normal);
+            albedo *= concrete.albedo / 0.42f;
+            normal = concrete.normal;
+            roughness = concrete.roughness;
             if (distDetailFade > 0.005f) {
-                float wallCoordH = (abs(normal.x) > 0.5f) ? position.z : position.x;
                 float wallCoordV = position.y;
 
                 // Juntas modulares de paneles cada 2.4m horizontales y 2.0m verticales
@@ -1572,9 +1697,7 @@ kernel void raytracePatio(
                 // Sombra ambiental en las hendiduras de las juntas de los paneles
                 float seamShadow = mix(mix(0.60f, 1.0f, panelSeam), 1.0f, 1.0f - distDetailFade);
                 albedo = albedo * seamShadow;
-                roughness = mix(0.65f, 0.92f, panelSeam);
-            } else {
-                roughness = 0.92f;
+                roughness *= mix(0.8f, 1.0f, panelSeam);
             }
             baseReflectivity = 0.0f;
         } else if (obsidianSurface) {
@@ -1685,7 +1808,10 @@ kernel void raytracePatio(
         // Iluminación ambiental: oscuridad absoluta (0.0f) cuando las luces están apagadas para forzar el uso de la linterna
         float ambientBase = (0.135f * lightScale) * fotofagoDrain;
         float skyAmbient = ambientBase + ambientBase * saturate(normal.y);
-        float3 direct = albedo * skyAmbient;
+        // El cielo HDR tiñe la luz ambiental (mip muy borroso = irradiancia aproximada), sin cambiar su intensidad
+        float3 envIrradiance = sampleEnvironment(environment, normal, 8.0f);
+        float3 envTint = envIrradiance / max(dot(envIrradiance, float3(0.2126f, 0.7152f, 0.0722f)), 1e-3f);
+        float3 direct = albedo * skyAmbient * mix(float3(1.0f), envTint, 0.6f);
         if (position.y < -4.0f) {
             // 🌊 Radiación bioluminiscente submarina constante: luz turquesa-esmeralda para que todo el abismo sea mágico y visible
             direct += albedo * float3(0.24f, 0.48f, 0.62f);
@@ -2247,5 +2373,43 @@ kernel void raytracePatio(
         }
     }
 
+    if (uniforms.temporalParams.z > 0.5f) {
+        // Profundidad invertida (1 = cerca) y movimiento hacia el píxel del frame anterior
+        float viewZ = max(1e-3f, firstSurfaceDistance * dot(primaryDirection, normalize(uniforms.cameraForward.xyz)));
+        depthOut.write(float4(saturate(0.05f / viewZ)), tid);
+
+        float3 worldHit = primaryOrigin + primaryDirection * firstSurfaceDistance;
+        float3 rel = worldHit - uniforms.prevCameraPosition.xyz;
+        float3 prevRight = uniforms.prevCameraRight.xyz;
+        float3 prevUp = uniforms.prevCameraUp.xyz;
+        float3 prevForward = uniforms.prevCameraForward.xyz;
+        float depthAlong = dot(rel, prevForward) / max(1e-6f, dot(prevForward, prevForward));
+        float2 motion = float2(0.0f);
+        if (depthAlong > 1e-3f) {
+            float prevU = dot(rel, prevRight) / (depthAlong * max(1e-6f, dot(prevRight, prevRight)));
+            float prevV = dot(rel, prevUp) / (depthAlong * max(1e-6f, dot(prevUp, prevUp)));
+            float2 prevPixel = float2((prevU + 1.0f) * 0.5f * float(width), (1.0f - prevV) * 0.5f * float(height));
+            motion = prevPixel - pixel;
+        }
+        motionOut.write(float4(motion, 0.0f, 0.0f), tid);
+    }
+
     output.write(half4(half3(toneMap(clamp(accumulated, 0.0f, 96.0f))), half(1.0f)), tid);
+}
+
+struct DepthCopyOut {
+    float depth [[depth(any)]];
+};
+
+vertex float4 fullscreenTriangleVertex(uint vid [[vertex_id]]) {
+    float2 p = float2(float((vid << 1) & 2), float(vid & 2));
+    return float4(p * 2.0f - 1.0f, 0.0f, 1.0f);
+}
+
+// MetalFX temporal pide una textura de profundidad real; el compute escribe r32Float y aquí la copiamos.
+fragment DepthCopyOut copyDepthFragment(float4 position [[position]],
+                                        texture2d<float, access::read> source [[texture(0)]]) {
+    DepthCopyOut out;
+    out.depth = source.read(uint2(position.xy)).r;
+    return out;
 }
