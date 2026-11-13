@@ -2098,6 +2098,33 @@ final class GameModel: ObservableObject {
     @AppStorage("touchControlsOpacity") var touchControlsOpacity: Double = 0.85
     @AppStorage("advancedReflectionsEnabled") var advancedReflectionsEnabled: Bool = true
     @AppStorage("targetFPS") var targetFPS: Int = 60
+    @AppStorage("adaptiveThermalScaling") var adaptiveThermalScaling: Bool = true
+    @AppStorage("metalFXUpscalingEnabled") var metalFXUpscalingEnabled: Bool = true
+    @Published private(set) var thermalState = ProcessInfo.processInfo.thermalState
+
+    // 🌡️ Con el iPhone caliente, iOS baja la GPU: bajamos resolución/FPS antes de que se trabe
+    var isThermalThrottling: Bool {
+        adaptiveThermalScaling && (thermalState == .serious || thermalState == .critical)
+    }
+
+    var effectiveRenderScale: CGFloat {
+        let scale = renderResolution.scale
+        guard adaptiveThermalScaling else { return scale }
+        switch thermalState {
+        case .critical: return min(scale, GameRenderResolution.ultraLight.scale)
+        case .serious: return min(scale, GameRenderResolution.light.scale)
+        default: return scale
+        }
+    }
+
+    var effectiveTargetFPS: Int {
+        guard adaptiveThermalScaling else { return targetFPS }
+        switch thermalState {
+        case .critical: return min(targetFPS, 30)
+        case .serious: return min(targetFPS, 60)
+        default: return targetFPS
+        }
+    }
     @AppStorage("cameraSensitivity") var cameraSensitivity: Double = 1.0
     @Published var isEditingHUDLayout: Bool = false {
         didSet {
@@ -2599,6 +2626,11 @@ final class GameModel: ObservableObject {
     }
 
     init() {
+        NotificationCenter.default.publisher(for: ProcessInfo.thermalStateDidChangeNotification)
+            .map { _ in ProcessInfo.processInfo.thermalState }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in self?.thermalState = state }
+            .store(in: &cancellables)
         if !UIDevice.isDuoSupported {
             duoScreenModeRaw = 0 // Si no es un iPhone Duo, se asegura pantalla estándar normal
         }
@@ -8585,6 +8617,13 @@ struct GameOptionsSheet: View {
                             Toggle("Tema Vidrio Líquido (Apple Liquid Glass)", isOn: $model.isLiquidGlassUIEnabled)
                             Toggle("Mostrar Radar Minimapa Táctico", isOn: $model.showsMinimap)
                             Toggle("Mostrar contador de FPS", isOn: $model.showsFPS)
+                            Toggle("Escalado MetalFX (más FPS, misma nitidez)", isOn: $model.metalFXUpscalingEnabled)
+                            Toggle("Ajuste automático por calor", isOn: $model.adaptiveThermalScaling)
+                            if model.isThermalThrottling {
+                                Text("🌡️ iPhone caliente: resolución y FPS reducidos temporalmente.")
+                                    .font(.caption)
+                                    .foregroundStyle(.orange)
+                            }
                         }
 
                     case .audio:

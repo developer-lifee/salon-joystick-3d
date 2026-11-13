@@ -1,5 +1,6 @@
 import Foundation
 import Metal
+import MetalFX
 import MetalKit
 import QuartzCore
 import simd
@@ -1327,8 +1328,20 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private let waterVertexPipeline: MTLComputePipelineState
     private let laserPipeline: MTLComputePipelineState
     private let waterTextures: [MTLTexture]
-    private let uniformBuffer: MTLBuffer
-    private let laserResultBuffer: MTLBuffer
+    // ⚙️ Triple buffering: la CPU prepara el siguiente frame mientras la GPU dibuja el actual
+    private static let maxFramesInFlight = 3
+    private var frameSlot = 0
+    private let completedSlotLock = NSLock()
+    private var lastCompletedSlot = 0
+    private let uniformBuffers: [MTLBuffer]
+    private let laserResultBuffers: [MTLBuffer]
+    private var uniformBuffer: MTLBuffer { uniformBuffers[frameSlot] }
+    /// Lecturas de la CPU: resultados del último frame que la GPU ya terminó.
+    private var laserResultBuffer: MTLBuffer {
+        completedSlotLock.lock()
+        defer { completedSlotLock.unlock() }
+        return laserResultBuffers[lastCompletedSlot]
+    }
     private let staticMesh: RTMeshResources
     private let playerMesh: RTMeshResources
     private let playerWalkMesh: RTMeshResources
@@ -1344,11 +1357,28 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private let rainbowGateMesh: RTMeshResources
     private let airPumpMesh: RTMeshResources
     private let subterraneanDoorMesh: RTMeshResources
-    private let instanceBuffer: MTLBuffer
-    private var instanceDescriptor: MTLInstanceAccelerationStructureDescriptor?
-    private var instanceAccelerationStructure: MTLAccelerationStructure?
-    private var instanceScratchBuffer: MTLBuffer?
-    private let frameSemaphore = DispatchSemaphore(value: 1)
+    private let instanceBuffers: [MTLBuffer]
+    private var instanceDescriptors: [MTLInstanceAccelerationStructureDescriptor] = []
+    private var instanceAccelerationStructures: [MTLAccelerationStructure] = []
+    private var instanceScratchBuffers: [MTLBuffer] = []
+    private var instanceBuffer: MTLBuffer { instanceBuffers[frameSlot] }
+    private var instanceDescriptor: MTLInstanceAccelerationStructureDescriptor? {
+        instanceDescriptors.isEmpty ? nil : instanceDescriptors[frameSlot]
+    }
+    private var instanceAccelerationStructure: MTLAccelerationStructure? {
+        instanceAccelerationStructures.isEmpty ? nil : instanceAccelerationStructures[frameSlot]
+    }
+    private var instanceScratchBuffer: MTLBuffer? {
+        instanceScratchBuffers.isEmpty ? nil : instanceScratchBuffers[frameSlot]
+    }
+    private let frameSemaphore = DispatchSemaphore(value: maxFramesInFlight)
+
+    // 🔍 MetalFX: ray tracing a resolución interna y escalado espacial a la del drawable
+    var internalRenderRatio: Float = 1
+    private(set) lazy var supportsMetalFXUpscaling = MTLFXSpatialScalerDescriptor.supportsDevice(device)
+    private var upscaler: MTLFXSpatialScaler?
+    private var upscaleInputTexture: MTLTexture?
+    private var upscaleOutputTexture: MTLTexture?
     private let audio: ChiptuneAudioEngine
 
     private var joystick = CGVector.zero
@@ -1509,17 +1539,23 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
         }
 
-        guard let uniformBuffer = device.makeBuffer(
-            length: MemoryLayout<RTUniforms>.stride,
-            options: .storageModeShared
-        ), let laserResultBuffer = device.makeBuffer(
-            length: MemoryLayout<RTLaserResult>.stride,
-            options: .storageModeShared
-        ) else {
-            throw MetalRayRendererError.resourceCreationFailed
+        var uniformBuffers: [MTLBuffer] = []
+        var laserResultBuffers: [MTLBuffer] = []
+        for _ in 0..<Self.maxFramesInFlight {
+            guard let uniformBuffer = device.makeBuffer(
+                length: MemoryLayout<RTUniforms>.stride,
+                options: .storageModeShared
+            ), let laserResultBuffer = device.makeBuffer(
+                length: MemoryLayout<RTLaserResult>.stride,
+                options: .storageModeShared
+            ) else {
+                throw MetalRayRendererError.resourceCreationFailed
+            }
+            uniformBuffers.append(uniformBuffer)
+            laserResultBuffers.append(laserResultBuffer)
         }
-        self.uniformBuffer = uniformBuffer
-        self.laserResultBuffer = laserResultBuffer
+        self.uniformBuffers = uniformBuffers
+        self.laserResultBuffers = laserResultBuffers
 
         let staticBuilder = Self.makeStaticScene()
         let playerBuilder = Self.makePlayerMesh(pose: .stand)
@@ -1558,10 +1594,14 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         self.subterraneanDoorMesh = try Self.makeMesh(builder: subDoorBuilder, device: device, queue: commandQueue)
 
         let instanceLength = MemoryLayout<MTLAccelerationStructureInstanceDescriptor>.stride * 27
-        guard let instanceBuffer = device.makeBuffer(length: instanceLength, options: .storageModeShared) else {
-            throw MetalRayRendererError.resourceCreationFailed
+        var instanceBuffers: [MTLBuffer] = []
+        for _ in 0..<Self.maxFramesInFlight {
+            guard let instanceBuffer = device.makeBuffer(length: instanceLength, options: .storageModeShared) else {
+                throw MetalRayRendererError.resourceCreationFailed
+            }
+            instanceBuffers.append(instanceBuffer)
         }
-        self.instanceBuffer = instanceBuffer
+        self.instanceBuffers = instanceBuffers
 
         if device.isHardwareRayTracingSupported,
            let staticAS = staticMesh.accelerationStructure,
@@ -1579,45 +1619,43 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
            let rainbowGateAS = rainbowGateMesh.accelerationStructure,
            let airPumpAS = airPumpMesh.accelerationStructure,
            let subDoorAS = subterraneanDoorMesh.accelerationStructure {
-            let descriptor = MTLInstanceAccelerationStructureDescriptor()
-            descriptor.instancedAccelerationStructures = [
-                staticAS,        // 0
-                playerAS,        // 1 (stand)
-                waterAS,         // 2
-                floatAS,         // 3
-                npcAS,           // 4 (Scout / Soldado Plasma)
-                shieldAS,        // 5
-                playerCoverAS,   // 6 (cover GTA)
-                playerSwimAS,    // 7 (swim Mario)
-                playerSitAS,     // 8 (sit tobogán)
-                playerWalkAS,    // 9 (walk articulado)
-                playerClimbAS,   // 10 (climb escalera)
-                fotofagoAS,      // 11 (El Fotófago - Golem Devorador de Luz)
-                rainbowGateAS,   // 12 (Puerta Holográfica Arcoíris 3,000 Pts)
-                airPumpAS,       // 13 (Bomba de Aire Neumática de Inflado Slime)
-                subDoorAS        // 14 (Pared Sellada Subterránea Pre-3000 Pts)
-            ]
-            descriptor.instanceCount = 27
-            descriptor.instanceDescriptorBuffer = instanceBuffer
-            self.instanceDescriptor = descriptor
+            for instanceBuffer in instanceBuffers {
+                let descriptor = MTLInstanceAccelerationStructureDescriptor()
+                descriptor.instancedAccelerationStructures = [
+                    staticAS,        // 0
+                    playerAS,        // 1 (stand)
+                    waterAS,         // 2
+                    floatAS,         // 3
+                    npcAS,           // 4 (Scout / Soldado Plasma)
+                    shieldAS,        // 5
+                    playerCoverAS,   // 6 (cover GTA)
+                    playerSwimAS,    // 7 (swim Mario)
+                    playerSitAS,     // 8 (sit tobogán)
+                    playerWalkAS,    // 9 (walk articulado)
+                    playerClimbAS,   // 10 (climb escalera)
+                    fotofagoAS,      // 11 (El Fotófago - Golem Devorador de Luz)
+                    rainbowGateAS,   // 12 (Puerta Holográfica Arcoíris 3,000 Pts)
+                    airPumpAS,       // 13 (Bomba de Aire Neumática de Inflado Slime)
+                    subDoorAS        // 14 (Pared Sellada Subterránea Pre-3000 Pts)
+                ]
+                descriptor.instanceCount = 27
+                descriptor.instanceDescriptorBuffer = instanceBuffer
 
-            let sizes = device.accelerationStructureSizes(descriptor: descriptor)
-            if let instanceAccelerationStructure = device.makeAccelerationStructure(size: sizes.accelerationStructureSize),
-               let scratch = device.makeBuffer(
-                 length: max(256, sizes.buildScratchBufferSize),
-                 options: .storageModePrivate
-               ) {
-                self.instanceAccelerationStructure = instanceAccelerationStructure
-                self.instanceScratchBuffer = scratch
-            } else {
-                self.instanceDescriptor = nil
-                self.instanceAccelerationStructure = nil
-                self.instanceScratchBuffer = nil
+                let sizes = device.accelerationStructureSizes(descriptor: descriptor)
+                guard let instanceAccelerationStructure = device.makeAccelerationStructure(size: sizes.accelerationStructureSize),
+                      let scratch = device.makeBuffer(
+                        length: max(256, sizes.buildScratchBufferSize),
+                        options: .storageModePrivate
+                      ) else {
+                    self.instanceDescriptors = []
+                    self.instanceAccelerationStructures = []
+                    self.instanceScratchBuffers = []
+                    break
+                }
+                self.instanceDescriptors.append(descriptor)
+                self.instanceAccelerationStructures.append(instanceAccelerationStructure)
+                self.instanceScratchBuffers.append(scratch)
             }
-        } else {
-            self.instanceDescriptor = nil
-            self.instanceAccelerationStructure = nil
-            self.instanceScratchBuffer = nil
         }
 
         super.init()
@@ -1701,12 +1739,14 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             currentBotLaserEnds[i] = .zero
             botLaserPropagationDistances[i] = 0
         }
-        let results = laserResultBuffer.contents().assumingMemoryBound(to: RTLaserResult.self)
-        results.pointee.bot0Start = .zero; results.pointee.bot0End = .zero
-        results.pointee.bot1Start = .zero; results.pointee.bot1End = .zero
-        results.pointee.bot2Start = .zero; results.pointee.bot2End = .zero
-        results.pointee.bot3Start = .zero; results.pointee.bot3End = .zero
-        results.pointee.bot4Start = .zero; results.pointee.bot4End = .zero
+        for buffer in laserResultBuffers {
+            let results = buffer.contents().assumingMemoryBound(to: RTLaserResult.self)
+            results.pointee.bot0Start = .zero; results.pointee.bot0End = .zero
+            results.pointee.bot1Start = .zero; results.pointee.bot1End = .zero
+            results.pointee.bot2Start = .zero; results.pointee.bot2End = .zero
+            results.pointee.bot3Start = .zero; results.pointee.bot3End = .zero
+            results.pointee.bot4Start = .zero; results.pointee.bot4End = .zero
+        }
         onNPCHealthsUpdate?(npcHealths)
     }
 
@@ -1815,9 +1855,18 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 frameSemaphore.signal()
                 return
             }
-            commandBuffer.addCompletedHandler { [frameSemaphore] _ in
+            frameSlot = (frameSlot + 1) % Self.maxFramesInFlight
+            let slot = frameSlot
+            commandBuffer.addCompletedHandler { [weak self, frameSemaphore] _ in
+                if let self {
+                    self.completedSlotLock.lock()
+                    self.lastCompletedSlot = slot
+                    self.completedSlotLock.unlock()
+                }
                 frameSemaphore.signal()
             }
+            let upscale = prepareUpscaler(for: drawable.texture)
+            let renderTarget = upscale?.input ?? drawable.texture
 
             let now = CACurrentMediaTime()
             let rawDt = Float(min(1.0 / 30.0, max(0, now - lastFrameTime)))
@@ -1831,7 +1880,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 audio.setWaterMovementIntensity(0)
             }
             writeInstanceDescriptors()
-            writeUniforms(texture: drawable.texture, dt: effectiveDt)
+            writeUniforms(texture: renderTarget, dt: effectiveDt)
 
             var renderedWaterTexture = waterTextures[waterStateIndex]
             let nextWaterStateIndex = 1 - waterStateIndex
@@ -1890,7 +1939,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 if let instanceAS = instanceAccelerationStructure {
                     laserEncoder.setAccelerationStructure(instanceAS, bufferIndex: 2)
                 }
-                laserEncoder.setBuffer(laserResultBuffer, offset: 0, index: 3)
+                laserEncoder.setBuffer(laserResultBuffers[slot], offset: 0, index: 3)
                 laserEncoder.setTexture(renderedWaterTexture, index: 0)
                 if let staticAS = staticMesh.accelerationStructure { laserEncoder.useResource(staticAS, usage: .read) }
                 if let waterAS = waterMesh.accelerationStructure { laserEncoder.useResource(waterAS, usage: .read) }
@@ -1912,8 +1961,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 if let instanceAS = instanceAccelerationStructure {
                     encoder.setAccelerationStructure(instanceAS, bufferIndex: 2)
                 }
-                encoder.setBuffer(laserResultBuffer, offset: 0, index: 3)
-                encoder.setTexture(drawable.texture, index: 0)
+                encoder.setBuffer(laserResultBuffers[slot], offset: 0, index: 3)
+                encoder.setTexture(renderTarget, index: 0)
                 encoder.setTexture(renderedWaterTexture, index: 1)
                 if let staticAS = staticMesh.accelerationStructure { encoder.useResource(staticAS, usage: .read) }
                 if let playerAS = playerMesh.accelerationStructure { encoder.useResource(playerAS, usage: .read) }
@@ -1931,10 +1980,22 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 if let airPumpAS = airPumpMesh.accelerationStructure { encoder.useResource(airPumpAS, usage: .read) }
                 if let subDoorAS = subterraneanDoorMesh.accelerationStructure { encoder.useResource(subDoorAS, usage: .read) }
                 encoder.dispatchThreads(
-                    MTLSize(width: drawable.texture.width, height: drawable.texture.height, depth: 1),
+                    MTLSize(width: renderTarget.width, height: renderTarget.height, depth: 1),
                     threadsPerThreadgroup: MTLSize(width: 8, height: 8, depth: 1)
                 )
                 encoder.endEncoding()
+            }
+
+            if let upscale {
+                upscale.scaler.colorTexture = upscale.input
+                upscale.scaler.outputTexture = upscale.output
+                upscale.scaler.inputContentWidth = upscale.input.width
+                upscale.scaler.inputContentHeight = upscale.input.height
+                upscale.scaler.encode(commandBuffer: commandBuffer)
+                if let blit = commandBuffer.makeBlitCommandEncoder() {
+                    blit.copy(from: upscale.output, to: drawable.texture)
+                    blit.endEncoding()
+                }
             }
 
             commandBuffer.present(drawable)
@@ -1953,6 +2014,46 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 fpsStartTime = now
             }
         }
+    }
+
+    private func prepareUpscaler(for drawable: MTLTexture) -> (scaler: MTLFXSpatialScaler, input: MTLTexture, output: MTLTexture)? {
+        guard supportsMetalFXUpscaling, internalRenderRatio < 0.99 else { return nil }
+        let inputWidth = max(1, Int((Float(drawable.width) * internalRenderRatio).rounded()))
+        let inputHeight = max(1, Int((Float(drawable.height) * internalRenderRatio).rounded()))
+        if let scaler = upscaler, let input = upscaleInputTexture, let output = upscaleOutputTexture,
+           input.width == inputWidth, input.height == inputHeight,
+           output.width == drawable.width, output.height == drawable.height,
+           output.pixelFormat == drawable.pixelFormat {
+            return (scaler, input, output)
+        }
+
+        let descriptor = MTLFXSpatialScalerDescriptor()
+        descriptor.inputWidth = inputWidth
+        descriptor.inputHeight = inputHeight
+        descriptor.outputWidth = drawable.width
+        descriptor.outputHeight = drawable.height
+        descriptor.colorTextureFormat = drawable.pixelFormat
+        descriptor.outputTextureFormat = drawable.pixelFormat
+        descriptor.colorProcessingMode = .perceptual
+        guard let scaler = descriptor.makeSpatialScaler(device: device) else { return nil }
+
+        let inputDescriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: drawable.pixelFormat, width: inputWidth, height: inputHeight, mipmapped: false
+        )
+        inputDescriptor.usage = scaler.colorTextureUsage.union([.shaderRead, .shaderWrite])
+        inputDescriptor.storageMode = .private
+        let outputDescriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: drawable.pixelFormat, width: drawable.width, height: drawable.height, mipmapped: false
+        )
+        outputDescriptor.usage = scaler.outputTextureUsage.union(.shaderRead)
+        outputDescriptor.storageMode = .private
+        guard let input = device.makeTexture(descriptor: inputDescriptor),
+              let output = device.makeTexture(descriptor: outputDescriptor) else { return nil }
+
+        upscaler = scaler
+        upscaleInputTexture = input
+        upscaleOutputTexture = output
+        return (scaler, input, output)
     }
 
     private var pendingDamageAccumulator: Float = 0

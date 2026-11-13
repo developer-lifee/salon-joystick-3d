@@ -35,11 +35,11 @@ struct MetalGameView: UIViewRepresentable {
         view.framebufferOnly = false
         view.colorPixelFormat = .bgra8Unorm
         view.clearColor = MTLClearColorMake(0.006, 0.009, 0.018, 1)
-        view.preferredFramesPerSecond = 60
+        view.preferredFramesPerSecond = model.effectiveTargetFPS
         view.enableSetNeedsDisplay = false
         view.isPaused = false
         view.autoResizeDrawable = false
-        view.renderScale = model.renderResolution.scale
+        view.renderScale = model.effectiveRenderScale
 
         let pan = UIPanGestureRecognizer(
             target: context.coordinator,
@@ -69,6 +69,7 @@ struct MetalGameView: UIViewRepresentable {
         do {
             let renderer = try MetalRayRenderer(view: view, audio: model.audio)
             context.coordinator.renderer = renderer
+            applyResolution(to: view, renderer: renderer)
             renderer.playerScore = model.playerScore
             renderer.onRainbowGateStatusUpdate = { [weak model] unlocked, current, target in
                 Task { @MainActor in
@@ -302,10 +303,21 @@ struct MetalGameView: UIViewRepresentable {
         return view
     }
 
+    /// Con MetalFX el drawable va a resolución de salida y el ray tracing a la resolución interna elegida.
+    private func applyResolution(to view: MTKView, renderer: MetalRayRenderer?) {
+        let internalScale = model.effectiveRenderScale
+        var outputScale = internalScale
+        if model.metalFXUpscalingEnabled, renderer?.supportsMetalFXUpscaling == true {
+            outputScale = max(internalScale, min(internalScale * 2, view.window?.screen.nativeScale ?? 3))
+        }
+        (view as? PointResolutionMTKView)?.renderScale = outputScale
+        renderer?.internalRenderRatio = Float(internalScale / outputScale)
+    }
+
     func updateUIView(_ view: MTKView, context: Context) {
-        (view as? PointResolutionMTKView)?.renderScale = model.renderResolution.scale
-        if view.preferredFramesPerSecond != model.targetFPS {
-            view.preferredFramesPerSecond = model.targetFPS
+        applyResolution(to: view, renderer: context.coordinator.renderer)
+        if view.preferredFramesPerSecond != model.effectiveTargetFPS {
+            view.preferredFramesPerSecond = model.effectiveTargetFPS
         }
         context.coordinator.invertsCameraY = model.invertsCameraY
         context.coordinator.cameraSensitivity = Float(model.cameraSensitivity)
