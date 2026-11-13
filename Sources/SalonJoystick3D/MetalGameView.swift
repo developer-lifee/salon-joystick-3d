@@ -305,9 +305,24 @@ struct MetalGameView: UIViewRepresentable {
 
     /// Con MetalFX el drawable va a resolución de salida y el ray tracing a la resolución interna elegida.
     private func applyResolution(to view: MTKView, renderer: MetalRayRenderer?) {
+        let usesMetalFX = model.metalFXUpscalingEnabled && renderer?.supportsMetalFXUpscaling == true
+        let tv = ExternalDisplayOutput.shared
+        if model.isTVConnected, tv.screenPixelSize.height > 0 {
+            // 📺 TV: ray tracing a la altura elegida (p. ej. 720p) y MetalFX hasta 2x sin pasar del TV
+            let thermalFactor = model.effectiveRenderScale / model.renderResolution.scale
+            let internalHeight = (CGFloat(model.tvRenderHeight) * thermalFactor).rounded()
+            let outputHeight = usesMetalFX ? min(internalHeight * 2, tv.screenPixelSize.height) : internalHeight
+            let aspect = tv.screenPixelSize.width / tv.screenPixelSize.height
+            let outputSize = CGSize(width: (outputHeight * aspect).rounded(), height: outputHeight)
+            if tv.layer.drawableSize != outputSize {
+                tv.layer.drawableSize = outputSize
+            }
+            renderer?.internalRenderRatio = Float(internalHeight / outputHeight)
+            return
+        }
         let internalScale = model.effectiveRenderScale
         var outputScale = internalScale
-        if model.metalFXUpscalingEnabled, renderer?.supportsMetalFXUpscaling == true {
+        if usesMetalFX {
             outputScale = max(internalScale, min(internalScale * 2, view.window?.screen.nativeScale ?? 3))
         }
         (view as? PointResolutionMTKView)?.renderScale = outputScale
@@ -316,8 +331,10 @@ struct MetalGameView: UIViewRepresentable {
 
     func updateUIView(_ view: MTKView, context: Context) {
         applyResolution(to: view, renderer: context.coordinator.renderer)
-        if view.preferredFramesPerSecond != model.effectiveTargetFPS {
-            view.preferredFramesPerSecond = model.effectiveTargetFPS
+        // Los TV refrescan a 60 Hz: más FPS solo calentaría el iPhone
+        let targetFPS = model.isTVConnected ? min(model.effectiveTargetFPS, 60) : model.effectiveTargetFPS
+        if view.preferredFramesPerSecond != targetFPS {
+            view.preferredFramesPerSecond = targetFPS
         }
         context.coordinator.invertsCameraY = model.invertsCameraY
         context.coordinator.cameraSensitivity = Float(model.cameraSensitivity)
@@ -424,6 +441,104 @@ struct MetalGameView: UIViewRepresentable {
                 label.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -28),
                 label.centerYAnchor.constraint(equalTo: view.centerYAnchor)
             ])
+        }
+    }
+}
+
+// MARK: - 📺 Salida dedicada al TV
+
+/// Cuando hay un TV conectado (AirPlay o USB-C), el renderer dibuja en esta capa a la
+/// resolución del TV y el iPhone queda como control.
+final class ExternalDisplayOutput: ObservableObject {
+    static let shared = ExternalDisplayOutput()
+
+    @Published private(set) var isConnected = false
+    private(set) var screenPixelSize: CGSize = .zero
+    let layer: CAMetalLayer
+
+    private init() {
+        layer = CAMetalLayer()
+        layer.device = MTLCreateSystemDefaultDevice()
+        layer.pixelFormat = .bgra8Unorm
+        layer.framebufferOnly = false
+        layer.contentsGravity = .resizeAspect
+        layer.backgroundColor = UIColor.black.cgColor
+    }
+
+    func connect(bounds: CGRect, scale: CGFloat) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer.frame = bounds
+        layer.contentsScale = scale
+        CATransaction.commit()
+        let pixelSize = CGSize(width: bounds.width * scale, height: bounds.height * scale)
+        if screenPixelSize != pixelSize {
+            screenPixelSize = pixelSize
+            layer.drawableSize = CGSize(width: 1280, height: 720)
+        }
+        if !isConnected {
+            isConnected = true
+        }
+    }
+
+    func disconnect() {
+        layer.removeFromSuperlayer()
+        screenPixelSize = .zero
+        isConnected = false
+    }
+}
+
+final class ExternalDisplayViewController: UIViewController {
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .black
+        view.layer.addSublayer(ExternalDisplayOutput.shared.layer)
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        let scale = view.window?.windowScene?.screen.nativeScale ?? view.traitCollection.displayScale
+        ExternalDisplayOutput.shared.connect(bounds: view.bounds, scale: scale)
+    }
+}
+
+final class ExternalDisplaySceneDelegate: UIResponder, UIWindowSceneDelegate {
+    var window: UIWindow?
+
+    func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
+        guard let windowScene = scene as? UIWindowScene else { return }
+        let window = UIWindow(windowScene: windowScene)
+        window.rootViewController = ExternalDisplayViewController()
+        window.isHidden = false
+        self.window = window
+    }
+
+    func sceneDidDisconnect(_ scene: UIScene) {
+        ExternalDisplayOutput.shared.disconnect()
+        window = nil
+    }
+}
+
+extension View {
+    /// En modo TV el iPhone no muestra el 3D, pero el MTKView de abajo sigue recibiendo los gestos de cámara.
+    func tvControllerCover(isActive: Bool) -> some View {
+        overlay {
+            if isActive {
+                ZStack {
+                    Color.black
+                    VStack(spacing: 10) {
+                        Image(systemName: "tv")
+                            .font(.system(size: 44, weight: .semibold))
+                        Text("Jugando en el TV")
+                            .font(.title3.bold())
+                        Text("Desliza aquí para mover la cámara")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    .foregroundStyle(.white.opacity(0.75))
+                }
+                .allowsHitTesting(false)
+            }
         }
     }
 }

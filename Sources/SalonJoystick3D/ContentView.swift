@@ -253,6 +253,7 @@ struct ContentView: View {
                     HStack(spacing: 0) {
                         ZStack {
                             MetalGameView(model: model)
+                                .tvControllerCover(isActive: model.isTVConnected)
                                 .ignoresSafeArea(.all)
                                 .allowsHitTesting(!model.isEditingHUDLayout)
                             if model.heldTool == .laser && model.laserBattery > 0.01 {
@@ -276,6 +277,7 @@ struct ContentView: View {
                     VStack(spacing: 0) {
                         ZStack {
                             MetalGameView(model: model)
+                                .tvControllerCover(isActive: model.isTVConnected)
                                 .ignoresSafeArea(.all)
                                 .allowsHitTesting(!model.isEditingHUDLayout)
                             if model.heldTool == .laser && model.laserBattery > 0.01 {
@@ -324,6 +326,7 @@ struct ContentView: View {
         } else {
             ZStack(alignment: .bottomLeading) {
                 MetalGameView(model: model)
+                    .tvControllerCover(isActive: model.isTVConnected)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .ignoresSafeArea(.all)
                     .allowsHitTesting(!model.isEditingHUDLayout)
@@ -2100,6 +2103,8 @@ final class GameModel: ObservableObject {
     @AppStorage("targetFPS") var targetFPS: Int = 60
     @AppStorage("adaptiveThermalScaling") var adaptiveThermalScaling: Bool = true
     @AppStorage("metalFXUpscalingEnabled") var metalFXUpscalingEnabled: Bool = true
+    @AppStorage("tvRenderHeight") var tvRenderHeight: Int = 720
+    @Published private(set) var isTVConnected = ExternalDisplayOutput.shared.isConnected
     @Published private(set) var thermalState = ProcessInfo.processInfo.thermalState
 
     // 🌡️ Con el iPhone caliente, iOS baja la GPU: bajamos resolución/FPS antes de que se trabe
@@ -2630,6 +2635,10 @@ final class GameModel: ObservableObject {
             .map { _ in ProcessInfo.processInfo.thermalState }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in self?.thermalState = state }
+            .store(in: &cancellables)
+        ExternalDisplayOutput.shared.$isConnected
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] connected in self?.isTVConnected = connected }
             .store(in: &cancellables)
         if !UIDevice.isDuoSupported {
             duoScreenModeRaw = 0 // Si no es un iPhone Duo, se asegura pantalla estándar normal
@@ -8619,6 +8628,11 @@ struct GameOptionsSheet: View {
                             Toggle("Mostrar contador de FPS", isOn: $model.showsFPS)
                             Toggle("Escalado MetalFX (más FPS, misma nitidez)", isOn: $model.metalFXUpscalingEnabled)
                             Toggle("Ajuste automático por calor", isOn: $model.adaptiveThermalScaling)
+                            Picker("Resolución en TV (ray tracing)", selection: $model.tvRenderHeight) {
+                                Text("720p (60 FPS)").tag(720)
+                                Text("900p").tag(900)
+                                Text("1080p (más nítido)").tag(1080)
+                            }
                             if model.isThermalThrottling {
                                 Text("🌡️ iPhone caliente: resolución y FPS reducidos temporalmente.")
                                     .font(.caption)

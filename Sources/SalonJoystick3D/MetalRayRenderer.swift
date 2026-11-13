@@ -1333,15 +1333,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private var frameSlot = 0
     private let completedSlotLock = NSLock()
     private var lastCompletedSlot = 0
+    /// Slot que la CPU lee y escribe este frame (fijo durante todo el frame).
+    private var cpuLaserSlot = 0
     private let uniformBuffers: [MTLBuffer]
     private let laserResultBuffers: [MTLBuffer]
     private var uniformBuffer: MTLBuffer { uniformBuffers[frameSlot] }
-    /// Lecturas de la CPU: resultados del último frame que la GPU ya terminó.
-    private var laserResultBuffer: MTLBuffer {
-        completedSlotLock.lock()
-        defer { completedSlotLock.unlock() }
-        return laserResultBuffers[lastCompletedSlot]
-    }
+    /// Acceso de la CPU: resultados del último frame que la GPU ya terminó.
+    private var laserResultBuffer: MTLBuffer { laserResultBuffers[cpuLaserSlot] }
     private let staticMesh: RTMeshResources
     private let playerMesh: RTMeshResources
     private let playerWalkMesh: RTMeshResources
@@ -1850,13 +1848,21 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
         autoreleasepool {
             _ = frameSemaphore.wait(timeout: .distantFuture)
-            guard let drawable = view.currentDrawable,
+            let tvOutput = ExternalDisplayOutput.shared
+            let targetDrawable = tvOutput.isConnected ? tvOutput.layer.nextDrawable() : view.currentDrawable
+            guard let drawable = targetDrawable,
                   let commandBuffer = commandQueue.makeCommandBuffer() else {
                 frameSemaphore.signal()
                 return
             }
             frameSlot = (frameSlot + 1) % Self.maxFramesInFlight
             let slot = frameSlot
+            completedSlotLock.lock()
+            let newestCompletedSlot = lastCompletedSlot
+            completedSlotLock.unlock()
+            // Conserva láseres de bots escritos entre frames (p. ej. sync multijugador)
+            copyBotLasers(from: cpuLaserSlot, to: newestCompletedSlot)
+            cpuLaserSlot = newestCompletedSlot
             commandBuffer.addCompletedHandler { [weak self, frameSemaphore] _ in
                 if let self {
                     self.completedSlotLock.lock()
@@ -1869,7 +1875,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             let renderTarget = upscale?.input ?? drawable.texture
 
             let now = CACurrentMediaTime()
-            let rawDt = Float(min(1.0 / 30.0, max(0, now - lastFrameTime)))
+            // Ajusta el dt a múltiplos del refresco de pantalla: el ruido de timing hacía vibrar la cámara al avanzar
+            let refreshInterval = 1.0 / Double(max(60, view.window?.screen.maximumFramesPerSecond ?? 60))
+            let vsyncCount = max(1, ((now - lastFrameTime) / refreshInterval).rounded())
+            let rawDt = Float(min(1.0 / 30.0, vsyncCount * refreshInterval))
             lastFrameTime = now
             let effectiveDt = isGamePaused ? 0.0 : (isSlowMotionActive ? rawDt * 0.20 : rawDt)
             if !isGamePaused {
@@ -1881,6 +1890,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
             writeInstanceDescriptors()
             writeUniforms(texture: renderTarget, dt: effectiveDt)
+            copyBotLasers(from: cpuLaserSlot, to: slot)
 
             var renderedWaterTexture = waterTextures[waterStateIndex]
             let nextWaterStateIndex = 1 - waterStateIndex
@@ -2014,6 +2024,16 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 fpsStartTime = now
             }
         }
+    }
+
+    /// La CPU escribe los láseres de los bots; el shader de este frame los lee de su propio slot.
+    private func copyBotLasers(from source: Int, to destination: Int) {
+        guard source != destination,
+              let start = MemoryLayout<RTLaserResult>.offset(of: \.bot0Start),
+              let end = MemoryLayout<RTLaserResult>.offset(of: \.bot4End) else { return }
+        let length = end + MemoryLayout<SIMD4<Float>>.stride - start
+        (laserResultBuffers[destination].contents() + start)
+            .copyMemory(from: laserResultBuffers[source].contents() + start, byteCount: length)
     }
 
     private func prepareUpscaler(for drawable: MTLTexture) -> (scaler: MTLFXSpatialScaler, input: MTLTexture, output: MTLTexture)? {
