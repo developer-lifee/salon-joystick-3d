@@ -182,6 +182,32 @@ struct MetalGameView: UIViewRepresentable {
                     model?.isNearFuseTerminal = isNear
                 }
             }
+            renderer.on3DChestChallengeUpdate = { [weak model] chestID, remaining, timer in
+                Task { @MainActor in
+                    model?.active3DChestID = chestID
+                    model?.active3DChestRemaining = remaining
+                    model?.active3DChestTimer = timer
+                }
+            }
+            renderer.on3DChestUnlocked = { [weak model] chestID, pts in
+                Task { @MainActor in
+                    model?.handle3DChestUnlocked(chestID: chestID, points: pts)
+                }
+            }
+            renderer.onNearChestUpdate = { [weak model] chestID in
+                Task { @MainActor in
+                    model?.nearbyChestID = chestID
+                }
+            }
+            model.onOpenChestRequested = { [weak renderer, weak model] chestID in
+                let pts = renderer?.openChestFromMinigame(chestID: chestID) ?? 0
+                if pts > 0 {
+                    Task { @MainActor in
+                        model?.playerHealth = min(model?.maxPlayerHealth ?? 150, (model?.playerHealth ?? 100) + 35)
+                        model?.playerShield = min(100, (model?.playerShield ?? 0) + 25)
+                    }
+                }
+            }
             renderer.onRecoveryProgressUpdate = { [weak model] remaining, isBoosting in
                 Task { @MainActor in
                     model?.updateRecoveryProgress(remaining: remaining, isBoosting: isBoosting)
@@ -260,6 +286,8 @@ struct MetalGameView: UIViewRepresentable {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 }
             }
+            renderer.lumiBodyColor = model.lumiBodyRGB
+            renderer.lumiCrestColor = model.lumiCrestRGB
             view.delegate = renderer
         } catch {
             if let onFallbackRequested {
@@ -281,7 +309,11 @@ struct MetalGameView: UIViewRepresentable {
         }
         context.coordinator.invertsCameraY = model.invertsCameraY
         context.coordinator.cameraSensitivity = Float(model.cameraSensitivity)
-        context.coordinator.renderer?.playerScore = max(context.coordinator.renderer?.playerScore ?? 0, model.playerScore)
+        if model.playerScore == 0 {
+            context.coordinator.renderer?.playerScore = 0
+        } else {
+            context.coordinator.renderer?.playerScore = max(context.coordinator.renderer?.playerScore ?? 0, model.playerScore)
+        }
         context.coordinator.renderer?.isPlayerDead = (model.playerHealth <= 0 || model.isDefeated) && !model.isRecoveringInChamber
         context.coordinator.renderer?.isHost = model.isHost
         context.coordinator.renderer?.isRecoveringInChamber = model.isRecoveringInChamber
@@ -304,6 +336,8 @@ struct MetalGameView: UIViewRepresentable {
         context.coordinator.renderer?.isRemotePlayerConnected = model.isAnyMultiplayerConnected
         context.coordinator.renderer?.remotePlayerPosition = model.remotePlayerPosition
         context.coordinator.renderer?.remotePlayerYaw = model.remotePlayerYaw
+        context.coordinator.renderer?.lumiBodyColor = model.lumiBodyRGB
+        context.coordinator.renderer?.lumiCrestColor = model.lumiCrestRGB
         context.coordinator.renderer?.remotePlayerHeldTool = model.remotePlayerHeldTool
         context.coordinator.renderer?.remotePlayerIsFiringLaser = model.remotePlayerIsFiringLaser
         context.coordinator.renderer?.remoteAgents = model.sortedRemoteAgents

@@ -26,6 +26,11 @@ private struct RTUniforms {
     var lightStates: SIMD4<Float>
     var secondaryCameraPosition: SIMD4<Float>
     var secondaryCameraForward: SIMD4<Float>
+    var lumiBodyColor: SIMD4<Float>
+    var lumiCrestColor: SIMD4<Float>
+    var chestCrystal0: SIMD4<Float>
+    var chestCrystal1: SIMD4<Float>
+    var chestCrystal2: SIMD4<Float>
 }
 
 private struct RTLaserResult {
@@ -708,17 +713,17 @@ private struct RTMeshBuilder {
     ) {
         let eyeDark = RTMaterial(color: SIMD3<Float>(0.02, 0.03, 0.02), roughness: 0.05, reflectivity: 0.90)
         let eyeSparkle = RTMaterial(color: SIMD3<Float>(1.0, 1.0, 1.0), roughness: 0.0, emission: SIMD3<Float>(2.5, 2.5, 2.5), reflectivity: 0.98)
-        let blushMat = RTMaterial(color: SIMD3<Float>(0.35, 1.0, 0.45), roughness: 0.20, emission: SIMD3<Float>(0.4, 1.4, 0.5), reflectivity: 0.30, kind: 9.0)
+        let blushMat = RTMaterial(color: SIMD3<Float>(0.35, 1.0, 0.45), roughness: 0.20, emission: SIMD3<Float>(0.4, 1.4, 0.5), reflectivity: 0.30, kind: 11.0)
         let smileMat = RTMaterial(color: SIMD3<Float>(0.04, 0.18, 0.06), roughness: 0.65, reflectivity: 0.05)
 
         // 1. Cuerpo aperado y rechoncho (Pancita ancha + cabeza redonda adorable de gelatina verde)
         addSphere(center: bellyCenter, radii: SIMD3<Float>(0.42, 0.44, 0.38), material: jellyMat, segments: 16, rings: 10)
         addSphere(center: headCenter, radii: SIMD3<Float>(0.38, 0.39, 0.35), material: jellyMat, segments: 16, rings: 10)
 
-        // 2. Gota / Cresta superior icónica del Slime
-        addSphere(center: headCenter + SIMD3<Float>(0, 0.36, -0.02), radii: SIMD3<Float>(0.13, 0.18, 0.13), material: jellyMat, segments: 10, rings: 6)
-        addSphere(center: headCenter + SIMD3<Float>(0, 0.50, -0.04), radii: SIMD3<Float>(0.07, 0.12, 0.07), material: jellyMat, segments: 8, rings: 5)
-        addSphere(center: headCenter + SIMD3<Float>(0, 0.60, -0.05), radii: SIMD3<Float>(0.035, 0.06, 0.035), material: jellyMat, segments: 6, rings: 4)
+        // 2. Gota / Cresta superior icónica del Slime (más alta, estilizada y visible de frente)
+        addSphere(center: headCenter + SIMD3<Float>(0, 0.38, 0.03), radii: SIMD3<Float>(0.17, 0.24, 0.17), material: jellyMat, segments: 12, rings: 8)
+        addSphere(center: headCenter + SIMD3<Float>(0, 0.56, 0.05), radii: SIMD3<Float>(0.11, 0.18, 0.11), material: jellyMat, segments: 10, rings: 6)
+        addSphere(center: headCenter + SIMD3<Float>(0, 0.70, 0.07), radii: SIMD3<Float>(0.06, 0.11, 0.06), material: blushMat, segments: 8, rings: 5)
 
         // 3. Grandes Ojos Adorables y Tiernos (Estilo Anime Slime / Lumi del Cómic)
         for side: Float in [-1.0, 1.0] {
@@ -1138,6 +1143,80 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         playerScore += points
         onScoreUpdate?(points)
     }
+
+    @discardableResult
+    func openChestFromMinigame(chestID: Int) -> Int {
+        guard !openedUnderwaterChestIDs.contains(chestID),
+              let chest = underwaterChestsList.first(where: { $0.id == chestID }) else {
+            return 0
+        }
+        openedUnderwaterChestIDs.insert(chest.id)
+        audio.playRecoveryCompleteSound()
+        addInternalScore(chest.points)
+        pendingWaterImpulse = SIMD4<Float>(chest.center.x, chest.center.z, -1.8, 1)
+        if lastNearChestID == chestID {
+            lastNearChestID = nil
+            onNearChestUpdate?(nil)
+        }
+        return chest.points
+    }
+
+    private func currentChestCrystalPositions(chestID: Int) -> [SIMD3<Float>] {
+        guard let chest = underwaterChestsList.first(where: { $0.id == chestID }) else {
+            return [.zero, .zero, .zero]
+        }
+        let baseCenter = chest.center + SIMD3<Float>(0, 1.30, 0)
+        return (0..<3).map { idx in
+            let angle = elapsedTime * 1.15 + Float(idx) * (2.0 * .pi / 3.0)
+            let bob = sin(elapsedTime * 2.4 + Float(idx) * 2.1) * 0.24
+            return baseCenter + SIMD3<Float>(cos(angle) * 1.35, bob, sin(angle) * 1.35)
+        }
+    }
+
+    private func shatterChestCrystal(index: Int, chestID: Int) {
+        guard index >= 0, index < 3, active3DChestCrystals[index] else { return }
+        active3DChestCrystals[index] = false
+        let cPos = currentChestCrystalPositions(chestID: chestID)[index]
+        pendingWaterImpulse = SIMD4<Float>(cPos.x, cPos.z, -1.6, 1)
+        audio.playLaserReflectionSound()
+        let remaining = active3DChestCrystals.filter { $0 }.count
+        if remaining == 0 {
+            let pts = openChestFromMinigame(chestID: chestID)
+            active3DChestID = nil
+            active3DChestTimer = 0
+            on3DChestChallengeUpdate?(nil, 0, 0)
+            on3DChestUnlocked?(chestID, pts)
+        } else {
+            on3DChestChallengeUpdate?(chestID, remaining, active3DChestTimer)
+        }
+    }
+
+    private func update3DChestChallenge(dt: Float) {
+        if chestCrystalHitCooldown > 0 {
+            chestCrystalHitCooldown = max(0, chestCrystalHitCooldown - dt)
+        }
+        guard let cid = active3DChestID else { return }
+        active3DChestTimer -= dt
+        if active3DChestTimer <= 0 {
+            active3DChestID = nil
+            active3DChestCrystals = [false, false, false]
+            active3DChestTimer = 0
+            on3DChestChallengeUpdate?(nil, 0, 0)
+            return
+        }
+        let positions = currentChestCrystalPositions(chestID: cid)
+        let playerBodyCenter = playerPosition + SIMD3<Float>(0, 0.85, 0)
+        for idx in 0..<3 where active3DChestCrystals[idx] {
+            if simd_distance(playerBodyCenter, positions[idx]) < 1.10 {
+                shatterChestCrystal(index: idx, chestID: cid)
+                break
+            }
+        }
+        if active3DChestID != nil {
+            let remaining = active3DChestCrystals.filter { $0 }.count
+            on3DChestChallengeUpdate?(cid, remaining, active3DChestTimer)
+        }
+    }
     var onRainbowGateStatusUpdate: ((Bool, Int, Int) -> Void)?
     private var previousGateUnlocked: Bool = false
     var onDamageTaken: ((Float) -> Void)?
@@ -1151,6 +1230,16 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     var onNearRecoveryConsoleUpdate: ((Bool) -> Void)?
     var onNearFuseTerminalUpdate: ((Bool) -> Void)?
     private var lastNearFuseTerminalState: Bool = false
+    var onNearChestUpdate: ((Int?) -> Void)?
+    private var lastNearChestID: Int? = nil
+    var on3DChestChallengeUpdate: ((Int?, Int, Float) -> Void)?
+    var on3DChestUnlocked: ((Int, Int) -> Void)?
+    private var active3DChestID: Int? = nil
+    private var active3DChestCrystals: [Bool] = [false, false, false]
+    private var active3DChestTimer: Float = 0
+    private var chestCrystalHitCooldown: Float = 0
+    var lumiBodyColor: SIMD3<Float> = SIMD3<Float>(0.03, 0.88, 0.10)
+    var lumiCrestColor: SIMD3<Float> = SIMD3<Float>(0.35, 1.0, 0.45)
     var onRecoveryProgressUpdate: ((Float, Bool) -> Void)?
     var onRecoveryCompleted: (() -> Void)?
     var onMirrorReflectionKill: (() -> Void)?
@@ -1217,7 +1306,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private(set) var currentBotLaserStarts = [SIMD3<Float>](repeating: .zero, count: 5)
     private(set) var currentBotLaserEnds = [SIMD3<Float>](repeating: .zero, count: 5)
 
-    private var currentWave: Int = 1
+    private var currentWave: Int = 0
+    private var isAwaitingLightsPrepPhase: Bool = true
     private var botsKilledInCurrentWave: Int = 0
     private var botsSpawnedInCurrentWave: Int = 2
     private var totalBotsInWave: Int = 2
@@ -1559,10 +1649,25 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         heldTool = .flashlight
         flashlightBattery = 1.0
 
-        currentWave = 1
+        openedUnderwaterChestIDs.removeAll()
+        collectedUnderwaterRelicIDs.removeAll()
+        if lastNearChestID != nil {
+            lastNearChestID = nil
+            onNearChestUpdate?(nil)
+        }
+        if active3DChestID != nil {
+            active3DChestID = nil
+            active3DChestCrystals = [false, false, false]
+            active3DChestTimer = 0
+            on3DChestChallengeUpdate?(nil, 0, 0)
+        }
+
+        let hasDonePrep = UserDefaults.standard.bool(forKey: "hasCompletedLightsPrepTutorial")
+        isAwaitingLightsPrepPhase = !isVersusMode && !hasDonePrep
+        currentWave = isAwaitingLightsPrepPhase ? 0 : 1
         botsKilledInCurrentWave = 0
         totalBotsInWave = 2
-        botsSpawnedInCurrentWave = min(totalBotsInWave, npcPositions.count)
+        botsSpawnedInCurrentWave = isAwaitingLightsPrepPhase ? 0 : min(totalBotsInWave, npcPositions.count)
         isWaveIntermission = false
         intermissionTimeRemaining = 0
 
@@ -1872,9 +1977,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     }
 
     private var swimStrokeTimer: Float = 0
+    private var geyserSubmergeTimer: Float = 0
 
     private func updateSimulation(dt: Float, rawDt: Float) {
         manualCameraTimer = max(0, manualCameraTimer - rawDt)
+        if geyserSubmergeTimer > 0 {
+            geyserSubmergeTimer = max(0, geyserSubmergeTimer - dt)
+        }
         updateToolTimers(dt: dt)
         updateNPCSimulation(dt: dt, rawDt: rawDt)
         flushDamageReport(rawDt: rawDt)
@@ -1967,9 +2076,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             desiredDirection = simd_normalize(desiredDirection)
         }
 
-        // 🌊 Subterranean Easter Egg & Posito de 10 cm con Pozo Profundo
+        // 🌊 Subterranean Easter Egg & Posito de 10 cm con Pozo Profundo y Conducto de Burbujas
         let currentlyInPool = isInsidePoolXZ(playerPosition) && playerPosition.y <= 0.35
-        let isSubterranean = enteredEasterEggViaToboggan && playerPosition.y <= -4.75
+        let inGeyserShaft = enteredEasterEggViaToboggan && playerPosition.z > 18.0 && playerPosition.y < 0.25
+        let isSubterranean = enteredEasterEggViaToboggan && (playerPosition.y <= -4.75 || inGeyserShaft)
         if isSubterranean {
             onDeepDiveReached?()
         }
@@ -2174,13 +2284,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         resolveParkourAndCabinCollisions(position: &proposed)
         resolveSubterraneanCollisions(position: &proposed)
         clampToArenaBounds(position: &proposed, previousPosition: playerPosition, margin: 0.38, velocity: &horizontalVelocity)
-        let isSubterraneanTarget = enteredEasterEggViaToboggan && playerPosition.y <= -4.75
+        let isSubterraneanTarget = enteredEasterEggViaToboggan && (playerPosition.y <= -4.75 || (playerPosition.z > 18.0 && playerPosition.y < 0.25))
         let isSubmergedUnderwater = enteredEasterEggViaToboggan && (playerPosition.y < -0.25 || isSubterraneanTarget)
         audio.setAudioZone(isUnderwater: isSubmergedUnderwater, isRainbowHall: proposed.z > 18.0)
         let willBeInPool = isInsidePoolXZ(proposed) && proposed.y <= 0.35
         let isDeepInWater = enteredEasterEggViaToboggan && playerPosition.y < -0.25
         let isInWater = (willBeInPool || currentlyInPool || isDeepInWater)
-        let nextGroundHeight = groundHeight(at: proposed, insidePool: willBeInPool)
+        let nextGroundHeight = isSubterraneanTarget ? -11.0 : groundHeight(at: proposed, insidePool: willBeInPool)
         let willBeOnFloat = willBeInPool && nextGroundHeight > -0.1
         let wasGrounded = playerPosition.y <= currentGroundHeight + 0.05
 
@@ -2270,10 +2380,17 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         }
 
         var landingSpeed: Float = 0
-        // 🌊 Al emerger a la superficie del posito de 14 cm (y >= -0.15m), desembarcar en el posito
-        if proposed.y >= -0.15 {
+        // 🌊 Al emerger a la superficie (y >= -0.25m), desembarcar en la fuente del Salón Arcoíris (si Z > 18) o en la piscina (si Z <= 18)
+        if proposed.y >= -0.25 && geyserSubmergeTimer <= 0 {
             if enteredEasterEggViaToboggan {
+                if proposed.z > 18.0 && isRainbowGateUnlocked {
+                    proposed.y = 0.25
+                    proposed.z = 60.8
+                    verticalVelocity = 0
+                }
                 enteredEasterEggViaToboggan = false
+                lastSubmittedWaterMovementIntensity = 0
+                audio.setWaterMovementIntensity(0)
                 audio.setAudioZone(isUnderwater: false, isRainbowHall: proposed.z > 18.0)
             }
         }
@@ -2290,7 +2407,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         if isSlidingOnToboggan {
             proposed = playerPosition
         } else if enteredEasterEggViaToboggan && proposed.y < -0.20 {
-            // 🌊 ZONA SUBACUÁTICA: Exclusivo del portal del tobogán
+            // 🌊 ZONA SUBACUÁTICA: Exclusivo del portal del tobogán o fuente de burbujas
             // 1. Piso abisal (Y = -11.0m)
             if proposed.y <= -11.0 {
                 proposed.y = -11.0
@@ -2306,13 +2423,27 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
             let inGeyser = abs(proposed.x) <= 2.2 && abs(proposed.z - 64.0) <= 2.2
 
-            if inGeyser && isRainbowGateUnlocked {
+            if geyserSubmergeTimer > 0 {
+                // 🌊 Descenso por las burbujas desde el Salón Arcoíris hacia el Santuario Submarino
+                verticalVelocity = min(verticalVelocity, -6.2)
+                if proposed.y <= -6.4 {
+                    proposed.z = max(60.5, proposed.z - dt * 3.8)
+                }
+            } else if inGeyser && isRainbowGateUnlocked {
                 // 🌀 Géiser Hidroeléctrico Ascendente: propulsión de burbujas hacia la superficie del Salón Arcoíris
                 verticalVelocity = max(verticalVelocity, 8.5)
-                audio.playWaterDisturbance(intensity: 0.35)
-                if proposed.y >= -0.25 {
+                swimStrokeTimer -= dt
+                if swimStrokeTimer <= 0 {
+                    audio.playWaterDisturbance(intensity: 0.35)
+                    swimStrokeTimer = 0.55
+                }
+                if proposed.y >= -0.35 {
                     enteredEasterEggViaToboggan = false
-                    proposed.y = 0.20
+                    proposed.y = 0.25
+                    proposed.z = 60.8
+                    verticalVelocity = 0
+                    lastSubmittedWaterMovementIntensity = 0
+                    audio.setWaterMovementIntensity(0)
                     audio.setAudioZone(isUnderwater: false, isRainbowHall: true)
                 }
             } else if !isInsideShaft {
@@ -2346,16 +2477,26 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 }
             }
 
-            // 🎁 Recolección interactiva de tesoros y reliquias subacuáticas ("sacar muchas cosas")
-            for chest in underwaterChestsList {
-                if !openedUnderwaterChestIDs.contains(chest.id) {
-                    if simd_distance(proposed, chest.center) < 1.75 {
-                        openedUnderwaterChestIDs.insert(chest.id)
-                        audio.playRecoveryCompleteSound()
-                        addInternalScore(chest.points)
-                        pendingWaterImpulse = SIMD4<Float>(chest.center.x, chest.center.z, -1.8, 1)
-                    }
+            // 🎁 Proximidad a cofres subacuáticos: activa el reto 3D de 3 cristales orbitantes
+            var closestChestID: Int? = nil
+            var closestChestDist: Float = 3.60
+            for chest in underwaterChestsList where !openedUnderwaterChestIDs.contains(chest.id) {
+                let d = simd_distance(proposed, chest.center)
+                if d < closestChestDist {
+                    closestChestDist = d
+                    closestChestID = chest.id
                 }
+            }
+            if let cid = closestChestID, active3DChestID == nil {
+                active3DChestID = cid
+                active3DChestCrystals = [true, true, true]
+                active3DChestTimer = 20.0
+                audio.playLaserIgnition()
+                on3DChestChallengeUpdate?(cid, 3, 20.0)
+            }
+            if closestChestID != lastNearChestID {
+                lastNearChestID = closestChestID
+                onNearChestUpdate?(closestChestID)
             }
             for relic in underwaterRelicsList {
                 if !collectedUnderwaterRelicIDs.contains(relic.id) {
@@ -2409,6 +2550,21 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
             proposed.y = nextGroundHeight
             verticalVelocity = 0
+        }
+        // 🌊 Zambullida en la Fuente de Agua del Salón Arcoíris (X = 0, Z = 64.0) hacia el Santuario Submarino
+        if !enteredEasterEggViaToboggan && isRainbowGateUnlocked && abs(proposed.x) <= 1.95 && abs(proposed.z - 64.0) <= 1.95 && proposed.y < 0.35 {
+            enteredEasterEggViaToboggan = true
+            geyserSubmergeTimer = 1.45
+            proposed.x = 0.0
+            proposed.y = -0.75
+            proposed.z = 64.0
+            verticalVelocity = -6.5
+            audio.playSubterraneanPortalPlungeSound()
+            audio.setAudioZone(isUnderwater: true, isRainbowHall: true)
+        }
+        if !enteredEasterEggViaToboggan && lastNearChestID != nil {
+            lastNearChestID = nil
+            onNearChestUpdate?(nil)
         }
         playerPosition = proposed
         reportNearbyLightIfNeeded()
@@ -2957,6 +3113,41 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                             npcYaws[index] = atan2(toPlayer.x, toPlayer.z)
                         }
                     }
+                }
+            }
+            return
+        }
+
+        update3DChestChallenge(dt: dt)
+
+        // Fase de Preparación y Luteo: esperar a que el jugador encienda las 4 luces antes de iniciar la Oleada 1
+        if isAwaitingLightsPrepPhase {
+            for i in npcPositions.indices {
+                currentBotLaserStarts[i] = .zero
+                currentBotLaserEnds[i] = .zero
+                botLaserActiveTimers[i] = 0
+                botLaserPropagationDistances[i] = 0
+                npcPositions[i] = SIMD3<Float>(0, -10, 0)
+            }
+            results.pointee.bot0Start = .zero; results.pointee.bot0End = .zero
+            results.pointee.bot1Start = .zero; results.pointee.bot1End = .zero
+            results.pointee.bot2Start = .zero; results.pointee.bot2End = .zero
+            results.pointee.bot3Start = .zero; results.pointee.bot3End = .zero
+            results.pointee.bot4Start = .zero; results.pointee.bot4End = .zero
+
+            if lightStates.post && lightStates.piscinaNeon && lightStates.sheeritNeon && lightStates.poolStrips {
+                isAwaitingLightsPrepPhase = false
+                UserDefaults.standard.set(true, forKey: "hasCompletedLightsPrepTutorial")
+                isWaveIntermission = true
+                intermissionTimeRemaining = 3.0
+                currentWave = 0
+                audio.playLaserIgnition()
+                onWaveUpdate?(0, 0, totalBotsInWave, true, 3.0)
+            } else {
+                waveStatusReportCountdown -= dt
+                if waveStatusReportCountdown <= 0 {
+                    waveStatusReportCountdown = 0.25
+                    onWaveUpdate?(0, 0, totalBotsInWave, false, 0)
                 }
             }
             return
@@ -3742,6 +3933,23 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             origin = lastToolOrigin
             direction = lastToolDirection
         }
+
+        // 💎 Impacto del láser contra los 3 cristales 3D del cofre activo
+        if let cid = active3DChestID, chestCrystalHitCooldown <= 0 {
+            let positions = currentChestCrystalPositions(chestID: cid)
+            for idx in 0..<3 where active3DChestCrystals[idx] {
+                let cPos = positions[idx]
+                let alongRay = simd_dot(cPos - origin, direction)
+                if alongRay > 0 && alongRay < 32.0 {
+                    let closestPt = origin + direction * alongRay
+                    if simd_distance(cPos, closestPt) < 0.72 {
+                        shatterChestCrystal(index: idx, chestID: cid)
+                        chestCrystalHitCooldown = 0.22
+                        break
+                    }
+                }
+            }
+        }
         var closestIndex: Int?
         var closestDistance: Float = 72
 
@@ -4072,10 +4280,32 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         margin: Float = 0.38,
         velocity: inout SIMD2<Float>
     ) {
-        // 🏊‍♂️ Pozo de la Piscina / Tramo Estrecho (-4.70 <= Y < -0.20):
-        // Conexión vertical entre la piscina superior y la cámara subterránea (solo si se sumergió vía tobogán)
+        // 🏊‍♂️ Pozo de la Piscina o Conducto de Burbujas (-4.70 <= Y < -0.20):
+        // Conexión vertical entre la superficie y la cámara subterránea
         if enteredEasterEggViaToboggan && position.y < -0.20 && position.y >= -4.70 {
             let shaftMargin = max(0.40, margin)
+            if position.z > 18.0 {
+                // ⛲ Conducto vertical de burbujas de la Fuente del Salón Arcoíris (X = 0, Z = 64.0)
+                let minX: Float = -2.20 + shaftMargin
+                let maxX: Float =  2.20 - shaftMargin
+                let minZ: Float = 61.80 + shaftMargin
+                let maxZ: Float = 66.20 - shaftMargin
+                if position.x < minX {
+                    position.x = minX
+                    if velocity.x < 0 { velocity.x = 0 }
+                } else if position.x > maxX {
+                    position.x = maxX
+                    if velocity.x > 0 { velocity.x = 0 }
+                }
+                if position.z < minZ {
+                    position.z = minZ
+                    if velocity.y < 0 { velocity.y = 0 }
+                } else if position.z > maxZ {
+                    position.z = maxZ
+                    if velocity.y > 0 { velocity.y = 0 }
+                }
+                return
+            }
             let minX: Float = -5.35 + shaftMargin
             let maxX: Float = 2.35 - shaftMargin
             let minZ: Float = -4.20 + shaftMargin
@@ -4294,7 +4524,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
         }
 
-        guard position.z > 17.5 else { return }
+        guard position.z > 17.5 && position.y > -0.20 && !enteredEasterEggViaToboggan else { return }
         let playerRadius: Float = 0.46
         for box in rtRainbowParkourBoxes {
             let topY = box.center.y + box.size.y * 0.5
@@ -4812,10 +5042,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         // 1. Muros Perimetrales del Salón & Delimitación de Piscina
         if isSubterranean {
-            let inOpening = origin.x >= -5.35 && origin.x <= 2.35 && origin.z >= -4.20 && origin.z <= 1.20
-            let subCeil: Float = inOpening ? 1.5 : -5.00
-            let bMin = SIMD3<Float>(-17.2, -11.0, -17.2)
-            let bMax = SIMD3<Float>(17.2, subCeil, 17.2)
+            let inPoolOpening = origin.x >= -5.35 && origin.x <= 2.35 && origin.z >= -4.20 && origin.z <= 1.20
+            let inGeyserOpening = abs(origin.x) <= 2.1 && abs(origin.z - 64.0) <= 2.1
+            let subCeil: Float = (inPoolOpening || inGeyserOpening) ? 1.5 : -5.00
+            let bMin = origin.z > 36.0 ? SIMD3<Float>(-21.5, -11.0, 36.0) : (origin.z > 17.8 ? SIMD3<Float>(-4.65, -11.0, -17.2) : SIMD3<Float>(-17.2, -11.0, -17.2))
+            let bMax = origin.z > 36.0 ? SIMD3<Float>(21.5, subCeil, 67.5) : (origin.z > 17.8 ? SIMD3<Float>(4.65, subCeil, 67.5) : SIMD3<Float>(17.2, subCeil, isRainbowGateUnlocked ? 67.5 : 17.2))
             for i in 0..<3 {
                 let o = origin[i]
                 let d = rayDir[i]
@@ -4977,7 +5208,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
     private func writeUniforms(texture: MTLTexture, dt: Float) {
         let currentlyInPool = isInsidePoolXZ(playerPosition) && playerPosition.y <= 0.35
-        let isSubterraneanTarget = enteredEasterEggViaToboggan && playerPosition.y <= -4.75
+        let inGeyserShaft = enteredEasterEggViaToboggan && playerPosition.z > 18.0 && playerPosition.y < 0.25
+        let isSubterraneanTarget = enteredEasterEggViaToboggan && (playerPosition.y <= -4.75 || inGeyserShaft)
         let isUnderwaterCamera = enteredEasterEggViaToboggan && (currentlyInPool || isSubterraneanTarget) && playerPosition.y < -0.10
 
         // 🎯 Elevación del punto de mira (lookAt) hacia la cabeza / hombro superior para evitar enfocar la espalda baja
@@ -5024,25 +5256,52 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
 
             // 🛡️ Collider Fino de Cámara FPS (Anti-Clipping & Near-Plane Protection)
-            // a) Tramo estrecho del pozo de la piscina (-4.70 <= Y < 0.25):
+            // a) Tramo estrecho del pozo de la piscina o conducto de burbujas (-4.70 <= Y < 0.25):
             if camPos.y < 0.25 && camPos.y >= -4.75 {
-                camPos.x = max(-5.05, min(2.05, camPos.x))
-                camPos.z = max(-3.85, min(0.85, camPos.z))
+                if playerPosition.z > 18.0 {
+                    camPos.x = max(-1.80, min(1.80, camPos.x))
+                    camPos.z = max(62.20, min(65.80, camPos.z))
+                } else {
+                    camPos.x = max(-5.05, min(2.05, camPos.x))
+                    camPos.z = max(-3.85, min(0.85, camPos.z))
+                }
             }
             // b) Cámara subterránea abisal (Y < -4.75):
             else if camPos.y < -4.75 {
-                camPos.x = max(-17.3, min(17.3, camPos.x))
-                camPos.z = max(-17.3, min(17.3, camPos.z))
+                if !isRainbowGateUnlocked {
+                    camPos.x = max(-17.3, min(17.3, camPos.x))
+                    camPos.z = max(-17.3, min(17.3, camPos.z))
+                } else if playerPosition.z <= 17.8 {
+                    camPos.x = max(-17.3, min(17.3, camPos.x))
+                    camPos.z = max(-17.3, camPos.z)
+                    if abs(camPos.x) >= 4.55 {
+                        camPos.z = min(17.3, camPos.z)
+                    }
+                } else if playerPosition.z <= 36.0 {
+                    camPos.x = max(-4.45, min(4.45, camPos.x))
+                    camPos.z = max(-17.3, min(67.1, camPos.z))
+                } else {
+                    camPos.x = max(-21.1, min(21.1, camPos.x))
+                    camPos.z = min(67.1, camPos.z)
+                    if abs(camPos.x) >= 4.55 {
+                        camPos.z = max(36.35, camPos.z)
+                    }
+                }
                 camPos.y = max(-11.3, camPos.y)
                 let underShaft = camPos.x >= -5.15 && camPos.x <= 2.15 && camPos.z >= -3.95 && camPos.z <= 0.95
-                if !underShaft {
+                let inGeyser = isRainbowGateUnlocked && abs(camPos.x) <= 2.2 && abs(camPos.z - 64.0) <= 2.2
+                if !underShaft && !inGeyser {
                     camPos.y = min(-4.95, camPos.y)
                 }
             }
-            // c) Gran Salón Arcoíris (Z >= 17.5):
-            else if camPos.z >= 17.5 {
+            // c) Gran Salón Arcoíris (jugador en Z > 17.8):
+            else if playerPosition.z > 17.8 {
                 camPos.x = max(-26.4, min(26.4, camPos.x))
-                camPos.z = max(18.0, min(71.4, camPos.z))
+                let inOpenPortal = isRainbowGateUnlocked && abs(camPos.x) < 4.75 && camPos.y < 4.55
+                if !inOpenPortal {
+                    camPos.z = max(18.25, camPos.z)
+                }
+                camPos.z = min(71.4, camPos.z)
                 camPos.y = max(0.15, min(8.6, camPos.y))
 
                 // Anti-clipping contra cada bloque de parkour:
@@ -5069,10 +5328,14 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     }
                 }
             }
-            // d) Patio / Salón Principal (Z < 17.5, Y >= 0.0):
+            // d) Patio / Salón Principal (jugador en Z <= 17.8, Y >= 0.0):
             else {
                 camPos.x = max(-17.3, min(17.3, camPos.x))
-                camPos.z = max(-17.3, min(17.3, camPos.z))
+                camPos.z = max(-17.3, camPos.z)
+                let inOpenPortal = isRainbowGateUnlocked && abs(camPos.x) < 4.75 && camPos.y < 4.55
+                if !inOpenPortal {
+                    camPos.z = min(17.3, camPos.z)
+                }
                 camPos.y = max(0.15, min(6.8, camPos.y))
             }
 
@@ -5096,7 +5359,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             var idealLakituPos = smoothedCameraTarget + backwardDir * distance + rawRight * shoulderOffset
 
             if isSubterraneanTarget {
-                let inOpening = isInsidePoolXZ(playerPosition)
+                let inOpening = isInsidePoolXZ(playerPosition) || (abs(playerPosition.x) <= 2.2 && abs(playerPosition.z - 64.0) <= 2.2)
                 if inOpening {
                     idealLakituPos.y = max(-10.2, min(0.60, idealLakituPos.y))
                 } else {
@@ -5135,7 +5398,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 lakituPosition.z = max(-3.95, min(0.95, lakituPosition.z))
                 lakituPosition.y = max(-4.40, lakituPosition.y)
             } else if isSubterraneanTarget {
-                let inOpening = isInsidePoolXZ(playerPosition)
+                let inOpening = isInsidePoolXZ(playerPosition) || (abs(playerPosition.x) <= 2.2 && abs(playerPosition.z - 64.0) <= 2.2)
                 if !inOpening {
                     lakituPosition.y = min(-4.95, lakituPosition.y)
                 }
@@ -5272,6 +5535,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             effectiveToolParamY = isMirrorReflectingLaser ? 2.0 : (mirrorActiveRemaining > 0 ? 1.5 : 1.0)
         }
 
+        let crystals = active3DChestID.map { currentChestCrystalPositions(chestID: $0) } ?? [.zero, .zero, .zero]
         var uniforms = RTUniforms(
             viewport: SIMD4<Float>(Float(texture.width), Float(texture.height), elapsedTime, rayBouncesEnabled ? 1 : 0),
             cameraPosition: SIMD4<Float>(cameraPosition, 1),
@@ -5292,7 +5556,12 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 lightStates.effectiveIntensity(.poolStrips)
             ),
             secondaryCameraPosition: SIMD4<Float>(secondaryCameraPos, 1.0),
-            secondaryCameraForward: SIMD4<Float>(secondaryCameraFwd, 0.0)
+            secondaryCameraForward: SIMD4<Float>(secondaryCameraFwd, 0.0),
+            lumiBodyColor: SIMD4<Float>(lumiBodyColor, 1.0),
+            lumiCrestColor: SIMD4<Float>(lumiCrestColor, 1.0),
+            chestCrystal0: SIMD4<Float>(crystals[0], active3DChestCrystals[0] ? 1.0 : 0.0),
+            chestCrystal1: SIMD4<Float>(crystals[1], active3DChestCrystals[1] ? 1.0 : 0.0),
+            chestCrystal2: SIMD4<Float>(crystals[2], active3DChestCrystals[2] ? 1.0 : 0.0)
         )
         lastCameraPosition = cameraPosition
         lastCameraRight = right * aspect * imagePlaneHeight
@@ -5784,9 +6053,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         // Hombreras monolíticas pesadas, cresta dorsal y peto de basalto Vantablack (imponente como Gólem Colosal en Oleada 3+)
         builder.addBox(center: SIMD3<Float>(-0.36, 1.06, 0.0), size: SIMD3<Float>(0.20, 0.16, 0.24), material: vantablackArmor)
         builder.addBox(center: SIMD3<Float>( 0.36, 1.06, 0.0), size: SIMD3<Float>(0.20, 0.16, 0.24), material: vantablackArmor)
-        builder.addBox(center: SIMD3<Float>( 0.00, 0.90, 0.17), size: SIMD3<Float>(0.38, 0.32, 0.10), material: vantablackArmor)
-        builder.addBox(center: SIMD3<Float>( 0.00, 0.96, -0.17), size: SIMD3<Float>(0.32, 0.36, 0.10), material: vantablackArmor)
-        builder.addSphere(center: SIMD3<Float>(0.00, 0.92, 0.23), radii: SIMD3<Float>(repeating: 0.075), material: darkCore, segments: 10, rings: 6)
+        builder.addBox(center: SIMD3<Float>( 0.00, 0.90, 0.235), size: SIMD3<Float>(0.38, 0.32, 0.10), material: vantablackArmor)
+        builder.addBox(center: SIMD3<Float>( 0.00, 0.96, -0.225), size: SIMD3<Float>(0.32, 0.36, 0.10), material: vantablackArmor)
+        builder.addSphere(center: SIMD3<Float>(0.00, 0.92, 0.295), radii: SIMD3<Float>(repeating: 0.075), material: darkCore, segments: 10, rings: 6)
         return builder
     }
 
@@ -5940,7 +6209,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         var builder = RTMeshBuilder()
         // Piso de pizarra oscura húmeda con reflejos especulares Ray-Traced
         let deck = RTMaterial(color: SIMD3<Float>(0.042, 0.052, 0.072), roughness: 0.08, reflectivity: 0.36, kind: 3)
-        let wall = RTMaterial(color: SIMD3<Float>(0.035, 0.045, 0.065), roughness: 0.9)
+        let wall = RTMaterial(color: SIMD3<Float>(0.095, 0.115, 0.145), roughness: 0.92)
         let poolTile = RTMaterial(color: SIMD3<Float>(0.14, 0.24, 0.26), roughness: 0.36, reflectivity: 0.08)
         let coping = RTMaterial(color: SIMD3<Float>(0.28, 0.30, 0.30), roughness: 0.12, reflectivity: 0.52, kind: 3)
         let mirror = RTMaterial(color: SIMD3<Float>(0.92, 0.95, 0.98), roughness: 0.01, reflectivity: 0.97, kind: 1)
@@ -6062,7 +6331,20 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
         // 🌈 🏛️ SANTUARIO SUBMARINO DE LOS PRISMAS (Z = 36.0 a 68.0, 44m x 32m, directamente bajo el Salón Arcoíris)
         builder.addBox(center: SIMD3<Float>(0.0, -11.60, 52.0), size: SIMD3<Float>(44.0, 0.30, 32.0), material: subFloorMat)
-        builder.addBox(center: SIMD3<Float>(0.0, -4.70, 52.0), size: SIMD3<Float>(44.0, 0.25, 32.0), material: subCeilingMat)
+        // Techo del Santuario Submarino (Y = -4.70m) con abertura de 4.4m x 4.4m en (X = 0, Z = 64.0) para el conducto de burbujas
+        builder.addBox(center: SIMD3<Float>(0.0, -4.70, 48.9), size: SIMD3<Float>(44.0, 0.25, 25.8), material: subCeilingMat)
+        builder.addBox(center: SIMD3<Float>(0.0, -4.70, 67.1), size: SIMD3<Float>(44.0, 0.25, 1.8), material: subCeilingMat)
+        builder.addBox(center: SIMD3<Float>(-12.1, -4.70, 64.0), size: SIMD3<Float>(19.8, 0.25, 4.4), material: subCeilingMat)
+        builder.addBox(center: SIMD3<Float>( 12.1, -4.70, 64.0), size: SIMD3<Float>(19.8, 0.25, 4.4), material: subCeilingMat)
+        // Paredes verticales del conducto de burbujas (Y = -4.70m a 0.0m, conectando el Santuario con la Fuente del Salón Arcoíris)
+        builder.addBox(center: SIMD3<Float>(0.0, -2.35, 61.74), size: SIMD3<Float>(4.6, 4.70, 0.12), material: poolTile)
+        builder.addBox(center: SIMD3<Float>(0.0, -2.35, 66.26), size: SIMD3<Float>(4.6, 4.70, 0.12), material: poolTile)
+        builder.addBox(center: SIMD3<Float>(-2.26, -2.35, 64.0), size: SIMD3<Float>(0.12, 4.70, 4.6), material: poolTile)
+        builder.addBox(center: SIMD3<Float>( 2.26, -2.35, 64.0), size: SIMD3<Float>(0.12, 4.70, 4.6), material: poolTile)
+        builder.addBox(center: SIMD3<Float>(0.0, -2.35, 61.82), size: SIMD3<Float>(4.2, 0.08, 0.06), material: subWallNeonCyan)
+        builder.addBox(center: SIMD3<Float>(0.0, -2.35, 66.18), size: SIMD3<Float>(4.2, 0.08, 0.06), material: subWallNeonCyan)
+        builder.addBox(center: SIMD3<Float>(-2.18, -2.35, 64.0), size: SIMD3<Float>(0.06, 0.08, 4.2), material: subWallNeonCyan)
+        builder.addBox(center: SIMD3<Float>( 2.18, -2.35, 64.0), size: SIMD3<Float>(0.06, 0.08, 4.2), material: subWallNeonCyan)
         builder.addBox(center: SIMD3<Float>(-13.5, -7.85, 36.0), size: SIMD3<Float>(17.0, 6.30, 0.40), material: subWallMat)
         builder.addBox(center: SIMD3<Float>( 13.5, -7.85, 36.0), size: SIMD3<Float>(17.0, 6.30, 0.40), material: subWallMat)
         builder.addBox(center: SIMD3<Float>(-22.0, -7.85, 52.0), size: SIMD3<Float>(0.40, 6.30, 32.0), material: subWallMat)
@@ -6327,10 +6609,13 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         builder.addBox(center: SIMD3<Float>(8.5, 1.85, -6.5), size: SIMD3<Float>(0.60, 0.75, 0.08), material: prismFaceMirror)
         builder.addBox(center: SIMD3<Float>(8.5, 2.30, -6.5), size: SIMD3<Float>(0.24, 0.24, 0.24), material: chronoCoreCrystal)
 
-        // 2. Interruptor / Receptor Cuántico del Chrono-Core (Pared Oeste, X = -17.55, Y = 2.4, Z = -6.5)
-        builder.addBox(center: SIMD3<Float>(-17.55, 2.40, -6.5), size: SIMD3<Float>(0.16, 1.15, 1.15), material: chronoGold)
-        builder.addBox(center: SIMD3<Float>(-17.44, 2.40, -6.5), size: SIMD3<Float>(0.14, 0.75, 0.75), material: chronoCoreCrystal)
-        builder.addBox(center: SIMD3<Float>(-17.38, 2.40, -6.5), size: SIMD3<Float>(0.08, 0.35, 0.35), material: prismFaceMirror)
+        // 2. Caja de Fusibles / Receptor Cuántico del Chrono-Core (Pared Oeste, X = -17.55, Y = 1.45, Z = -6.5)
+        builder.addBox(center: SIMD3<Float>(-17.55, 1.45, -6.5), size: SIMD3<Float>(0.20, 1.45, 1.35), material: chronoPedestal)
+        builder.addBox(center: SIMD3<Float>(-17.44, 1.45, -6.5), size: SIMD3<Float>(0.12, 1.25, 1.15), material: chronoGold)
+        builder.addBox(center: SIMD3<Float>(-17.37, 1.45, -6.5), size: SIMD3<Float>(0.10, 0.85, 0.78), material: chronoCoreCrystal)
+        builder.addBox(center: SIMD3<Float>(-17.31, 1.72, -6.5), size: SIMD3<Float>(0.08, 0.14, 0.55), material: prismFaceMirror)
+        builder.addBox(center: SIMD3<Float>(-17.31, 1.45, -6.5), size: SIMD3<Float>(0.08, 0.14, 0.55), material: prismFaceMirror)
+        builder.addBox(center: SIMD3<Float>(-17.31, 1.18, -6.5), size: SIMD3<Float>(0.08, 0.14, 0.55), material: prismFaceMirror)
 
         let lampPosition = SIMD3<Float>(-7.55, 0, 12.65)
         builder.addBox(center: lampPosition + SIMD3<Float>(0, 1.42, 0), size: SIMD3<Float>(0.13, 2.75, 0.13), material: metal)
@@ -6384,8 +6669,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         builder.addBox(center: SIMD3<Float>(-27.0, 4.5, 45.0), size: SIMD3<Float>(0.4, 9.0, 54.4), material: wallDarkMatte)
         builder.addBox(center: SIMD3<Float>( 27.0, 4.5, 45.0), size: SIMD3<Float>(0.4, 9.0, 54.4), material: wallDarkMatte)
         // Alas Norte que conectan el Salón de la Piscina (±17.8) con el ancho del Salón Arcoíris (±27.0) en Z = 17.8
-        builder.addBox(center: SIMD3<Float>(-22.4, 4.5, 17.8), size: SIMD3<Float>(9.6, 9.0, 0.4), material: wallDarkMatte)
-        builder.addBox(center: SIMD3<Float>( 22.4, 4.5, 17.8), size: SIMD3<Float>(9.6, 9.0, 0.4), material: wallDarkMatte)
+        builder.addBox(center: SIMD3<Float>(-22.6, 4.5, 17.8), size: SIMD3<Float>(9.2, 9.0, 0.4), material: wallDarkMatte)
+        builder.addBox(center: SIMD3<Float>( 22.6, 4.5, 17.8), size: SIMD3<Float>(9.2, 9.0, 0.4), material: wallDarkMatte)
 
         // 2. 7 Colores del Espectro Arcoíris Mario Kart:
         let rainbowColors: [(SIMD3<Float>, SIMD3<Float>)] = [
@@ -6412,11 +6697,35 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let laneWidth: Float = 54.0 / Float(laneCount) // 7.714m por carril
         for i in 0..<laneCount {
             let xCenter = -27.0 + laneWidth * 0.5 + Float(i) * laneWidth
-            builder.addBox(
-                center: SIMD3<Float>(xCenter, -0.12, 45.0),
-                size: SIMD3<Float>(laneWidth - 0.14, 0.24, 54.0),
-                material: rainbowFloorMats[i]
-            )
+            if i == 3 {
+                // Dejar abertura de 4.4m x 4.4m en (X = 0, Z = 64.0) para la Fuente de Agua del Géiser
+                builder.addBox(
+                    center: SIMD3<Float>(0.0, -0.12, 39.9),
+                    size: SIMD3<Float>(laneWidth - 0.14, 0.24, 43.8),
+                    material: rainbowFloorMats[i]
+                )
+                builder.addBox(
+                    center: SIMD3<Float>(0.0, -0.12, 69.1),
+                    size: SIMD3<Float>(laneWidth - 0.14, 0.24, 5.8),
+                    material: rainbowFloorMats[i]
+                )
+                builder.addBox(
+                    center: SIMD3<Float>(-2.99, -0.12, 64.0),
+                    size: SIMD3<Float>(1.59, 0.24, 4.4),
+                    material: rainbowFloorMats[i]
+                )
+                builder.addBox(
+                    center: SIMD3<Float>(2.99, -0.12, 64.0),
+                    size: SIMD3<Float>(1.59, 0.24, 4.4),
+                    material: rainbowFloorMats[i]
+                )
+            } else {
+                builder.addBox(
+                    center: SIMD3<Float>(xCenter, -0.12, 45.0),
+                    size: SIMD3<Float>(laneWidth - 0.14, 0.24, 54.0),
+                    material: rainbowFloorMats[i]
+                )
+            }
             if i > 0 {
                 let xDiv = -27.0 + Float(i) * laneWidth
                 builder.addBox(
@@ -6425,6 +6734,33 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     material: laneDividerMat
                 )
             }
+        }
+
+        // ⛲ Fuente de Agua Cuántica del Salón Arcoíris (X = 0, Z = 64.0) conectada al Géiser Submarino
+        let fountainRimMat = RTMaterial(color: SIMD3<Float>(0.12, 0.16, 0.22), roughness: 0.35, reflectivity: 0.18)
+        let fountainNeonMat = RTMaterial(color: SIMD3<Float>(0.0, 0.90, 1.0), roughness: 0.15, emission: SIMD3<Float>(0.0, 1.6, 2.2), reflectivity: 0.25, kind: 5)
+        let fountainWaterMat = RTMaterial(color: SIMD3<Float>(0.05, 0.72, 0.96), roughness: 0.04, emission: SIMD3<Float>(0.02, 0.28, 0.45), reflectivity: 0.55, kind: 3)
+        let fountainBubbleMat = RTMaterial(color: SIMD3<Float>(0.68, 0.96, 1.0), roughness: 0.04, emission: SIMD3<Float>(0.25, 0.85, 1.25), reflectivity: 0.50, kind: 3)
+        // Bordes de la fuente (Norte, Sur, Oeste, Este)
+        builder.addBox(center: SIMD3<Float>( 0.0, 0.18, 61.65), size: SIMD3<Float>(4.9, 0.36, 0.32), material: fountainRimMat)
+        builder.addBox(center: SIMD3<Float>( 0.0, 0.18, 66.35), size: SIMD3<Float>(4.9, 0.36, 0.32), material: fountainRimMat)
+        builder.addBox(center: SIMD3<Float>(-2.35, 0.18, 64.0), size: SIMD3<Float>(0.32, 0.36, 4.4), material: fountainRimMat)
+        builder.addBox(center: SIMD3<Float>( 2.35, 0.18, 64.0), size: SIMD3<Float>(0.32, 0.36, 4.4), material: fountainRimMat)
+        // Tira neón superior del brocal
+        builder.addBox(center: SIMD3<Float>( 0.0, 0.38, 61.65), size: SIMD3<Float>(4.92, 0.05, 0.14), material: fountainNeonMat)
+        builder.addBox(center: SIMD3<Float>( 0.0, 0.38, 66.35), size: SIMD3<Float>(4.92, 0.05, 0.14), material: fountainNeonMat)
+        builder.addBox(center: SIMD3<Float>(-2.35, 0.38, 64.0), size: SIMD3<Float>(0.14, 0.05, 4.42), material: fountainNeonMat)
+        builder.addBox(center: SIMD3<Float>( 2.35, 0.38, 64.0), size: SIMD3<Float>(0.14, 0.05, 4.42), material: fountainNeonMat)
+        // Anillo de agua luminoso en el borde interno y chorros burbujeantes sobre la fuente abierta
+        builder.addBox(center: SIMD3<Float>( 0.0, 0.02, 61.90), size: SIMD3<Float>(4.35, 0.06, 0.25), material: fountainWaterMat)
+        builder.addBox(center: SIMD3<Float>( 0.0, 0.02, 66.10), size: SIMD3<Float>(4.35, 0.06, 0.25), material: fountainWaterMat)
+        builder.addBox(center: SIMD3<Float>(-2.05, 0.02, 64.0), size: SIMD3<Float>(0.25, 0.06, 4.10), material: fountainWaterMat)
+        builder.addBox(center: SIMD3<Float>( 2.05, 0.02, 64.0), size: SIMD3<Float>(0.25, 0.06, 4.10), material: fountainWaterMat)
+        for fIdx in 0..<6 {
+            let fY: Float = 0.25 + Float(fIdx) * 0.26
+            let fAngle = Float(fIdx) * 1.35
+            let fSpread: Float = 0.22 + Float(fIdx) * 0.06
+            builder.addSphere(center: SIMD3<Float>(cos(fAngle) * fSpread, fY, 64.0 + sin(fAngle) * fSpread), radii: SIMD3<Float>(repeating: 0.22 - Float(fIdx) * 0.015), material: fountainBubbleMat, segments: 8, rings: 5)
         }
 
         // Materiales Neón para Bordes y Muros

@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDisplayName</key>
-	<string>Laser Tracer</string>
+	<string>Lumi</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIconName</key>
@@ -11,13 +11,13 @@
 	<key>CFBundleIdentifier</key>
 	<string>com.estebanavila.RtPruebas</string>
 	<key>CFBundleName</key>
-	<string>Laser Tracer</string>
+	<string>Lumi: Laser Tracer</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>2.1</string>
 	<key>CFBundleVersion</key>
-	<string>164</string>
+	<string>191</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSRequiresIPhoneOS</key>

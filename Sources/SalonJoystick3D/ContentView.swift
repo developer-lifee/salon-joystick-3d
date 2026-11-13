@@ -313,8 +313,13 @@ struct ContentView: View {
             .fullScreenCover(isPresented: $model.showsPrologueScreen) {
                 CinematicPrologueView(model: model)
             }
-            .fullScreenCover(isPresented: $model.showsQuantumFuseBox) {
-                QuantumFuseBoxView(model: model)
+            .fullScreenCover(isPresented: Binding(
+                get: { model.activeChestMinigameID != nil },
+                set: { if !$0 { model.activeChestMinigameID = nil } }
+            )) {
+                if let chestID = model.activeChestMinigameID {
+                    QuantumChestMinigameView(model: model, chestID: chestID)
+                }
             }
         } else {
             ZStack(alignment: .bottomLeading) {
@@ -528,8 +533,8 @@ struct ContentView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 7)
-                .background(.ultraThinMaterial, in: Capsule())
-                .background(Color.black.opacity(0.45), in: Capsule())
+                .background(Color.white.opacity(0.16), in: Capsule())
+                .background(.ultraThinMaterial.opacity(0.42), in: Capsule())
                 .overlay(
                     Capsule()
                         .stroke(
@@ -583,23 +588,9 @@ struct ContentView: View {
                         HStack(spacing: 8) {
                             Image(systemName: "lock.shield.fill")
                                 .foregroundStyle(.cyan)
-                            Text("🔒 CHRONO-CORE DORMIDO: Conecta los fusibles cuánticos para activar el Modo Slow-Mo y +50 HP.")
+                            Text("🔒 CHRONO-CORE DORMIDO: Abre cualquier Cofre del Tesoro 💎 bajo el agua para activar Slow-Mo y +50 HP.")
                                 .font(.system(size: 11, weight: .bold))
                                 .foregroundStyle(.white)
-                            Button {
-                                model.showsQuantumFuseBox = true
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "wrench.and.screwdriver.fill")
-                                    Text("REPARAR FUSIBLES")
-                                }
-                                .font(.system(size: 10, weight: .black, design: .monospaced))
-                                .foregroundStyle(.black)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(Color.yellow, in: Capsule())
-                                .shadow(color: Color.yellow.opacity(0.6), radius: 5)
-                            }
                         }
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
@@ -609,33 +600,44 @@ struct ContentView: View {
                         .transition(.move(edge: .top).combined(with: .opacity))
                     }
 
-                    if model.isNearFuseTerminal && !model.isSlowMotionUnlocked {
-                        Button {
-                            model.showsQuantumFuseBox = true
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "bolt.badge.automatic.fill")
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundStyle(.yellow)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("⚡ CAJA DE FUSIBLES CUÁNTICA")
-                                        .font(.system(size: 11, weight: .black, design: .monospaced))
-                                        .foregroundStyle(.white)
-                                    Text("Toca para reconectar cables y activar Slow-Mo")
-                                        .font(.system(size: 9.5, weight: .semibold))
-                                        .foregroundStyle(.white.opacity(0.8))
-                                }
-                                Image(systemName: "chevron.right.circle.fill")
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundStyle(.yellow)
+                    if let cid = model.active3DChestID {
+                        HStack(spacing: 8) {
+                            Image(systemName: "diamond.fill")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(.cyan)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("💎 CERRADURA 3D COFRE #\(cid + 1) — \(3 - model.active3DChestRemaining)/3 · \(Int(ceil(model.active3DChestTimer)))s")
+                                    .font(.system(size: 11, weight: .black, design: .monospaced))
+                                    .foregroundStyle(.white)
+                                Text("Dispara con el LÁSER (o toca) los 3 cristales que orbitan el cofre")
+                                    .font(.system(size: 9.5, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.85))
                             }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(.ultraThinMaterial, in: Capsule())
-                            .background(Color.black.opacity(0.7), in: Capsule())
-                            .overlay(Capsule().stroke(Color.yellow.opacity(0.85), lineWidth: 1.5))
-                            .shadow(color: Color.yellow.opacity(0.5), radius: 8)
                         }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .background(Color.black.opacity(0.75), in: Capsule())
+                        .overlay(Capsule().stroke(Color.cyan.opacity(0.85), lineWidth: 1.5))
+                        .shadow(color: Color.cyan.opacity(0.5), radius: 8)
+                        .transition(.scale.combined(with: .opacity))
+                    }
+
+                    if let rewardText = model.chestRewardBannerText {
+                        HStack(spacing: 10) {
+                            Image(systemName: "gift.fill")
+                                .font(.system(size: 16, weight: .black))
+                                .foregroundStyle(.yellow)
+                            Text(rewardText)
+                                .font(.system(size: 11.5, weight: .black, design: .rounded))
+                                .foregroundStyle(.white)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 9)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .background(Color.black.opacity(0.78), in: Capsule())
+                        .overlay(Capsule().stroke(LinearGradient(colors: [.yellow, .cyan], startPoint: .leading, endPoint: .trailing), lineWidth: 1.5))
+                        .shadow(color: Color.yellow.opacity(0.45), radius: 10)
                         .transition(.scale.combined(with: .opacity))
                     }
 
@@ -801,28 +803,25 @@ struct ContentView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(.ultraThinMaterial, in: Capsule())
+                    .background(Color.white.opacity(0.16), in: Capsule())
+                    .background(.ultraThinMaterial.opacity(0.42), in: Capsule())
                     .overlay(
                         Capsule()
                             .stroke(LinearGradient(colors: [.yellow.opacity(0.85), .orange.opacity(0.60)], startPoint: .leading, endPoint: .trailing), lineWidth: 1.5)
                     )
                     .shadow(color: .orange.opacity(0.35), radius: 8, x: 0, y: 4)
                 } else if model.isWaveIntermission {
+                    let intermissionGold = Color(red: 1.0, green: 0.86, blue: 0.36)
                     VStack(spacing: 4) {
                         Text("¡OLEADA COMPLETADA!")
                             .font(.system(size: 16, weight: .black, design: .monospaced))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [.yellow, .orange],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .shadow(color: .orange.opacity(0.8), radius: 6)
+                            .foregroundStyle(intermissionGold)
+                            .shadow(color: .black.opacity(0.45), radius: 3)
 
                         Text("DESCANSO: \(Int(ceil(model.waveIntermissionTime)))s")
                             .font(.system(size: 13, weight: .bold, design: .monospaced))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(intermissionGold.opacity(0.95))
+                            .shadow(color: .black.opacity(0.4), radius: 2)
 
                         if model.isAnyMultiplayerConnected && model.multiplayer.mode == .cooperative && model.remotePlayerIsRecovering {
                             Button {
@@ -848,18 +847,40 @@ struct ContentView: View {
                             .padding(.top, 2)
                         } else {
                             Text("+25 HP REGENERADOS")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(.green)
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundStyle(intermissionGold.opacity(0.88))
+                                .shadow(color: .black.opacity(0.35), radius: 2)
                         }
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .background(Color.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .background(.ultraThinMaterial.opacity(0.42), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(LinearGradient(colors: [.yellow.opacity(0.8), .orange.opacity(0.4)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.5)
+                            .stroke(intermissionGold.opacity(0.75), lineWidth: 1.5)
                     )
-                    .shadow(color: .black.opacity(0.4), radius: 10, x: 0, y: 5)
+                    .shadow(color: .black.opacity(0.22), radius: 8, x: 0, y: 4)
+                } else if model.currentWave == 0 {
+                    let onCount = [model.lightStates.post, model.lightStates.piscinaNeon, model.lightStates.sheeritNeon, model.lightStates.poolStrips].filter { $0 }.count
+                    VStack(spacing: 4) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "lightbulb.max.fill")
+                                .font(.system(size: 13, weight: .black))
+                                .foregroundStyle(.yellow)
+                            Text("PREPARACIÓN DEL SALÓN — LUCES: \(onCount) / 4")
+                                .font(.system(size: 12, weight: .black, design: .monospaced))
+                                .foregroundStyle(.yellow)
+                        }
+                        Text("Busca los 4 💡 amarillos en el radar (arriba izq.), usa WARP (abajo der.) para moverte rápido y enciéndelos para iniciar la Oleada 1.")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                    }
+                    .frame(maxWidth: 410)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
                 } else {
                     HStack(spacing: 10) {
                         HStack(spacing: 4) {
@@ -905,7 +926,8 @@ struct ContentView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(.ultraThinMaterial, in: Capsule())
+                    .background(Color.white.opacity(0.16), in: Capsule())
+                    .background(.ultraThinMaterial.opacity(0.42), in: Capsule())
                     .overlay(
                         Capsule()
                             .stroke(LinearGradient(colors: [.white.opacity(0.85), .red.opacity(0.50)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.2)
@@ -1064,7 +1086,8 @@ struct ContentView: View {
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(.black.opacity(0.75), in: Capsule())
+                    .background(Color.white.opacity(0.16), in: Capsule())
+                    .background(.ultraThinMaterial.opacity(0.42), in: Capsule())
                     .overlay(Capsule().stroke(Color.yellow.opacity(0.85), lineWidth: 1.5))
                     .shadow(color: .yellow.opacity(0.4), radius: 6)
                 } else if model.isNearRainbowGate && model.isRainbowGateUnlocked {
@@ -1072,7 +1095,7 @@ struct ContentView: View {
                         Image(systemName: "sparkles")
                             .font(.system(size: 12, weight: .bold))
                             .foregroundStyle(.cyan)
-                        Text("✨ ¡PORTAL ABIERTO (3,000 PTS)! CRUZA AL OTRO MUNDO")
+                        Text("✨ ¡PORTAL ABIERTO! CRUZA AL OTRO MUNDO")
                             .font(.system(size: 11, weight: .heavy, design: .monospaced))
                             .foregroundStyle(.white)
                     }
@@ -1192,9 +1215,9 @@ struct ContentView: View {
                         scale: model.hudMinimapScale,
                         onSelect: { model.selectedHUDGroup = 8 }
                     ))
-                    .padding(.trailing, 12)
-                    .padding(.bottom, 126)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .padding(.leading, 12)
+                    .padding(.top, 10)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .transition(.scale.combined(with: .opacity))
             }
 
@@ -1810,8 +1833,13 @@ struct ContentView: View {
             .fullScreenCover(isPresented: $model.showsPrologueScreen) {
                 CinematicPrologueView(model: model)
             }
-            .fullScreenCover(isPresented: $model.showsQuantumFuseBox) {
-                QuantumFuseBoxView(model: model)
+            .fullScreenCover(isPresented: Binding(
+                get: { model.activeChestMinigameID != nil },
+                set: { if !$0 { model.activeChestMinigameID = nil } }
+            )) {
+                if let chestID = model.activeChestMinigameID {
+                    QuantumChestMinigameView(model: model, chestID: chestID)
+                }
             }
             .onAppear {
                 UIApplication.shared.isIdleTimerDisabled = true
@@ -1832,7 +1860,7 @@ final class GameModel: ObservableObject {
     @Published var multiplayer = LocalMultiplayerSession()
     @Published var gameCenter = GameCenterManager()
     func updateAudioPauseState() {
-        let shouldPause = (gameState != .playing) || showsSettingsSheet || showsMultiplayerSheet || isEditingHUDLayout || showsPrologueScreen
+        let shouldPause = (gameState != .playing) || showsSettingsSheet || showsMultiplayerSheet || isEditingHUDLayout || showsPrologueScreen || (activeChestMinigameID != nil)
         audio.setPaused(shouldPause)
     }
 
@@ -1912,6 +1940,93 @@ final class GameModel: ObservableObject {
         didSet { updateAudioPauseState() }
     }
     @Published var isNearFuseTerminal: Bool = false
+    @Published var nearbyChestID: Int? = nil
+    @Published var activeChestMinigameID: Int? = nil {
+        didSet { updateAudioPauseState() }
+    }
+    var onOpenChestRequested: ((Int) -> Void)?
+
+    @Published var lumiColorIndex: Int = UserDefaults.standard.integer(forKey: "lumiColorIndex") {
+        didSet { UserDefaults.standard.set(lumiColorIndex, forKey: "lumiColorIndex") }
+    }
+    @Published var lumiCrestColorIndex: Int = UserDefaults.standard.integer(forKey: "lumiCrestColorIndex") {
+        didSet { UserDefaults.standard.set(lumiCrestColorIndex, forKey: "lumiCrestColorIndex") }
+    }
+
+    static let lumiBodyPalette: [(name: String, rgb: SIMD3<Float>, color: Color)] = [
+        ("Esmeralda", SIMD3<Float>(0.03, 0.88, 0.10), Color(red: 0.05, green: 0.88, blue: 0.15)),
+        ("Cian Cuántico", SIMD3<Float>(0.02, 0.78, 0.96), Color(red: 0.02, green: 0.78, blue: 0.96)),
+        ("Oro Solar", SIMD3<Float>(0.98, 0.76, 0.06), Color(red: 0.98, green: 0.76, blue: 0.06)),
+        ("Magenta Neón", SIMD3<Float>(0.94, 0.12, 0.78), Color(red: 0.94, green: 0.12, blue: 0.78)),
+        ("Rubí Plasma", SIMD3<Float>(0.96, 0.10, 0.22), Color(red: 0.96, green: 0.10, blue: 0.22)),
+        ("Violeta Galaxia", SIMD3<Float>(0.55, 0.18, 0.98), Color(red: 0.55, green: 0.18, blue: 0.98))
+    ]
+
+    static let lumiCrestPalette: [(name: String, rgb: SIMD3<Float>, color: Color)] = [
+        ("Lima Neón", SIMD3<Float>(0.35, 1.00, 0.45), Color(red: 0.35, green: 1.00, blue: 0.45)),
+        ("Oro Estelar", SIMD3<Float>(1.00, 0.86, 0.18), Color(red: 1.00, green: 0.86, blue: 0.18)),
+        ("Cian Eléctrico", SIMD3<Float>(0.12, 0.95, 1.00), Color(red: 0.12, green: 0.95, blue: 1.00)),
+        ("Coral Fuego", SIMD3<Float>(1.00, 0.28, 0.42), Color(red: 1.00, green: 0.28, blue: 0.42)),
+        ("Violeta Luz", SIMD3<Float>(0.85, 0.32, 1.00), Color(red: 0.85, green: 0.32, blue: 1.00))
+    ]
+
+    var lumiBodyRGB: SIMD3<Float> {
+        let idx = max(0, min(Self.lumiBodyPalette.count - 1, lumiColorIndex))
+        return Self.lumiBodyPalette[idx].rgb
+    }
+
+    var lumiCrestRGB: SIMD3<Float> {
+        let idx = max(0, min(Self.lumiCrestPalette.count - 1, lumiCrestColorIndex))
+        return Self.lumiCrestPalette[idx].rgb
+    }
+
+    @Published var chestRewardBannerText: String? = nil
+    @Published var active3DChestID: Int? = nil
+    @Published var active3DChestRemaining: Int = 0
+    @Published var active3DChestTimer: Float = 0
+
+    func handle3DChestUnlocked(chestID: Int, points: Int) {
+        playerHealth = min(maxPlayerHealth, playerHealth + 35)
+        playerShield = min(100, playerShield + 25)
+        let unlockedSlowMo = !isSlowMotionUnlocked
+        if unlockedSlowMo {
+            onQuantumPuzzleSolved()
+        }
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+            chestRewardBannerText = unlockedSlowMo
+                ? "💎 ¡COFRE #\(chestID + 1) ABIERTO! +\(points) PTS · +35 HP · +25 ESCUDO · ⚡ SLOW-MO"
+                : "💎 ¡COFRE #\(chestID + 1) ABIERTO! +\(points) PTS · +35 HP · +25 ESCUDO"
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) { [weak self] in
+            withAnimation {
+                self?.chestRewardBannerText = nil
+            }
+        }
+        audio.playLaserIgnition()
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+
+    func completeChestMinigame(chestID: Int) {
+        onOpenChestRequested?(chestID)
+        let pts = (chestID == 5) ? 1000 : 500
+        let unlockedSlowMo = !isSlowMotionUnlocked
+        if unlockedSlowMo {
+            onQuantumPuzzleSolved()
+        }
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+            chestRewardBannerText = unlockedSlowMo
+                ? "💎 ¡COFRE #\(chestID + 1) ABIERTO! +\(pts) PTS · +35 HP · +25 ESCUDO · ⚡ SLOW-MO"
+                : "💎 ¡COFRE #\(chestID + 1) ABIERTO! +\(pts) PTS · +35 HP · +25 ESCUDO"
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) { [weak self] in
+            withAnimation {
+                self?.chestRewardBannerText = nil
+            }
+        }
+        audio.playLaserIgnition()
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        activeChestMinigameID = nil
+    }
     @Published var playerHealth: Float = UserDefaults.standard.bool(forKey: "isSlowMotionUnlocked") ? 150.0 : 100.0
     @Published var playerShield: Float = 100.0
     private var lastDamageTime: TimeInterval = 0
@@ -2347,7 +2462,7 @@ final class GameModel: ObservableObject {
     @Published private(set) var localPlayerPosition = SIMD3<Float>(3.8, 0, 3.8)
     @Published private(set) var localPlayerYaw: Float = .pi
     @Published var npcPositions: [SIMD3<Float>] = []
-    @AppStorage("showsMinimap") var showsMinimap: Bool = true
+    @AppStorage("showsMinimapV2") var showsMinimap: Bool = true
     private var cancellables = Set<AnyCancellable>()
 
     var isAnyMultiplayerConnected: Bool {
@@ -2762,7 +2877,9 @@ final class GameModel: ObservableObject {
         remotePlayerHealth = 100.0
         remotePlayerShield = 100.0
         remotePlayerScore = 0
-        currentWave = 1
+        let isVersusOrLightBattle = isAnyMultiplayerConnected && (multiplayer.mode == .versus || multiplayer.mode == .lightBattle)
+        let shouldDoLightsPrep = !isVersusOrLightBattle && !UserDefaults.standard.bool(forKey: "hasCompletedLightsPrepTutorial")
+        currentWave = shouldDoLightsPrep ? 0 : 1
         botsRemainingInWave = 2
         totalBotsInWave = 2
         isWaveIntermission = false
@@ -3213,7 +3330,9 @@ final class GameModel: ObservableObject {
     func returnToMainMenu() {
         playerHealth = maxPlayerHealth
         playerScore = 0
-        currentWave = 1
+        let isVersusOrLightBattle = isAnyMultiplayerConnected && (multiplayer.mode == .versus || multiplayer.mode == .lightBattle)
+        let shouldDoLightsPrep = !isVersusOrLightBattle && !UserDefaults.standard.bool(forKey: "hasCompletedLightsPrepTutorial")
+        currentWave = shouldDoLightsPrep ? 0 : 1
         botsRemainingInWave = 2
         totalBotsInWave = 2
         isWaveIntermission = false
@@ -3444,7 +3563,9 @@ final class GameModel: ObservableObject {
         isRecoveringInChamber = false
         remotePlayerIsRecovering = false
         recoveryTimeRemaining = 0
-        currentWave = 1
+        let isVersusOrLightBattle = isAnyMultiplayerConnected && (multiplayer.mode == .versus || multiplayer.mode == .lightBattle)
+        let shouldDoLightsPrep = !isVersusOrLightBattle && !UserDefaults.standard.bool(forKey: "hasCompletedLightsPrepTutorial")
+        currentWave = shouldDoLightsPrep ? 0 : 1
         botsRemainingInWave = 2
         totalBotsInWave = 2
         isWaveIntermission = false
@@ -3482,7 +3603,9 @@ final class GameModel: ObservableObject {
         recoveryTimeRemaining = 0
         heldTool = .flashlight
         joystick = .zero
-        currentWave = 1
+        let isVersusOrLightBattle = isAnyMultiplayerConnected && (multiplayer.mode == .versus || multiplayer.mode == .lightBattle)
+        let shouldDoLightsPrep = !isVersusOrLightBattle && !UserDefaults.standard.bool(forKey: "hasCompletedLightsPrepTutorial")
+        currentWave = shouldDoLightsPrep ? 0 : 1
         botsRemainingInWave = 2
         totalBotsInWave = 2
         isWaveIntermission = false
@@ -5297,6 +5420,7 @@ final class ChiptuneAudioEngine {
     func setAudioZone(isUnderwater: Bool, isRainbowHall: Bool) {
         audioQueue.async { [weak self] in
             guard let self else { return }
+            let wasUnderwater = self.isInUnderwaterZone
             if self.isInUnderwaterZone == isUnderwater && self.isInRainbowHallZone == isRainbowHall {
                 return
             }
@@ -5304,6 +5428,12 @@ final class ChiptuneAudioEngine {
             self.isInRainbowHallZone = isRainbowHall
             self.underwaterEQ.bands[0].bypass = !isUnderwater
             guard self.started else { return }
+
+            if wasUnderwater && !isUnderwater {
+                self.splashNode.stop()
+                self.waterMovementIntensity = 0
+                self.waterNode.volume = 0
+            }
 
             self.musicNode.stop()
             let activeBuffer: AVAudioPCMBuffer?
@@ -5481,7 +5611,7 @@ final class ChiptuneAudioEngine {
             self.nextSplash += 1
             self.splashNode.volume = 0.26 + max(0, min(1, intensity)) * 0.14
             self.splashNode.rate = 1.0
-            self.splashNode.scheduleBuffer(self.splashBuffers[index])
+            self.splashNode.scheduleBuffer(self.splashBuffers[index], at: nil, options: .interrupts)
             if !self.splashNode.isPlaying {
                 self.splashNode.play()
             }
@@ -5496,7 +5626,7 @@ final class ChiptuneAudioEngine {
             self.nextSplash += 1
             self.splashNode.volume = 0.22 + max(0, min(1, intensity)) * 0.14
             self.splashNode.rate = 0.62 // Submerged low-frequency bubble resonance!
-            self.splashNode.scheduleBuffer(self.splashBuffers[index])
+            self.splashNode.scheduleBuffer(self.splashBuffers[index], at: nil, options: .interrupts)
             if !self.splashNode.isPlaying {
                 self.splashNode.play()
             }
@@ -6742,8 +6872,8 @@ struct TacticalMinimapView: View {
         ZStack {
             // Fondo de Cristal Líquido Translúcido
             Circle()
-                .fill(Color.black.opacity(0.65))
-                .background(.ultraThinMaterial, in: Circle())
+                .fill(Color.white.opacity(0.14))
+                .background(.ultraThinMaterial.opacity(0.45), in: Circle())
 
             // Rejilla Concéntrica de Radar Táctico
             Circle()
@@ -6823,6 +6953,14 @@ struct TacticalMinimapView: View {
                     .font(.system(size: isFullView ? 11 : 8, weight: .bold))
                     .foregroundStyle(model.playerScore >= 3000 ? Color.yellow : Color.cyan)
                     .position(x: portalX, y: wallY)
+
+                // 💎 Cofre del Tesoro en la piscina (0.2, -1.5)
+                let chestX = radius + CGFloat(0.2 - playerPos.x) * pxPerMeter
+                let chestY = radius + CGFloat(-1.5 - playerPos.z) * pxPerMeter
+                Image(systemName: "diamond.fill")
+                    .font(.system(size: isFullView ? 10 : 8, weight: .bold))
+                    .foregroundStyle(Color.cyan)
+                    .position(x: chestX, y: chestY)
             }
             .clipShape(Circle()) // Recorta cualquier geometría que se salga del círculo
 
@@ -6846,19 +6984,17 @@ struct TacticalMinimapView: View {
                 let finalY = isClamped ? (radius + (dz / dist) * maxRadarR) : lz
 
                 ZStack {
-                    if pt.isOn {
-                        Circle()
-                            .fill(pt.color.opacity(0.40))
-                            .frame(width: isFullView ? 14 : 10, height: isFullView ? 14 : 10)
-                            .blur(radius: 2)
-                    }
                     Circle()
-                        .fill(pt.isOn ? pt.color : Color.gray.opacity(0.45))
-                        .frame(width: isFullView ? 8 : 6, height: isFullView ? 8 : 6)
-                        .overlay(Circle().stroke(Color.black, lineWidth: 1))
-                    Image(systemName: pt.isOn ? "lightbulb.fill" : "lightbulb")
-                        .font(.system(size: isFullView ? 6 : 4.5, weight: .bold))
-                        .foregroundStyle(pt.isOn ? .black : .white.opacity(0.8))
+                        .fill((pt.isOn ? pt.color : Color.yellow).opacity(pt.isOn ? 0.42 : 0.30))
+                        .frame(width: isFullView ? 16 : 12, height: isFullView ? 16 : 12)
+                        .blur(radius: 1.5)
+                    Circle()
+                        .fill(pt.isOn ? pt.color : Color.black.opacity(0.85))
+                        .frame(width: isFullView ? 10 : 8, height: isFullView ? 10 : 8)
+                        .overlay(Circle().stroke(pt.isOn ? Color.white : Color.yellow, lineWidth: 1.2))
+                    Image(systemName: pt.isOn ? "lightbulb.fill" : "lightbulb.fill")
+                        .font(.system(size: isFullView ? 7 : 5.5, weight: .bold))
+                        .foregroundStyle(pt.isOn ? .black : .yellow)
                 }
                 .position(x: finalX, y: finalY)
             }
@@ -7751,34 +7887,48 @@ struct MultiplayerSettingsSheet: View {
 
 struct GameSlang {
     let languageCode: String
+    var regionCode: String {
+        Locale.current.region?.identifier.uppercased() ?? ""
+    }
 
-    // 💀 Pantalla de Derrota (Slangs de Infancia / Gamer)
+    // 💀 Pantalla de Derrota (Idioma natural + guiño regional por país si aplica)
     var defeatTitle: String {
         switch languageCode {
-        case "en": return "YOU DED 💀"
-        case "pt": return "FOI DE BASE 💀"
-        case "fr": return "T'ES MORT D'UN COUP :v"
-        case "ja": return "オワタ＼(^o^)／"
-        case "de": return "LOST GEGANGEN 💀"
-        case "hi": return "KHATAM TATA BYE BYE 💀"
-        case "it": return "SEI MORTO MALISSIMO 💀"
-        case "zh": return "芭比Q了 💀"
-        case "ko": return "망했다 💀"
-        default:   return "MORIDO :v"
+        case "en":
+            switch regionCode {
+            case "GB", "AU": return "KNOCKED OUT, MATE! 💀"
+            default: return "DEFEATED 💀"
+            }
+        case "pt": return regionCode == "BR" ? "FOI DE BASE! 💀" : "DERROTADO 💀"
+        case "fr": return "ÉLIMINÉ ! 💀"
+        case "ja": return "やられた！ 💀"
+        case "de": return "BESIEGT 💀"
+        case "hi": return "हारे गए! 💀"
+        case "it": return "SCONFITTO 💀"
+        case "zh": return "阵亡了 💀"
+        case "ko": return "쓰러졌다! 💀"
+        default:
+            switch regionCode {
+            case "CO": return "¡NOS DIERON PISO, PARCE! 💀"
+            case "MX": return "¡YA VALIÓ, WEY! 💀"
+            case "AR": return "¡QUÉ BAJÓN, CHE! 💀"
+            case "ES": return "¡CAÍSTE, TÍO! 💀"
+            default:   return "¡DERROTADO! 💀"
+            }
         }
     }
 
     var defeatVersusTitle: String {
         switch languageCode {
-        case "en": return "WASTED IN COMBAT"
-        case "pt": return "DEITOU NA BRÈXA :v"
-        case "fr": return "MIS AU TAPIS!"
-        case "ja": return "しぼう :v"
-        case "de": return "WEGGEKLATSCHT!"
-        case "hi": return "DHOBI PACHAD HO GAYA!"
-        case "it": return "TI HANNO ARRIFATTO :v"
-        case "zh": return "直接被干碎了!"
-        case "ko": return "컷! 당해버렸쥬?"
+        case "en": return "DEFEATED IN COMBAT"
+        case "pt": return "CAIU EM COMBATE"
+        case "fr": return "VAINCU AU COMBAT"
+        case "ja": return "しょうぶにまけた！"
+        case "de": return "IM KAMPF BESIEGT"
+        case "hi": return "मुकाबले में हार!"
+        case "it": return "SCONFITTO IN BATTAGLIA"
+        case "zh": return "对决落败！"
+        case "ko": return "대결 패배!"
         default:   return "CAÍSTE EN COMBATE"
         }
     }
@@ -7786,59 +7936,67 @@ struct GameSlang {
     var defeatTeamTitle: String {
         switch languageCode {
         case "en": return "SQUAD WIPED OUT"
-        case "pt": return "BONDE DERRUBADO"
-        case "fr": return "MISSION ÉCHOUÉE"
+        case "pt": return "ESQUADRÃO DERROTADO"
+        case "fr": return "ESCOUADE ÉLIMINÉE"
         case "ja": return "ぜんめつ..."
-        case "de": return "TEAM GEWIPED"
-        case "hi": return "SQUAD KHATAM BHAI!"
-        case "it": return "SQUADRA DISTRUTTA!"
-        case "zh": return "团灭了兄弟们..."
-        case "ko": return "올킬 당함..."
+        case "de": return "TEAM BESIEGT"
+        case "hi": return "टीम हार गई!"
+        case "it": return "SQUADRA SCONFITTA!"
+        case "zh": return "全队阵亡..."
+        case "ko": return "전원 탈락..."
         default:   return "MISIÓN FALLIDA"
         }
     }
 
     var defeatSubtitleReset: String {
         switch languageCode {
-        case "en": return "A MIMIR UN RATO • BACK TO WAVE 1"
-        case "pt": return "VACILOU, MORREU • ONDA 1 DE NOVO"
-        case "fr": return "RETOUR À LA CASE DÉPART • VAGUE 1"
-        case "ja": return "ゲームオーバー • ウェーブ1へもどる"
-        case "de": return "DIGGA WAS WAR DAS • WELLE 1"
-        case "hi": return "KHEL KHATAM BHAI • WAPAS WAVE 1 PE"
-        case "it": return "VACCI PIANO • SI RIPARTE DA ONDATA 1"
-        case "zh": return "重开一把 • 从第一波重新开始"
-        case "ko": return "멘탈 잡고 1웨이브부터 다시"
-        default:   return "OLEADA RESTABLECIDA A OLEADA 1"
+        case "en": return "BACK TO WAVE 1"
+        case "pt": return "DE VOLTA À ONDA 1"
+        case "fr": return "RETOUR À LA VAGUE 1"
+        case "ja": return "ウェーブ1へもどる"
+        case "de": return "ZURÜCK ZU WELLE 1"
+        case "hi": return "वापस वेव 1 पर"
+        case "it": return "SI RIPARTE DALL'ONDATA 1"
+        case "zh": return "从第 1 波重新开始"
+        case "ko": return "웨이브 1부터 다시 시작"
+        default:   return "VOLVIENDO A LA OLEADA 1"
         }
     }
 
     var retryButton: String {
         switch languageCode {
-        case "en": return "RESPAWN ME PLZ (RETRY)"
-        case "pt": return "RESSUSCITA AÍ (TENTAR DE NOVO)"
-        case "fr": return "REZ-MOI STP (RÉESSAYER)"
-        case "ja": return "もういっかい！ (RETRY)"
-        case "de": return "NOCHMAL REINDA! (RETRY)"
-        case "hi": return "FIR SE KHELENGE! (RESPAWN)"
-        case "it": return "SPAWNAMI PLS! (RIGIOCA)"
-        case "zh": return "再来一把! (RETRY)"
-        case "ko": return "한 판 더! (RETRY)"
-        default:   return "DAME VIDA (REINTENTAR)"
+        case "en": return "PLAY AGAIN (RETRY)"
+        case "pt": return "JOGAR DE NOVO"
+        case "fr": return "REJOUER"
+        case "ja": return "もういちど (RETRY)"
+        case "de": return "NOCHMAL SPIELEN"
+        case "hi": return "फिर से खेलें (RETRY)"
+        case "it": return "RIPROVA"
+        case "zh": return "再来一局 (RETRY)"
+        case "ko": return "다시 하기 (RETRY)"
+        default:
+            switch regionCode {
+            case "CO": return "¡OTRA VEZ, PARCE! (REINTENTAR)"
+            case "MX": return "¡OTRA VEZ, WEY! (REINTENTAR)"
+            case "AR": return "¡OTRA VEZ, CHE! (REINTENTAR)"
+            case "ES": return "¡OTRA VEZ, TÍO! (REINTENTAR)"
+            case "CL": return "¡OTRA VEZ, PO! (REINTENTAR)"
+            default:   return "REINTENTAR"
+            }
         }
     }
 
     var nextRoundButton: String {
         switch languageCode {
-        case "en": return "RUN IT BACK (NEXT ROUND)"
+        case "en": return "NEXT ROUND"
         case "pt": return "PRÓXIMO ROUND"
         case "fr": return "MANCHE SUIVANTE"
         case "ja": return "つぎのラウンド"
         case "de": return "NÄCHSTE RUNDE"
-        case "hi": return "AGLA ROUND CHALO!"
+        case "hi": return "अगला राउंड"
         case "it": return "PROSSIMO ROUND"
-        case "zh": return "下一轮冲冲冲!"
-        case "ko": return "다음 라운드 가자!"
+        case "zh": return "下一轮"
+        case "ko": return "다음 라운드"
         default:   return "SIGUIENTE RONDA"
         }
     }
@@ -7846,48 +8004,71 @@ struct GameSlang {
     // 🎬 Lore y Prólogo
     var loreButtonTitle: String {
         switch languageCode {
-        case "en": return "THE LORE THO: SECRET OF LUMINA"
-        case "pt": return "HISTÓRIA DAS ANTIGAS: O SEGREDO DE LUMINA"
-        case "fr": return "L'HISTOIRE DU DARON: LE SECRET DE LUMINA"
-        case "ja": return "むかしばなし: ルミナのひみつ"
-        case "de": return "DEEP LORE: DAS GEHEIMNIS VON LUMINA"
-        case "hi": return "ASLI KAHANI: SECRET OF LUMINA"
-        case "it": return "IL LORE SEGRETO: DI LUMINA"
-        case "zh": return "故事背景大揭秘: 卢米娜的秘密"
-        case "ko": return "비하인드 스토리: 루미나의 비밀"
-        default:   return "LORE & CUENTO: EL SECRETO DE LUMINA"
+        case "en": return "LORE: THE SECRET OF LUMI"
+        case "pt": return "LORE: O SEGREDO DE LUMI"
+        case "fr": return "LORE : LE SECRET DE LUMI"
+        case "ja": return "ストーリー：ルミのひみつ"
+        case "de": return "LORE: LUMIS GEHEIMNIS"
+        case "hi": return "कहानी: लूमी का रहस्य"
+        case "it": return "LORE: IL SEGRETO DI LUMI"
+        case "zh": return "故事背景：卢米的秘密"
+        case "ko": return "스토리: 루미의 비밀"
+        default:   return "LORE: EL SECRETO DE LUMI"
         }
     }
 
     // 👑 Victoria
     var victoryTitle: String {
         switch languageCode {
-        case "en": return "POGGERS! EZ CLAP! 👑"
-        case "pt": return "MITOU DEMAIS! 👑"
-        case "fr": return "MASTERCLASS! 👑"
-        case "ja": return "カチカク！やったー！ 👑"
-        case "de": return "ABSOLUTER EHRENMANN! 👑"
-        case "hi": return "BOOYAH! OP BHAI OP! 👑"
-        case "it": return "LEGGENDA ASSOLUTA! GG! 👑"
-        case "zh": return "秀麻了! 绝杀! 👑"
-        case "ko": return "개이득! 레전드 찍었다! 👑"
-        default:   return "¡CORONAMOS! 👑"
+        case "en":
+            switch regionCode {
+            case "GB", "AU": return "BRILLIANT VICTORY! 👑"
+            case "IN": return "BOOYAH! VICTORY! 👑"
+            default: return "VICTORY! 👑"
+            }
+        case "pt": return regionCode == "BR" ? "MANDOU MUITO! 👑" : "VITÓRIA! 👑"
+        case "fr": return "VICTOIRE ! 👑"
+        case "ja": return "しょうり！やったー！ 👑"
+        case "de": return "SIEG! 👑"
+        case "hi": return "जीत गए! शानदार! 👑"
+        case "it": return "VITTORIA! 👑"
+        case "zh": return "胜利！太强了！ 👑"
+        case "ko": return "승리! 대단해요! 👑"
+        default:
+            switch regionCode {
+            case "CO": return "¡CORONAMOS, PARCE! 👑"
+            case "MX": return "¡GANAMOS, WEY! 👑"
+            case "AR": return "¡VAMOS TODAVÍA! 👑"
+            case "ES": return "¡VICTORIA BRUTAL! 👑"
+            default:   return "¡VICTORIA! 👑"
+            }
         }
     }
 
     // ⚡ Menú principal y botones
     var playButton: String {
         switch languageCode {
-        case "en": return "LET'S COOK! (PLAY)"
-        case "pt": return "BORA JOGAR! (PLAY)"
-        case "fr": return "C'EST PARTI! (JOUER)"
-        case "ja": return "あそぶ！(PLAY)"
-        case "de": return "LOS GEHT'S! (SPIELEN)"
-        case "hi": return "CHALO SHURU KAREIN! (PLAY)"
-        case "it": return "ANDIAMO A VINCERE! (GIOCA)"
-        case "zh": return "开整! (PLAY)"
-        case "ko": return "드가자! (PLAY)"
-        default:   return "¡A DARLE! (JUGAR)"
+        case "en":
+            switch regionCode {
+            case "GB", "AU": return "LET'S GO, MATE! (PLAY)"
+            default: return "PLAY"
+            }
+        case "pt": return regionCode == "BR" ? "BORA JOGAR!" : "JOGAR"
+        case "fr": return "JOUER"
+        case "ja": return "あそぶ (PLAY)"
+        case "de": return "SPIELEN"
+        case "hi": return "खेलें (PLAY)"
+        case "it": return "GIOCA"
+        case "zh": return "开始游戏 (PLAY)"
+        case "ko": return "플레이 (PLAY)"
+        default:
+            switch regionCode {
+            case "CO": return "¡HÁGALE PUES!"
+            case "MX": return "¡ÓRALE, A JUGAR!"
+            case "AR": return "¡DALE, A JUGAR!"
+            case "ES": return "¡VAMOS ALLÁ!"
+            default:   return "JUGAR"
+            }
         }
     }
 
@@ -7898,10 +8079,10 @@ struct GameSlang {
         case "fr": return "OPTIONS ET PARAMÈTRES"
         case "ja": return "せってい (SETTINGS)"
         case "de": return "EINSTELLUNGEN"
-        case "hi": return "SETTINGS & OPTIONS"
+        case "hi": return "सेटिंग्स (SETTINGS)"
         case "it": return "OPZIONI E IMPOSTAZIONI"
         case "zh": return "系统设置 (SETTINGS)"
-        case "ko": return "환경설정 (SETTINGS)"
+        case "ko": return "설정 (SETTINGS)"
         default:   return "OPCIONES Y AJUSTES"
         }
     }
@@ -7913,7 +8094,7 @@ struct GameSlang {
         case "fr": return "MULTIJOUEUR EN LIGNE / LOCAL"
         case "ja": return "マルチプレイ (ONLINE / LOCAL)"
         case "de": return "MEHRSPIELER ONLINE / LOKAL"
-        case "hi": return "DOST KE SAATH (MULTIPLAYER)"
+        case "hi": return "मल्टीप्लेयर (ONLINE / LOCAL)"
         case "it": return "MULTIGIOCA ONLINE / LOCALE"
         case "zh": return "联机对战 (MULTIPLAYER)"
         case "ko": return "멀티플레이 (MULTIPLAYER)"
@@ -7923,21 +8104,22 @@ struct GameSlang {
 
     var speed2XTitle: String {
         switch languageCode {
-        case "en": return "⚡ 2X ZOOMIN'"
-        case "pt": return "⚡ 2X TURBINADO"
-        case "fr": return "⚡ 2X VITESSE ÉCLAIR"
-        case "ja": return "⚡ 2X ばくそく"
-        case "de": return "⚡ 2X TURBO SPEED"
-        case "hi": return "⚡ 2X FULL SPEED JALDI"
-        case "it": return "⚡ 2X CORSA PAZZA"
-        case "zh": return "⚡ 2X 起飞倍速"
-        case "ko": return "⚡ 2X 초고속 모드"
-        default:   return "⚡ 2X CINE VOLAO"
+        case "en": return "⚡ 2X SPEED"
+        case "pt": return "⚡ VELOCIDADE 2X"
+        case "fr": return "⚡ VITESSE 2X"
+        case "ja": return "⚡ 2X スピード"
+        case "de": return "⚡ 2X TEMPO"
+        case "hi": return "⚡ 2X स्पीड"
+        case "it": return "⚡ VELOCITÀ 2X"
+        case "zh": return "⚡ 2倍速"
+        case "ko": return "⚡ 2배속"
+        default:   return "⚡ VELOCIDAD 2X"
         }
     }
 }
 
 enum GameOptionsTab: String, CaseIterable, Identifiable {
+    case lumi = "Lumi"
     case controls = "Controles"
     case graphics = "Gráficos"
     case audio = "Sonido"
@@ -7949,6 +8131,7 @@ enum GameOptionsTab: String, CaseIterable, Identifiable {
 
     var icon: String {
         switch self {
+        case .lumi: "sparkles"
         case .controls: "gamecontroller.fill"
         case .graphics: "display"
         case .audio: "speaker.wave.2.fill"
@@ -8014,6 +8197,130 @@ struct GameOptionsSheet: View {
 
                 Form {
                     switch selectedTab {
+                    case .lumi:
+                        Section("✨ VISTA PREVIA DE TU LUMI") {
+                            let bodyCol = GameModel.lumiBodyPalette[max(0, min(GameModel.lumiBodyPalette.count - 1, model.lumiColorIndex))].color
+                            let crestCol = GameModel.lumiCrestPalette[max(0, min(GameModel.lumiCrestPalette.count - 1, model.lumiCrestColorIndex))].color
+                            HStack(spacing: 18) {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(RadialGradient(colors: [bodyCol.opacity(0.32), Color.black.opacity(0.88)], center: .center, startRadius: 8, endRadius: 70))
+                                        .frame(width: 112, height: 112)
+                                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(bodyCol.opacity(0.75), lineWidth: 1.5))
+
+                                    VStack(spacing: -8) {
+                                        // Cresta de 3 gotas
+                                        VStack(spacing: -4) {
+                                            Capsule().fill(crestCol).frame(width: 10, height: 15)
+                                                .shadow(color: crestCol, radius: 5)
+                                            Capsule().fill(bodyCol).frame(width: 16, height: 16)
+                                        }
+                                        .offset(x: 3, y: 2)
+
+                                        // Cabeza + Ojos
+                                        ZStack {
+                                            Ellipse()
+                                                .fill(LinearGradient(colors: [bodyCol.opacity(0.95), bodyCol.opacity(0.75)], startPoint: .top, endPoint: .bottom))
+                                                .frame(width: 50, height: 44)
+                                                .shadow(color: bodyCol.opacity(0.8), radius: 8)
+                                            HStack(spacing: 12) {
+                                                Circle().fill(Color.black).frame(width: 9, height: 11)
+                                                    .overlay(Circle().fill(Color.white).frame(width: 3.5, height: 3.5).offset(x: -1.5, y: -2))
+                                                Circle().fill(Color.black).frame(width: 9, height: 11)
+                                                    .overlay(Circle().fill(Color.white).frame(width: 3.5, height: 3.5).offset(x: -1.5, y: -2))
+                                            }
+                                            .offset(y: -2)
+                                        }
+
+                                        // Pancita
+                                        Ellipse()
+                                            .fill(LinearGradient(colors: [bodyCol.opacity(0.9), bodyCol.opacity(0.65)], startPoint: .top, endPoint: .bottom))
+                                            .frame(width: 58, height: 32)
+                                    }
+                                }
+
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Lumi Cuántico")
+                                        .font(.headline.bold())
+                                    Text("Cuerpo: \(GameModel.lumiBodyPalette[max(0, min(GameModel.lumiBodyPalette.count - 1, model.lumiColorIndex))].name)")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(bodyCol)
+                                    Text("Cresta: \(GameModel.lumiCrestPalette[max(0, min(GameModel.lumiCrestPalette.count - 1, model.lumiCrestColorIndex))].name)")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(crestCol)
+                                    Text("Se refleja en vivo en tus manos y en el espejo.")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+
+                        Section("🎨 COLOR DEL CUERPO Y CRESTA") {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Color del cuerpo")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.secondary)
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 10) {
+                                        ForEach(Array(GameModel.lumiBodyPalette.enumerated()), id: \.offset) { idx, item in
+                                            Button {
+                                                model.lumiColorIndex = idx
+                                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                            } label: {
+                                                VStack(spacing: 4) {
+                                                    Circle()
+                                                        .fill(item.color)
+                                                        .frame(width: 28, height: 28)
+                                                        .overlay(
+                                                            Circle().stroke(Color.white, lineWidth: model.lumiColorIndex == idx ? 2.5 : 0.6)
+                                                        )
+                                                    Text(item.name)
+                                                        .font(.system(size: 10, weight: model.lumiColorIndex == idx ? .bold : .medium))
+                                                        .foregroundStyle(model.lumiColorIndex == idx ? .primary : .secondary)
+                                                }
+                                                .padding(.vertical, 4)
+                                                .padding(.horizontal, 6)
+                                                .background(model.lumiColorIndex == idx ? Color.white.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
+                                    }
+                                }
+
+                                Text("Color de la cresta")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.secondary)
+                                    .padding(.top, 4)
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 10) {
+                                        ForEach(Array(GameModel.lumiCrestPalette.enumerated()), id: \.offset) { idx, item in
+                                            Button {
+                                                model.lumiCrestColorIndex = idx
+                                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                            } label: {
+                                                VStack(spacing: 4) {
+                                                    Circle()
+                                                        .fill(item.color)
+                                                        .frame(width: 24, height: 24)
+                                                        .overlay(
+                                                            Circle().stroke(Color.white, lineWidth: model.lumiCrestColorIndex == idx ? 2.5 : 0.6)
+                                                        )
+                                                    Text(item.name)
+                                                        .font(.system(size: 10, weight: model.lumiCrestColorIndex == idx ? .bold : .medium))
+                                                        .foregroundStyle(model.lumiCrestColorIndex == idx ? .primary : .secondary)
+                                                }
+                                                .padding(.vertical, 4)
+                                                .padding(.horizontal, 6)
+                                                .background(model.lumiCrestColorIndex == idx ? Color.white.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
                     case .controls:
                         Section("🎮 Mando Inalámbrico") {
                             HStack {
@@ -8574,11 +8881,11 @@ struct HUDDraggableModifier: ViewModifier {
     let scale: Double
     let onSelect: () -> Void
 
-    @GestureState private var dragTranslation: CGSize = .zero
+    @State private var liveDrag: CGSize = .zero
 
     func body(content: Content) -> some View {
-        let currentX = offsetX + Double(dragTranslation.width)
-        let currentY = offsetY + Double(dragTranslation.height)
+        let currentX = min(max(offsetX + Double(liveDrag.width), -460), 460)
+        let currentY = min(max(offsetY + Double(liveDrag.height), -300), 300)
 
         content
             .allowsHitTesting(!isEditing)
@@ -8608,14 +8915,15 @@ struct HUDDraggableModifier: ViewModifier {
                             onSelect()
                         }
                         .gesture(
-                            DragGesture(minimumDistance: 0)
-                                .updating($dragTranslation) { value, state, _ in
-                                    state = value.translation
+                            DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                                .onChanged { value in
+                                    liveDrag = value.translation
                                 }
                                 .onEnded { value in
                                     onSelect()
-                                    offsetX = min(max(offsetX + Double(value.translation.width), -420), 420)
-                                    offsetY = min(max(offsetY + Double(value.translation.height), -280), 280)
+                                    offsetX = min(max(offsetX + Double(value.translation.width), -460), 460)
+                                    offsetY = min(max(offsetY + Double(value.translation.height), -300), 300)
+                                    liveDrag = .zero
                                 }
                         )
                 }
@@ -10263,20 +10571,20 @@ struct MainMenuView: View {
 
                         //  iOS 18 Liquid Glass Title Card
                         VStack(spacing: isCompactLandscape ? 4 : 8) {
-                            Text("LASER TRACER 3D")
-                                .font(.system(size: isCompactLandscape ? 28 : 42, weight: .black, design: .rounded))
+                            Text("LUMI: LASER TRACER")
+                                .font(.system(size: isCompactLandscape ? 26 : 38, weight: .black, design: .rounded))
                                 .minimumScaleFactor(0.55)
                                 .lineLimit(1)
                                 .foregroundStyle(
                                     LinearGradient(
-                                        colors: [.white, .cyan, .purple],
+                                        colors: [.green, .cyan, .purple],
                                         startPoint: .leading,
                                         endPoint: .trailing
                                     )
                                 )
-                                .shadow(color: .cyan.opacity(0.9), radius: isCompactLandscape ? 10 : 18)
+                                .shadow(color: .green.opacity(0.75), radius: isCompactLandscape ? 10 : 18)
 
-                            Text("METAL RAY TRACING COMBAT & DEFENSIVE SHIELD")
+                            Text("3D RAY TRACING • LIGHT & MIRRORS ADVENTURE")
                                 .font(.system(size: isCompactLandscape ? 9 : 11, weight: .bold, design: .monospaced))
                                 .minimumScaleFactor(0.55)
                                 .lineLimit(1)
@@ -10736,6 +11044,726 @@ struct RecoveryChamberOverlayView: View {
             )
             .shadow(color: .yellow.opacity(0.35), radius: 16, x: 0, y: 6)
             .padding(.bottom, 24)
+        }
+    }
+}
+
+// MARK: - 💎 Minijuego de Cofres: Espejos de Luz (Estilo Fuego y Agua)
+private enum LightDir {
+    case up, down, left, right
+    var delta: (dr: Int, dc: Int) {
+        switch self {
+        case .up: return (-1, 0)
+        case .down: return (1, 0)
+        case .left: return (0, -1)
+        case .right: return (0, 1)
+        }
+    }
+    func reflected(bySlash isForwardSlash: Bool) -> LightDir {
+        // isForwardSlash == true -> '/' ; false -> '\'
+        switch (self, isForwardSlash) {
+        case (.right, true):  return .up
+        case (.right, false): return .down
+        case (.left, true):   return .down
+        case (.left, false):  return .up
+        case (.down, true):   return .left
+        case (.down, false):  return .right
+        case (.up, true):     return .right
+        case (.up, false):    return .left
+        }
+    }
+}
+
+private enum MirrorCellKind: Equatable {
+    case empty
+    case stone
+    case emitter(LightDir, color: Color = .cyan)
+    case portal(id: Int)
+    case target(requiresBoth: Bool = false)
+    case mirror(isForwardSlash: Bool)
+}
+
+private struct PortalGridPuzzleLevel {
+    let grid: [[MirrorCellKind]]
+
+    static func level(for chestID: Int) -> PortalGridPuzzleLevel {
+        var g = Array(repeating: Array(repeating: MirrorCellKind.empty, count: 6), count: 5)
+        switch chestID {
+        case 1:
+            // 🌀 Cofre #2: Portales + Espejos
+            g[2][0] = .emitter(.right)
+            g[2][2] = .mirror(isForwardSlash: false)  // sol: /
+            g[0][2] = .mirror(isForwardSlash: false)  // sol: /
+            g[0][4] = .portal(id: 0)
+            g[4][4] = .portal(id: 1)
+            g[4][5] = .target()
+            g[2][3] = .stone; g[3][3] = .stone; g[4][3] = .stone
+        case 4:
+            // 🌀 Cofre #5: Portales + Multi-rebote
+            g[0][5] = .emitter(.left)
+            g[0][2] = .mirror(isForwardSlash: false)  // sol: /
+            g[2][2] = .portal(id: 0)
+            g[1][4] = .portal(id: 1)
+            g[4][4] = .mirror(isForwardSlash: false)  // sol: /
+            g[4][1] = .mirror(isForwardSlash: true)   // sol: \
+            g[3][1] = .target()
+            g[0][1] = .stone; g[2][4] = .stone; g[3][3] = .stone
+        default:
+            // 🌈 Cofre #3: Prismas RGB (Rojo + Verde = Amarillo)
+            g[0][0] = .emitter(.right, color: .red)
+            g[0][3] = .mirror(isForwardSlash: true)   // sol: \
+            g[4][0] = .emitter(.right, color: .green)
+            g[4][2] = .mirror(isForwardSlash: false)  // sol: /
+            g[2][2] = .mirror(isForwardSlash: false)  // sol: /
+            g[2][3] = .target(requiresBoth: true)
+            g[1][1] = .stone; g[3][4] = .stone; g[1][4] = .stone
+        }
+        return PortalGridPuzzleLevel(grid: g)
+    }
+}
+
+struct QuantumChestMinigameView: View {
+    @ObservedObject var model: GameModel
+    let chestID: Int
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var isUnlocked: Bool = false
+    @State private var rewardBurstScale: CGFloat = 0.4
+    @State private var rewardGlowOpacity: Double = 0.0
+
+    private var modeTitle: String {
+        switch chestID % 6 {
+        case 0, 3: return "🎱 COFRE #\(chestID + 1) — BILLAR DE FOTONES"
+        case 1, 4: return "🌀 COFRE #\(chestID + 1) — PORTALES Y ESPEJOS"
+        case 2:    return "🌈 COFRE #\(chestID + 1) — PRISMAS RGB"
+        default:   return "🛡️ COFRE #\(chestID + 1) — REFLECTOR ACTIVO"
+        }
+    }
+
+    private var modeSubtitle: String {
+        if isUnlocked { return "✅ ¡CERRADURA DESBLOQUEADA!" }
+        switch chestID % 6 {
+        case 0, 3: return "Arrastra para apuntar en 360° y calcula el rebote tipo Pool hacia la gema"
+        case 1, 4: return "Gira las rocas espejo para enviar el rayo por el portal azul hacia el naranja"
+        case 2:    return "Combina el rayo ROJO y el VERDE en la gema central para encenderla"
+        default:   return "Desliza el espejo inferior para rebotar 5 pulsos de luz al núcleo superior"
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color(red: 0.04, green: 0.06, blue: 0.11), Color(red: 0.08, green: 0.04, blue: 0.14)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ).ignoresSafeArea()
+
+            VStack(spacing: 10) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(modeTitle)
+                            .font(.system(size: 15, weight: .black, design: .monospaced))
+                            .foregroundStyle(.cyan)
+                        Text(modeSubtitle)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(isUnlocked ? .green : .white.opacity(0.85))
+                    }
+                    Spacer()
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 26))
+                            .foregroundStyle(.white.opacity(0.75))
+                    }
+                }
+                .padding(.horizontal, 28)
+
+                Group {
+                    switch chestID % 6 {
+                    case 0, 3:
+                        PhotonPoolPuzzleView(chestID: chestID, isUnlocked: isUnlocked, onSolved: triggerWin)
+                    case 5:
+                        ActiveReflectorPuzzleView(isUnlocked: isUnlocked, onSolved: triggerWin)
+                    default:
+                        PortalMirrorGridPuzzleView(chestID: chestID, isUnlocked: isUnlocked, onSolved: triggerWin)
+                    }
+                }
+            }
+            .padding(.vertical, 10)
+
+            if isUnlocked {
+                let pts = (chestID == 5) ? 1000 : 500
+                ZStack {
+                    Color.black.opacity(0.68).ignoresSafeArea()
+                    VStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(RadialGradient(colors: [.yellow.opacity(0.75), .cyan.opacity(0.25), .clear], center: .center, startRadius: 8, endRadius: 72))
+                                .frame(width: 140, height: 140)
+                                .opacity(rewardGlowOpacity)
+                            Image(systemName: "shippingbox.and.arrow.backward.fill")
+                                .font(.system(size: 54, weight: .black))
+                                .foregroundStyle(LinearGradient(colors: [.yellow, .orange, .cyan], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                .shadow(color: .yellow.opacity(0.9), radius: 14)
+                        }
+                        Text("✨ ¡TESORO OBTENIDO!")
+                            .font(.system(size: 20, weight: .black, design: .rounded))
+                            .foregroundStyle(.yellow)
+                        HStack(spacing: 10) {
+                            Text("+\(pts) PTS")
+                                .padding(.horizontal, 10).padding(.vertical, 5)
+                                .background(Color.cyan.opacity(0.25), in: Capsule())
+                                .overlay(Capsule().stroke(Color.cyan, lineWidth: 1))
+                            Text("+35 HP")
+                                .padding(.horizontal, 10).padding(.vertical, 5)
+                                .background(Color.green.opacity(0.25), in: Capsule())
+                                .overlay(Capsule().stroke(Color.green, lineWidth: 1))
+                            Text("+25 ESCUDO")
+                                .padding(.horizontal, 10).padding(.vertical, 5)
+                                .background(Color.blue.opacity(0.25), in: Capsule())
+                                .overlay(Capsule().stroke(Color.blue, lineWidth: 1))
+                        }
+                        .font(.system(size: 12, weight: .black, design: .monospaced))
+                        .foregroundStyle(.white)
+                    }
+                    .padding(24)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24))
+                    .overlay(RoundedRectangle(cornerRadius: 24).stroke(LinearGradient(colors: [.yellow, .cyan], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 2))
+                    .scaleEffect(rewardBurstScale)
+                }
+                .transition(.opacity)
+            }
+        }
+    }
+
+    private func triggerWin() {
+        guard !isUnlocked else { return }
+        withAnimation(.spring(response: 0.42, dampingFraction: 0.62)) {
+            isUnlocked = true
+            rewardBurstScale = 1.0
+            rewardGlowOpacity = 1.0
+        }
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.45) {
+            model.completeChestMinigame(chestID: chestID)
+            dismiss()
+        }
+    }
+}
+
+// MARK: - 🎱 Modo 1: Billar de Fotones (Pool de Luz 360°)
+private struct PhotonPoolPuzzleView: View {
+    let chestID: Int
+    let isUnlocked: Bool
+    let onSolved: () -> Void
+
+    @State private var aimAngle: Double = -0.35
+    @State private var firedPath: [CGPoint] = []
+    @State private var didHitTarget: Bool = false
+
+    private let arenaW: CGFloat = 420
+    private let arenaH: CGFloat = 220
+
+    private var emitterPos: CGPoint {
+        chestID == 0 ? CGPoint(x: 52, y: 110) : CGPoint(x: 52, y: 175)
+    }
+
+    private var targetPos: CGPoint {
+        chestID == 0 ? CGPoint(x: 368, y: 110) : CGPoint(x: 235, y: 180)
+    }
+
+    private var stones: [(center: CGPoint, radius: CGFloat)] {
+        if chestID == 0 {
+            return [(CGPoint(x: 210, y: 110), 34)]
+        } else {
+            return [(CGPoint(x: 155, y: 165), 28), (CGPoint(x: 295, y: 95), 28)]
+        }
+    }
+
+    private var mirrors: [(a: CGPoint, b: CGPoint)] {
+        if chestID == 0 {
+            return [(CGPoint(x: 150, y: 34), CGPoint(x: 270, y: 34))]
+        } else {
+            return [
+                (CGPoint(x: 115, y: 26), CGPoint(x: 205, y: 58)),
+                (CGPoint(x: 382, y: 55), CGPoint(x: 382, y: 155))
+            ]
+        }
+    }
+
+    var body: some View {
+        let preview = traceRay(maxBounces: 1)
+        HStack(spacing: 16) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color.black.opacity(0.55))
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.cyan.opacity(0.65), lineWidth: 2))
+
+                // Stones
+                ForEach(0..<stones.count, id: \.self) { idx in
+                    let s = stones[idx]
+                    Circle()
+                        .fill(LinearGradient(colors: [Color(white: 0.30), Color(white: 0.14)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: s.radius * 2, height: s.radius * 2)
+                        .overlay(Circle().stroke(Color.white.opacity(0.22), lineWidth: 1.5))
+                        .position(s.center)
+                }
+
+                // Mirrors
+                ForEach(0..<mirrors.count, id: \.self) { idx in
+                    let m = mirrors[idx]
+                    Path { p in
+                        p.move(to: m.a)
+                        p.addLine(to: m.b)
+                    }
+                    .stroke(Color.cyan, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                    .shadow(color: .cyan, radius: 5)
+                }
+
+                // Target Gem
+                Circle()
+                    .fill((didHitTarget ? Color.green : Color.yellow).opacity(0.28))
+                    .frame(width: 38, height: 38)
+                    .overlay(
+                        Image(systemName: "diamond.fill")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundStyle(didHitTarget ? .green : .yellow)
+                    )
+                    .shadow(color: didHitTarget ? .green : .yellow, radius: 8)
+                    .position(targetPos)
+
+                // Pool aim guide (only up to first impact!)
+                if firedPath.isEmpty {
+                    Path { p in
+                        if let first = preview.points.first {
+                            p.move(to: first)
+                            for pt in preview.points.dropFirst() {
+                                p.addLine(to: pt)
+                            }
+                        }
+                    }
+                    .stroke(Color.white.opacity(0.55), style: StrokeStyle(lineWidth: 2, dash: [6, 5]))
+                }
+
+                // Fired full bounce path
+                if !firedPath.isEmpty {
+                    Path { p in
+                        p.move(to: firedPath[0])
+                        for pt in firedPath.dropFirst() {
+                            p.addLine(to: pt)
+                        }
+                    }
+                    .stroke(didHitTarget ? Color.green : Color.cyan, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+                    .shadow(color: didHitTarget ? .green : .cyan, radius: 8)
+                }
+
+                // Emitter
+                Circle()
+                    .fill(Color.cyan)
+                    .frame(width: 24, height: 24)
+                    .overlay(
+                        Rectangle()
+                            .fill(Color.white)
+                            .frame(width: 14, height: 4)
+                            .offset(x: 8)
+                            .rotationEffect(.radians(aimAngle))
+                    )
+                    .shadow(color: .cyan, radius: 8)
+                    .position(emitterPos)
+            }
+            .frame(width: arenaW, height: arenaH)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        guard !isUnlocked else { return }
+                        firedPath = []
+                        let dx = value.location.x - emitterPos.x
+                        let dy = value.location.y - emitterPos.y
+                        aimAngle = atan2(dy, dx)
+                    }
+            )
+
+            VStack(spacing: 12) {
+                Button {
+                    fireShot()
+                } label: {
+                    VStack(spacing: 6) {
+                        Image(systemName: "bolt.circle.fill")
+                            .font(.system(size: 32, weight: .bold))
+                        Text("DISPARAR\nRAYO")
+                            .font(.system(size: 11, weight: .black, design: .monospaced))
+                            .multilineTextAlignment(.center)
+                    }
+                    .foregroundStyle(.black)
+                    .frame(width: 96, height: 96)
+                    .background(LinearGradient(colors: [.cyan, .yellow], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 20))
+                    .shadow(color: .cyan.opacity(0.6), radius: 10)
+                }
+                .disabled(isUnlocked)
+
+                Text("Ángulo: \(Int((aimAngle * 180 / .pi).rounded()))°")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+        }
+    }
+
+    private func fireShot() {
+        let res = traceRay(maxBounces: 5)
+        firedPath = res.points
+        didHitTarget = res.hitTarget
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        if res.hitTarget {
+            onSolved()
+        } else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+                if !isUnlocked { firedPath = [] }
+            }
+        }
+    }
+
+    private func traceRay(maxBounces: Int) -> (points: [CGPoint], hitTarget: Bool) {
+        var origin = emitterPos
+        var dir = CGVector(dx: cos(aimAngle), dy: sin(aimAngle))
+        var pts: [CGPoint] = [origin]
+
+        let walls: [(CGPoint, CGPoint)] = [
+            (CGPoint(x: 0, y: 0), CGPoint(x: arenaW, y: 0)),
+            (CGPoint(x: arenaW, y: 0), CGPoint(x: arenaW, y: arenaH)),
+            (CGPoint(x: arenaW, y: arenaH), CGPoint(x: 0, y: arenaH)),
+            (CGPoint(x: 0, y: arenaH), CGPoint(x: 0, y: 0))
+        ]
+        let allSegments = mirrors + walls
+
+        for _ in 0...maxBounces {
+            var bestT: CGFloat = 10000
+            var bestNormal = CGVector(dx: 0, dy: 0)
+            var hitKind = 0 // 0=reflect, 1=stone, 2=target
+
+            // Check target
+            if let tTarget = intersectCircle(origin: origin, dir: dir, center: targetPos, radius: 19), tTarget < bestT {
+                bestT = tTarget
+                hitKind = 2
+            }
+            // Check stones
+            for s in stones {
+                if let tStone = intersectCircle(origin: origin, dir: dir, center: s.center, radius: s.radius), tStone < bestT {
+                    bestT = tStone
+                    hitKind = 1
+                }
+            }
+            // Check segments (mirrors + walls)
+            for seg in allSegments {
+                if let (tSeg, n) = intersectSegment(origin: origin, dir: dir, a: seg.0, b: seg.1), tSeg < bestT {
+                    bestT = tSeg
+                    bestNormal = n
+                    hitKind = 0
+                }
+            }
+
+            let hitPt = CGPoint(x: origin.x + dir.dx * bestT, y: origin.y + dir.dy * bestT)
+            pts.append(hitPt)
+            if hitKind == 2 { return (pts, true) }
+            if hitKind == 1 { return (pts, false) }
+
+            let dotDN = dir.dx * bestNormal.dx + dir.dy * bestNormal.dy
+            dir = CGVector(dx: dir.dx - 2 * dotDN * bestNormal.dx, dy: dir.dy - 2 * dotDN * bestNormal.dy)
+            origin = CGPoint(x: hitPt.x + dir.dx * 1.5, y: hitPt.y + dir.dy * 1.5)
+        }
+        return (pts, false)
+    }
+
+    private func intersectCircle(origin: CGPoint, dir: CGVector, center: CGPoint, radius: CGFloat) -> CGFloat? {
+        let ocx = origin.x - center.x
+        let ocy = origin.y - center.y
+        let b = ocx * dir.dx + ocy * dir.dy
+        let c = ocx * ocx + ocy * ocy - radius * radius
+        let disc = b * b - c
+        guard disc >= 0 else { return nil }
+        let t = -b - sqrt(disc)
+        return t > 1.0 ? t : nil
+    }
+
+    private func intersectSegment(origin: CGPoint, dir: CGVector, a: CGPoint, b: CGPoint) -> (CGFloat, CGVector)? {
+        let vx = b.x - a.x
+        let vy = b.y - a.y
+        let denom = dir.dx * vy - dir.dy * vx
+        guard abs(denom) > 1e-5 else { return nil }
+        let ax = a.x - origin.x
+        let ay = a.y - origin.y
+        let t = (ax * vy - ay * vx) / denom
+        let u = (ax * dir.dy - ay * dir.dx) / denom
+        guard t > 1.0 && u >= 0 && u <= 1 else { return nil }
+        let len = hypot(vx, vy)
+        var nx = -vy / len
+        var ny = vx / len
+        if dir.dx * nx + dir.dy * ny > 0 { nx = -nx; ny = -ny }
+        return (t, CGVector(dx: nx, dy: ny))
+    }
+}
+
+// MARK: - 🌀🌈 Modo 2 & 3: Portales + Prismas RGB (Grid 6x5)
+private struct PortalMirrorGridPuzzleView: View {
+    let chestID: Int
+    let isUnlocked: Bool
+    let onSolved: () -> Void
+
+    @State private var grid: [[MirrorCellKind]] = []
+    private let cellSize: CGFloat = 46
+    private let spacing: CGFloat = 4
+
+    private var beams: [(points: [CGPoint], color: Color, hitTarget: Bool)] {
+        guard grid.count == 5 else { return [] }
+        var emitters: [(r: Int, c: Int, dir: LightDir, color: Color)] = []
+        var portalA: (Int, Int)?
+        var portalB: (Int, Int)?
+        for r in 0..<5 {
+            for c in 0..<6 {
+                switch grid[r][c] {
+                case .emitter(let d, let col): emitters.append((r, c, d, col))
+                case .portal(let id):
+                    if id == 0 { portalA = (r, c) } else { portalB = (r, c) }
+                default: break
+                }
+            }
+        }
+        func centerOf(_ r: Int, _ c: Int) -> CGPoint {
+            let step = cellSize + spacing
+            return CGPoint(x: CGFloat(c) * step + cellSize * 0.5, y: CGFloat(r) * step + cellSize * 0.5)
+        }
+        return emitters.map { em in
+            var pts: [CGPoint] = [centerOf(em.r, em.c)]
+            var r = em.r, c = em.c, dir = em.dir
+            var hit = false
+            for _ in 0..<36 {
+                r += dir.delta.dr
+                c += dir.delta.dc
+                if r < 0 || r >= 5 || c < 0 || c >= 6 {
+                    let prev = pts.last ?? .zero
+                    pts.append(CGPoint(x: prev.x + CGFloat(dir.delta.dc) * (cellSize * 0.5),
+                                       y: prev.y + CGFloat(dir.delta.dr) * (cellSize * 0.5)))
+                    break
+                }
+                pts.append(centerOf(r, c))
+                switch grid[r][c] {
+                case .stone, .emitter:
+                    return (pts, em.color, false)
+                case .target:
+                    hit = true
+                    return (pts, em.color, true)
+                case .mirror(let slash):
+                    dir = dir.reflected(bySlash: slash)
+                case .portal(let id):
+                    if id == 0, let b = portalB {
+                        r = b.0; c = b.1
+                        pts.append(centerOf(r, c))
+                    } else if id == 1, let a = portalA {
+                        r = a.0; c = a.1
+                        pts.append(centerOf(r, c))
+                    }
+                case .empty:
+                    break
+                }
+            }
+            return (pts, em.color, hit)
+        }
+    }
+
+    var body: some View {
+        let traced = beams
+        let allHit = !traced.isEmpty && traced.allSatisfy { $0.hitTarget }
+        let boardW = CGFloat(6) * cellSize + CGFloat(5) * spacing
+        let boardH = CGFloat(5) * cellSize + CGFloat(4) * spacing
+
+        ZStack(alignment: .topLeading) {
+            VStack(spacing: spacing) {
+                ForEach(0..<5, id: \.self) { r in
+                    HStack(spacing: spacing) {
+                        ForEach(0..<6, id: \.self) { c in
+                            let cell = (r < grid.count && c < grid[r].count) ? grid[r][c] : .empty
+                            gridCell(cell: cell, allHit: allHit || isUnlocked) {
+                                guard !isUnlocked else { return }
+                                if case .mirror(let slash) = grid[r][c] {
+                                    grid[r][c] = .mirror(isForwardSlash: !slash)
+                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                    if beams.allSatisfy({ $0.hitTarget }) {
+                                        onSolved()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            ForEach(0..<traced.count, id: \.self) { idx in
+                let b = traced[idx]
+                // Draw contiguous segments (split on portal jumps)
+                Path { p in
+                    guard let first = b.points.first else { return }
+                    p.move(to: first)
+                    for i in 1..<b.points.count {
+                        let prev = b.points[i - 1]
+                        let cur = b.points[i]
+                        if hypot(cur.x - prev.x, cur.y - prev.y) > cellSize * 1.4 {
+                            p.move(to: cur)
+                        } else {
+                            p.addLine(to: cur)
+                        }
+                    }
+                }
+                .stroke(b.color, style: StrokeStyle(lineWidth: 4.5, lineCap: .round, lineJoin: .round))
+                .shadow(color: b.color, radius: 7)
+                .allowsHitTesting(false)
+            }
+        }
+        .frame(width: boardW, height: boardH)
+        .padding(12)
+        .background(Color.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.cyan.opacity(0.45), lineWidth: 1.5))
+        .onAppear {
+            grid = PortalGridPuzzleLevel.level(for: chestID % 6).grid
+        }
+    }
+
+    @ViewBuilder
+    private func gridCell(cell: MirrorCellKind, allHit: Bool, onTap: @escaping () -> Void) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.white.opacity(0.06))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.10), lineWidth: 1))
+            switch cell {
+            case .empty: EmptyView()
+            case .stone:
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(Color(white: 0.20))
+                    .padding(3)
+                    .overlay(Image(systemName: "mountain.2.fill").font(.system(size: 14)).foregroundStyle(.white.opacity(0.28)))
+            case .emitter(let d, let col):
+                Circle().fill(col.opacity(0.32)).padding(5)
+                    .overlay(Image(systemName: d == .left ? "arrow.left.circle.fill" : "arrow.right.circle.fill").font(.system(size: 20, weight: .bold)).foregroundStyle(col))
+            case .portal(let id):
+                let pCol: Color = id == 0 ? .blue : .orange
+                Circle().stroke(pCol, lineWidth: 3).padding(7)
+                    .overlay(Circle().fill(pCol.opacity(0.35)).padding(11))
+                    .shadow(color: pCol, radius: 5)
+            case .target:
+                Circle().fill((allHit ? Color.yellow : Color.white.opacity(0.15)).opacity(0.35)).padding(4)
+                    .overlay(Image(systemName: "diamond.fill").font(.system(size: 21, weight: .bold)).foregroundStyle(allHit ? .yellow : .gray))
+                    .shadow(color: allHit ? .yellow : .clear, radius: 8)
+            case .mirror(let slash):
+                Button(action: onTap) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8).fill(Color.purple.opacity(0.22))
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cyan.opacity(0.65), lineWidth: 1.2))
+                        Rectangle()
+                            .fill(LinearGradient(colors: [.white, .cyan], startPoint: .top, endPoint: .bottom))
+                            .frame(width: 5.5, height: cellSize * 0.78)
+                            .cornerRadius(3)
+                            .rotationEffect(.degrees(slash ? 45 : -45))
+                    }
+                }
+                .buttonStyle(.plain)
+                .disabled(isUnlocked)
+            }
+        }
+        .frame(width: cellSize, height: cellSize)
+    }
+}
+
+// MARK: - 🛡️ Modo 4: Reflector Activo (Cofre #6 — Tiempo Real)
+private struct ActiveReflectorPuzzleView: View {
+    let isUnlocked: Bool
+    let onSolved: () -> Void
+
+    @State private var paddleX: CGFloat = 210
+    @State private var pulsePos: CGPoint = CGPoint(x: 90, y: 40)
+    @State private var pulseVel: CGVector = CGVector(dx: 2.2, dy: 2.8)
+    @State private var hits: Int = 0
+    @State private var timer: Timer? = nil
+
+    private let arenaW: CGFloat = 420
+    private let arenaH: CGFloat = 220
+
+    var body: some View {
+        VStack(spacing: 8) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color.black.opacity(0.55))
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.yellow.opacity(0.65), lineWidth: 2))
+
+                // Top Prism Core Target
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(LinearGradient(colors: [.cyan, .yellow], startPoint: .leading, endPoint: .trailing))
+                    .frame(width: 92, height: 22)
+                    .overlay(Text("NÚCLEO \(hits)/5").font(.system(size: 10, weight: .black, design: .monospaced)).foregroundStyle(.black))
+                    .shadow(color: .yellow, radius: 8)
+                    .position(x: arenaW * 0.5, y: 20)
+
+                // Energy Pulse
+                Circle()
+                    .fill(Color.cyan)
+                    .frame(width: 16, height: 16)
+                    .shadow(color: .cyan, radius: 8)
+                    .position(pulsePos)
+
+                // Player Mirror Paddle
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(LinearGradient(colors: [.white, .cyan], startPoint: .top, endPoint: .bottom))
+                    .frame(width: 90, height: 12)
+                    .shadow(color: .cyan, radius: 6)
+                    .position(x: paddleX, y: arenaH - 20)
+            }
+            .frame(width: arenaW, height: arenaH)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        paddleX = max(50, min(arenaW - 50, value.location.x))
+                    }
+            )
+        }
+        .onAppear {
+            timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { _ in
+                guard !isUnlocked else { return }
+                pulsePos.x += pulseVel.dx
+                pulsePos.y += pulseVel.dy
+
+                if pulsePos.x <= 10 || pulsePos.x >= arenaW - 10 { pulseVel.dx = -pulseVel.dx }
+                if pulsePos.y <= 10 { pulseVel.dy = abs(pulseVel.dy) }
+
+                // Check paddle bounce
+                if pulseVel.dy > 0 && pulsePos.y >= arenaH - 28 && pulsePos.y <= arenaH - 12 && abs(pulsePos.x - paddleX) <= 50 {
+                    let offset = (pulsePos.x - paddleX) / 50.0
+                    pulseVel.dx = offset * 3.8
+                    pulseVel.dy = -3.4
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                }
+
+                // Check core hit
+                if pulseVel.dy < 0 && pulsePos.y <= 34 && abs(pulsePos.x - arenaW * 0.5) <= 50 {
+                    hits += 1
+                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                    if hits >= 5 {
+                        timer?.invalidate()
+                        onSolved()
+                        return
+                    }
+                    pulsePos = CGPoint(x: Bool.random() ? 70 : arenaW - 70, y: 40)
+                    pulseVel = CGVector(dx: Bool.random() ? 2.1 : -2.1, dy: 2.7)
+                }
+
+                // Missed bottom -> respawn from top
+                if pulsePos.y > arenaH + 12 {
+                    pulsePos = CGPoint(x: CGFloat.random(in: 70...(arenaW - 70)), y: 40)
+                    pulseVel = CGVector(dx: Bool.random() ? 2.0 : -2.0, dy: 2.7)
+                }
+            }
+        }
+        .onDisappear {
+            timer?.invalidate()
         }
     }
 }

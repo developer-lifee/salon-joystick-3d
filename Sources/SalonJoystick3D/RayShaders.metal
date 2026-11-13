@@ -20,6 +20,11 @@ struct RTUniforms {
     float4 lightStates;
     float4 secondaryCameraPosition;
     float4 secondaryCameraForward;
+    float4 lumiBodyColor;
+    float4 lumiCrestColor;
+    float4 chestCrystal0;
+    float4 chestCrystal1;
+    float4 chestCrystal2;
 };
 
 struct RTLaserResult {
@@ -638,14 +643,15 @@ inline FirstPersonHit intersectFirstPersonViewModel(
     float time,
     bool isUnderwater,
     float toolKind,
-    float swimSpeed
+    float swimSpeed,
+    float3 lumiColor
 ) {
     FirstPersonHit result;
     result.hit = false;
     result.distance = 1e5f;
     result.normal = float3(0, 1, 0);
-    result.albedo = float3(0.20f, 0.88f, 0.28f);
-    result.emission = float3(0.03f, 0.16f, 0.06f);
+    result.albedo = lumiColor;
+    result.emission = lumiColor * 0.24f;
 
     if (isUnderwater) {
         float3 lHandCam, rHandCam;
@@ -883,15 +889,15 @@ inline FirstPersonHit intersectFirstPersonViewModel(
                     result.distance = tArm;
                     float3 pHit = r.origin + r.direction * tArm;
                     result.normal = normalize(pHit - (rElbowWorld + baArm * (yArm / badaArm)));
-                    result.albedo = float3(0.92f, 0.94f, 0.97f);
-                    result.emission = float3(0.02f, 0.08f, 0.14f);
-                    result.reflectivity = 0.30f;
-                    result.roughness = 0.18f;
+                    result.albedo = lumiColor;
+                    result.emission = lumiColor * 0.28f;
+                    result.reflectivity = 0.24f;
+                    result.roughness = 0.14f;
                 }
             }
         }
 
-        // 1. Palma de Guante Blanco con Acentos Cian
+        // 1. Palma de Slime Verde Bioluminiscente
         float handRadius = 0.052f;
         float3 ocR = r.origin - rHandWorld;
         float bR = dot(ocR, r.direction);
@@ -903,10 +909,10 @@ inline FirstPersonHit intersectFirstPersonViewModel(
                 result.hit = true;
                 result.distance = tR;
                 result.normal = normalize((r.origin + r.direction * tR) - rHandWorld);
-                result.albedo = float3(0.92f, 0.94f, 0.97f);
-                result.emission = float3(0.02f, 0.08f, 0.14f);
-                result.reflectivity = 0.30f;
-                result.roughness = 0.18f;
+                result.albedo = lumiColor;
+                result.emission = lumiColor * 0.28f;
+                result.reflectivity = 0.24f;
+                result.roughness = 0.14f;
             }
         }
 
@@ -921,8 +927,8 @@ inline FirstPersonHit intersectFirstPersonViewModel(
                 result.hit = true;
                 result.distance = tF1;
                 result.normal = normalize((r.origin + r.direction * tF1) - finger1Pos);
-                result.albedo = float3(0.25f, 0.92f, 0.30f);
-                result.emission = float3(0.05f, 0.24f, 0.09f);
+                result.albedo = min(lumiColor + float3(0.10f), float3(1.0f));
+                result.emission = lumiColor * 0.26f;
                 result.reflectivity = 0.25f;
                 result.roughness = 0.15f;
             }
@@ -938,8 +944,8 @@ inline FirstPersonHit intersectFirstPersonViewModel(
                 result.hit = true;
                 result.distance = tF2;
                 result.normal = normalize((r.origin + r.direction * tF2) - finger2Pos);
-                result.albedo = float3(0.24f, 0.90f, 0.28f);
-                result.emission = float3(0.04f, 0.22f, 0.08f);
+                result.albedo = min(lumiColor + float3(0.08f), float3(1.0f));
+                result.emission = lumiColor * 0.25f;
                 result.reflectivity = 0.25f;
                 result.roughness = 0.15f;
             }
@@ -1258,7 +1264,7 @@ kernel void raytracePatio(
             bounce1Throughput = throughput;
         }
         tracer.accept_any_intersection(false);
-        uint rayMask = (bounce == 0 && isMirrorViewport) ? 0x01 : (firstPerson ? 0x05 : 0x07);
+        uint rayMask = (bounce == 0 && isMirrorViewport) ? 0x01 : ((firstPerson && bounce == 0) ? 0x05 : 0x07);
         auto hit = tracer.intersect(currentRay, accelerationStructure, rayMask);
         float3 position;
         float3 normal;
@@ -1269,7 +1275,7 @@ kernel void raytracePatio(
         float3 emission = float3(0.0f);
 
         bool hitFP = false;
-        if (firstPerson && bounce < 2) {
+        if (firstPerson && bounce == 0) {
             bool inWater = uniforms.cameraPosition.y < 0.35f || uniforms.cameraPosition.y <= -4.75f;
             FirstPersonHit fpHit = intersectFirstPersonViewModel(
                 currentRay,
@@ -1280,7 +1286,8 @@ kernel void raytracePatio(
                 uniforms.viewport.z,
                 inWater,
                 uniforms.toolParameters.x,
-                max(0.0f, uniforms.waterSimulation.z - 1.0f)
+                max(0.0f, uniforms.waterSimulation.z - 1.0f),
+                uniforms.lumiBodyColor.rgb
             );
             if (fpHit.hit && (hit.type == intersection_type::none || fpHit.distance < hit.distance)) {
                 hitFP = true;
@@ -1299,6 +1306,43 @@ kernel void raytracePatio(
                 kind = (fpHit.reflectivity > 0.90f) ? 1.0f : 0.0f;
                 baseReflectivity = fpHit.reflectivity;
                 roughness = fpHit.roughness;
+            }
+        }
+
+        // 💎 Cristales 3D orbitantes de cerradura de cofre (en el mundo 3D)
+        if (!hitFP) {
+            float4 crystals[3] = { uniforms.chestCrystal0, uniforms.chestCrystal1, uniforms.chestCrystal2 };
+            float bestCrystalDist = (hit.type != intersection_type::none) ? hit.distance : 1e5f;
+            for (int cIdx = 0; cIdx < 3; ++cIdx) {
+                if (crystals[cIdx].w > 0.5f) {
+                    float3 cCenter = crystals[cIdx].xyz;
+                    float3 ocC = currentRay.origin - cCenter;
+                    float bC = dot(ocC, currentRay.direction);
+                    float cC = dot(ocC, ocC) - 0.28f * 0.28f;
+                    float discC = bC * bC - cC;
+                    if (discC >= 0.0f) {
+                        float tC = -bC - sqrt(discC);
+                        if (tC > 0.20f && tC < bestCrystalDist) {
+                            bestCrystalDist = tC;
+                            hitFP = true;
+                            if (bounce == 0) {
+                                firstSurfaceDistance = tC;
+                            } else if (bounce == 1) {
+                                bounce1Distance = tC;
+                            }
+                            position = currentRay.origin + currentRay.direction * tC;
+                            normal = normalize(position - cCenter);
+                            if (dot(normal, currentRay.direction) > 0.0f) {
+                                normal = -normal;
+                            }
+                            albedo = float3(0.20f, 0.96f, 1.0f);
+                            emission = float3(0.60f, 2.45f, 3.25f);
+                            kind = 0.0f;
+                            baseReflectivity = 0.72f;
+                            roughness = 0.06f;
+                        }
+                    }
+                }
             }
         }
 
@@ -1413,6 +1457,7 @@ kernel void raytracePatio(
         bool puddleSurface = kind > 7.5f && kind < 8.5f;
         bool jellySurface = kind > 8.5f && kind < 9.5f;
         bool obsidianSurface = kind > 9.5f && kind < 10.5f;
+        bool crestSurface = kind > 10.5f && kind < 11.5f;
         bool waterSurface = poolWaterSurface || puddleSurface;
 
         float botMelt = 0.0f;
@@ -1511,7 +1556,7 @@ kernel void raytracePatio(
         } else if (kind < 0.5f && abs(normal.y) < 0.35f && (abs(position.x) > 16.5f || abs(position.z) > 16.5f || abs(position.x) > 25.5f || position.z > 69.5f)) {
             // 🧱 Muros Perimetrales: Paneles Modulares Cyber / Titanio con Juntas Biseladas Suaves
             float distToCam = length(position - uniforms.cameraPosition.xyz);
-            float distDetailFade = smoothstep(12.0f, 3.5f, distToCam);
+            float distDetailFade = smoothstep(8.0f, 3.0f, distToCam);
             if (distDetailFade > 0.005f) {
                 float wallCoordH = (abs(normal.x) > 0.5f) ? position.z : position.x;
                 float wallCoordV = position.y;
@@ -1527,9 +1572,11 @@ kernel void raytracePatio(
                 // Sombra ambiental en las hendiduras de las juntas de los paneles
                 float seamShadow = mix(mix(0.60f, 1.0f, panelSeam), 1.0f, 1.0f - distDetailFade);
                 albedo = albedo * seamShadow;
-                roughness = mix(0.55f, 0.85f, panelSeam);
+                roughness = mix(0.65f, 0.92f, panelSeam);
+            } else {
+                roughness = 0.92f;
             }
-            baseReflectivity = 0.03f;
+            baseReflectivity = 0.0f;
         } else if (obsidianSurface) {
             // 🌑 Armadura Sólida Mate Vantablack del Fotófago (opaca, absorbe la luz sin transparencias ni destellos invasivos)
             float viewCos = saturate(dot(-currentRay.direction, normal));
@@ -1553,15 +1600,25 @@ kernel void raytracePatio(
             float3 cellUV = fract(position * 34.0f) - 0.5f;
             float cellHash = fract(sin(dot(cellId, float3(12.9898f, 78.233f, 37.719f))) * 43758.5453f);
             float speckle = (cellHash > 0.84f) ? smoothstep(0.32f, 0.08f, length(cellUV)) : 0.0f;
-            albedo = mix(float3(0.20f, 0.94f, 0.28f), float3(0.82f, 1.0f, 0.24f), speckle * 0.85f);
+            float3 baseLumi = uniforms.lumiBodyColor.rgb;
+            float3 sparkleLumi = min(baseLumi + float3(0.28f, 0.28f, 0.12f), float3(1.0f));
+            albedo = mix(baseLumi, sparkleLumi, speckle * 0.85f);
 
-            // Dispersión Subsuperficial (SSS) y auto-iluminación bioluminiscente verde pura
+            // Dispersión Subsuperficial (SSS) y auto-iluminación bioluminiscente personalizable
             float viewCos = saturate(dot(-currentRay.direction, normal));
             float rimSSS = pow(1.0f - viewCos, 2.5f);
-            emission += float3(0.22f, 1.15f, 0.30f) * (0.35f + rimSSS * 0.85f) + float3(0.65f, 0.95f, 0.20f) * (speckle * 0.55f);
+            emission = baseLumi * (0.32f + rimSSS * 0.58f) + sparkleLumi * (speckle * 0.35f);
             // Reflectividad orgánica de gelatina/vidrio (baja reflectividad frontal F0 ~ 0.035, brillo sutil en silueta rasante)
             baseReflectivity = mix(0.04f, 0.25f, pow(1.0f - viewCos, 3.5f));
             roughness = 0.06f;
+        } else if (crestSurface) {
+            float3 crestCol = uniforms.lumiCrestColor.rgb;
+            float viewCos = saturate(dot(-currentRay.direction, normal));
+            float rimSSS = pow(1.0f - viewCos, 2.2f);
+            albedo = crestCol;
+            emission = crestCol * (0.45f + rimSSS * 0.75f);
+            baseReflectivity = 0.22f;
+            roughness = 0.12f;
         }
 
         // 🫠 Disolución / Derretimiento Líquido Cromático al eliminar a un enemigo
@@ -1626,7 +1683,7 @@ kernel void raytracePatio(
         }
 
         // Iluminación ambiental: oscuridad absoluta (0.0f) cuando las luces están apagadas para forzar el uso de la linterna
-        float ambientBase = (0.085f * lightScale) * fotofagoDrain;
+        float ambientBase = (0.135f * lightScale) * fotofagoDrain;
         float skyAmbient = ambientBase + ambientBase * saturate(normal.y);
         float3 direct = albedo * skyAmbient;
         if (position.y < -4.0f) {
@@ -1640,22 +1697,35 @@ kernel void raytracePatio(
             float3 toolToSurface = fromTool / max(toolDistance, 1e-4f);
             float dotDir = dot(toolToSurface, normalize(uniforms.toolDirection.xyz));
             
-            // Tactical dual-cone: haz central concentrado de alta intensidad + halo perimetral suave
-            float centerBeam = smoothstep(0.85f, 0.985f, dotDir);
-            float wideSpill = smoothstep(0.62f, 0.85f, dotDir) * 0.35f;
+            // Linterna táctica realista: haz central concentrado + halo sutil de corto alcance (sin iluminar todo el mapa)
+            float centerBeam = smoothstep(0.955f, 0.992f, dotDir);
+            float wideSpill = smoothstep(0.88f, 0.96f, dotDir) * 0.18f;
             float cone = centerBeam + wideSpill;
             
             float battery = clamp(uniforms.toolParameters.y, 0.0f, 1.0f);
             float flicker = (battery < 0.06f && battery > 0.001f) ? (0.88f + 0.12f * sin(uniforms.viewport.z * 10.0f)) : 1.0f;
-            if (cone > 0.001f && toolDistance < 38.0f && battery > 0.001f) {
-                float incidence = saturate(dot(normal, -toolToSurface));
-                float flashlightPower = (52.0f / (1.0f + toolDistance * toolDistance * 0.032f)) * battery * flicker;
-                float3 flashlightColor = float3(1.0f, 0.94f, 0.82f);
-                direct += albedo * flashlightColor * flashlightPower * cone * (0.22f + incidence * 0.78f);
-                
-                float3 flashlightHalf = normalize(-toolToSurface - currentRay.direction);
-                float flashlightGloss = pow(saturate(dot(normal, flashlightHalf)), 140.0f);
-                direct += flashlightColor * flashlightPower * cone * flashlightGloss * 0.40f;
+            if (cone > 0.005f && toolDistance < 25.0f && battery > 0.001f) {
+                bool flashlightBlocked = false;
+                if (bounce == 0 && toolDistance > 0.25f) {
+                    ray flashShadow;
+                    flashShadow.origin = position + normal * 0.015f;
+                    flashShadow.direction = -toolToSurface;
+                    flashShadow.max_distance = max(0.0f, toolDistance - 0.20f);
+                    tracer.accept_any_intersection(true);
+                    auto flashHit = tracer.intersect(flashShadow, accelerationStructure, 0x03);
+                    flashlightBlocked = (flashHit.type != intersection_type::none);
+                }
+                if (!flashlightBlocked) {
+                    float incidence = saturate(dot(normal, -toolToSurface));
+                    float rangeFade = smoothstep(25.0f, 15.0f, toolDistance);
+                    float flashlightPower = (16.5f / (1.0f + toolDistance * toolDistance * 0.16f)) * rangeFade * battery * flicker;
+                    float3 flashlightColor = float3(1.0f, 0.94f, 0.82f);
+                    direct += albedo * flashlightColor * flashlightPower * cone * (0.14f + incidence * 0.86f);
+                    
+                    float3 flashlightHalf = normalize(-toolToSurface - currentRay.direction);
+                    float flashlightGloss = pow(saturate(dot(normal, flashlightHalf)), 140.0f);
+                    direct += flashlightColor * flashlightPower * cone * flashlightGloss * 0.28f;
+                }
             }
         } else if (uniforms.toolParameters.x > 1.5f && uniforms.toolParameters.x < 2.5f && uniforms.toolParameters.y > 0.01f) {
             float primarySpot = laserResult.primaryEnd.w > 0.5f
@@ -1815,7 +1885,7 @@ kernel void raytracePatio(
 
         // 🌈 Iluminación Prismática Ray-Traced del Gran Salón Arcoíris (estrictamente Z > 18.0)
         // Confinada dentro del Salón Arcoíris para que no se filtre a través de los muros o pórtico sur hacia el Salón de la Piscina
-        if (position.z > 18.0f && totalLights > 0.001f) {
+        if (position.z > 17.90f && totalLights > 0.001f) {
             float3 rainbowPos[4] = {
                 float3(-13.5f, 5.4f, 32.0f), // Sector 1 (Rojo-Naranja): Cabaña NW + Entrada Arcoíris
                 float3( 13.5f, 5.4f, 32.0f), // Sector 2 (Amarillo-Esmeralda): Cabaña NE + Parkour Medio
@@ -2132,11 +2202,12 @@ kernel void raytracePatio(
         }
     }
 
-    // 🌊 Complete Aquatic Realm: Surface Pool & Subterranean Ocean Chamber
+    // 🌊 Complete Aquatic Realm: Surface Pool, Bubble Shaft & Subterranean Ocean Chamber
     float3 cameraPos = uniforms.cameraPosition.xyz;
     bool isCameraInPoolXZ = (cameraPos.x > -5.35f && cameraPos.x < 2.35f && cameraPos.z > -4.20f && cameraPos.z < 1.20f);
+    bool isCameraInFountainXZ = (abs(cameraPos.x) < 2.25f && abs(cameraPos.z - 64.0f) < 2.25f);
     bool isSubterranean = (cameraPos.y < -4.75f);
-    bool isUnderwater = (isCameraInPoolXZ && cameraPos.y < 0.38f) || isSubterranean;
+    bool isUnderwater = ((isCameraInPoolXZ || isCameraInFountainXZ) && cameraPos.y < 0.0f) || isSubterranean;
 
     if (isUnderwater) {
         float simT = uniforms.waterSimulation.x * 2.5f;
@@ -2160,12 +2231,14 @@ kernel void raytracePatio(
         float fogAmount = saturate(firstSurfaceDistance * 0.038f);
         accumulated = mix(accumulated, deepWaterTint, fogAmount * 0.72f);
 
-        // 4. Shimmering Pool Skylight looking up towards the pool surface
+        // 4. Shimmering Pool or Fountain Skylight looking up towards the surface
         if (primaryDirection.y > 0.05f) {
             float distToSurface = max(0.1f, (0.45f - cameraPos.y) / max(0.01f, primaryDirection.y));
             if (distToSurface < firstSurfaceDistance) {
                 float2 surfXZ = cameraPos.xz + primaryDirection.xz * distToSurface;
-                if (surfXZ.x > -5.35f && surfXZ.x < 2.35f && surfXZ.y > -4.20f && surfXZ.y < 1.20f) {
+                bool inPoolSurf = (surfXZ.x > -5.35f && surfXZ.x < 2.35f && surfXZ.y > -4.20f && surfXZ.y < 1.20f);
+                bool inFountainSurf = (abs(surfXZ.x) < 2.25f && abs(surfXZ.y - 64.0f) < 2.25f);
+                if (inPoolSurf || inFountainSurf) {
                     float wSurf = sin(surfXZ.x * 1.2f + simT) * cos(surfXZ.y * 1.2f + simT * 1.2f);
                     float3 surfaceGlow = mix(float3(0.35f, 0.85f, 1.0f), float3(1.0f, 1.0f, 1.0f), saturate(wSurf * 0.5f + 0.5f));
                     accumulated += surfaceGlow * 0.75f;

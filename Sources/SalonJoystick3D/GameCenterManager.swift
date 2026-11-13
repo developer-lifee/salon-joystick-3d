@@ -238,7 +238,7 @@ final class GameCenterManager: NSObject, ObservableObject {
         request.minPlayers = 2
         request.maxPlayers = clampedMax
         request.defaultNumberOfPlayers = clampedMax
-        request.inviteMessage = "¡Únete a mi escuadrón en Laser Tracer 3D (hasta \(clampedMax) jugadores)!"
+        request.inviteMessage = "¡Únete a mi escuadrón en Lumi: Laser Tracer (hasta \(clampedMax) jugadores)!"
 
         guard let vc = GKMatchmakerViewController(matchRequest: request) else { return }
         let coordinator = GameCenterMatchmakerCoordinator(gameCenter: self)

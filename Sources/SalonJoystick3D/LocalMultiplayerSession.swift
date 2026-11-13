@@ -269,7 +269,7 @@ final class LocalMultiplayerSession: NSObject, ObservableObject {
         isHosting = false
         isSearching = true
         discoveredPeers = []
-        statusMessage = "Buscando salas cercanas de Laser Tracer..."
+        statusMessage = "Buscando salas cercanas de Lumi: Laser Tracer..."
 
         let brw = MCNearbyServiceBrowser(peer: localPeer, serviceType: serviceType)
         brw.delegate = self
