@@ -1262,6 +1262,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
     private var smoothedRemotePos: SIMD3<Float> = SIMD3<Float>(-3.8, 0, 3.8)
     private var smoothedRemoteAgents: [String: SIMD3<Float>] = [:]
     private var netSyncTimer: Float = 0
+    // ⚡️ Throttle del HUD: cada @Published invalida SwiftUI, así que no publicamos a 60 Hz
+    private var hudSyncTimer: Float = 0
+    private var hudSyncDue = true
+    private var lastReportedUnderwater: Bool?
+    private var lastReportedNearCover: Bool?
 
     // 🌊 Tesoros y Reliquias Subacuáticas Interactivas ("sacar muchas cosas")
     private var openedUnderwaterChestIDs: Set<Int> = []
@@ -1981,6 +1986,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
 
     private func updateSimulation(dt: Float, rawDt: Float) {
         manualCameraTimer = max(0, manualCameraTimer - rawDt)
+        hudSyncTimer += rawDt
+        hudSyncDue = hudSyncTimer >= 0.1
+        if hudSyncDue {
+            hudSyncTimer = 0
+        }
         if geyserSubmergeTimer > 0 {
             geyserSubmergeTimer = max(0, geyserSubmergeTimer - dt)
         }
@@ -1988,7 +1998,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         updateNPCSimulation(dt: dt, rawDt: rawDt)
         flushDamageReport(rawDt: rawDt)
         checkCombatHits(dt: dt)
-        onNPCHealthsUpdate?(npcHealths)
+        if hudSyncDue {
+            onNPCHealthsUpdate?(npcHealths)
+        }
 
         if isRemotePlayerConnected {
             let interp = min(1.0, rawDt * 14.0)
@@ -2086,7 +2098,10 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         let currentGroundHeight = isSubterranean ? -11.0 : groundHeight(at: playerPosition, insidePool: currentlyInPool)
         let currentlyOnFloat = currentlyInPool && isStandingOnFloat(playerPosition)
         let isPlayerUnderwater = enteredEasterEggViaToboggan && ((currentlyInPool && !currentlyOnFloat && playerPosition.y < -0.25) || isSubterranean)
-        onUnderwaterStatusUpdate?(isPlayerUnderwater)
+        if isPlayerUnderwater != lastReportedUnderwater {
+            lastReportedUnderwater = isPlayerUnderwater
+            onUnderwaterStatusUpdate?(isPlayerUnderwater)
+        }
         let isUnderFire = pendingDamageAccumulator > 0
         let isDivingInPool = currentlyInPool && !currentlyOnFloat && playerPosition.y <= -0.65
         let baseSpeed: Float = isDivingInPool ? 4.2 : (currentlyInPool && !currentlyOnFloat ? 3.6 : (isSubterranean ? 4.6 : 4.0))
@@ -2235,7 +2250,11 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 nearCoverRock = rock
             }
         }
-        onCoverStatusUpdate?(nearCoverRock != nil)
+        let isNearCover = nearCoverRock != nil
+        if isNearCover != lastReportedNearCover {
+            lastReportedNearCover = isNearCover
+            onCoverStatusUpdate?(isNearCover)
+        }
 
         if isCoverActive, let rock = nearCoverRock {
             let rCenter = SIMD2<Float>(rock.center.x, rock.center.z)
@@ -2713,7 +2732,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             laserBattery = min(1.0, laserBattery + dt / 10.0)
             laserActiveRemaining = 0.0
         }
-        onLaserBatteryUpdate?(laserBattery)
+        if hudSyncDue {
+            onLaserBatteryUpdate?(laserBattery)
+        }
 
         // 🛡️🔥 GESTIÓN TÉRMICA DEL ESCUDO ESPEJO (SE CALIENTA Y DISIPA)
         if heldTool == .mirror {
@@ -2743,7 +2764,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             }
             mirrorActiveRemaining = 0.0
         }
-        onMirrorHeatUpdate?(mirrorHeat, mirrorOverheated)
+        if hudSyncDue {
+            onMirrorHeatUpdate?(mirrorHeat, mirrorOverheated)
+        }
 
         // 🔦 GESTIÓN DE BATERÍA DE LA LINTERNA
         if heldTool == .flashlight {
@@ -2751,7 +2774,9 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         } else {
             flashlightBattery = min(1.0, flashlightBattery + dt / 22.0)
         }
-        onFlashlightBatteryUpdate?(flashlightBattery)
+        if hudSyncDue {
+            onFlashlightBatteryUpdate?(flashlightBattery)
+        }
 
         toolStatusCountdown -= dt
         if toolStatusCountdown <= 0 {

@@ -2306,6 +2306,7 @@ final class GameModel: ObservableObject {
     @Published var lightBattleWinner: String? = nil
 
     func updateNPCHealths(_ healths: [Float]) {
+        guard healths != npcHealths else { return }
         self.npcHealths = healths
     }
     @Published private(set) var warpRequestID = 0
