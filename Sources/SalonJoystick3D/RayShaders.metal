@@ -92,6 +92,72 @@ inline float3 sampleEnvironment(texture2d<half> environment, float3 direction, f
     return float3(environment.sample(environmentSampler, equirectUV(direction), level(lod)).rgb);
 }
 
+/// 🪐 Un planeta en el cielo del Salón Arcoíris (disco con relieve esférico, bandas, atmósfera y anillo opcional).
+inline float3 hallPlanet(float3 d, float3 center, float radius, float3 colA, float3 colB, float bandFreq,
+                         float ringInner, float ringOuter, float3 sunDir, float time) {
+    float facing = dot(d, center);
+    if (facing < 0.0f) { return float3(0.0f); }
+    float3 helper = abs(center.y) < 0.95f ? float3(0.0f, 1.0f, 0.0f) : float3(1.0f, 0.0f, 0.0f);
+    float3 u = normalize(cross(helper, center));
+    float3 v = cross(center, u);
+    float3 offset = d - center * facing;
+    float x = dot(offset, u) / radius;
+    float y = dot(offset, v) / radius;
+    float r2 = x * x + y * y;
+    float3 color = float3(0.0f);
+
+    // Anillo inclinado (elipse aplanada en Y); se oculta detrás del planeta
+    bool ringBehind = false;
+    if (ringOuter > 0.0f) {
+        float ry = (y - x * 0.18f) / 0.28f;
+        float rr = sqrt(x * x + ry * ry);
+        if (rr > ringInner && rr < ringOuter) {
+            ringBehind = ry > 0.0f && r2 < 1.0f;
+            float ringBands = 0.55f + 0.45f * sin(rr * 38.0f);
+            float ringFade = smoothstep(ringInner, ringInner + 0.08f, rr) * smoothstep(ringOuter, ringOuter - 0.12f, rr);
+            if (!ringBehind) {
+                color += mix(colB, float3(0.95f, 0.92f, 0.85f), 0.5f) * ringBands * ringFade * 0.55f;
+            }
+        }
+    }
+
+    if (r2 < 1.0f) {
+        float z = sqrt(1.0f - r2);
+        float3 n = normalize(u * x + v * y - center * z);
+        float light = saturate(dot(n, sunDir));
+        float swirl = sin(x * 3.1f + time * 0.04f) * 0.6f + sin(x * 7.3f - y * 2.0f) * 0.15f;
+        float band = 0.5f + 0.5f * sin(y * bandFreq + swirl);
+        float3 surface = mix(colA, colB, band);
+        float rim = pow(1.0f - z, 3.0f);
+        float3 planetColor = surface * (0.04f + 1.25f * light) + colA * rim * 0.35f;
+        // Si el anillo pasa por delante, se mezcla sobre el disco
+        color = ringBehind ? planetColor : planetColor + color * 0.85f;
+    } else if (r2 < 1.35f) {
+        // Halo de atmósfera
+        color += colA * smoothstep(1.35f, 1.0f, r2) * 0.22f;
+    }
+    return color;
+}
+
+/// 🌌 Planetas visibles desde el Gran Salón Arcoíris (sin muros, plataforma flotando en el cielo).
+inline float3 hallPlanets(float3 d, float time) {
+    float3 sunDir = normalize(float3(-0.45f, 0.35f, -0.82f));
+    float3 c = float3(0.0f);
+    // Gigante gaseoso con anillo, al fondo del salón
+    c += hallPlanet(d, normalize(float3(0.32f, 0.40f, 1.0f)), 0.15f,
+                    float3(1.05f, 0.62f, 0.30f), float3(0.85f, 0.78f, 0.62f), 15.0f, 1.35f, 2.15f, sunDir, time);
+    // Planeta de hielo azul
+    c += hallPlanet(d, normalize(float3(-0.70f, 0.62f, 0.75f)), 0.055f,
+                    float3(0.35f, 0.75f, 1.15f), float3(0.85f, 0.95f, 1.10f), 9.0f, 0.0f, 0.0f, sunDir, time);
+    // Planeta violeta al oeste
+    c += hallPlanet(d, normalize(float3(-1.0f, 0.30f, 0.15f)), 0.085f,
+                    float3(0.80f, 0.35f, 1.10f), float3(0.40f, 0.20f, 0.75f), 11.0f, 0.0f, 0.0f, sunDir, time);
+    // Pequeña luna verde azulada al este
+    c += hallPlanet(d, normalize(float3(1.0f, 0.55f, 0.30f)), 0.045f,
+                    float3(0.30f, 1.00f, 0.75f), float3(0.15f, 0.55f, 0.50f), 7.0f, 0.0f, 0.0f, sunDir, time);
+    return c;
+}
+
 /// En compute no hay derivadas: el mip sale del tamaño del píxel proyectado sobre la superficie.
 inline float textureLOD(float distance, float3 rayDirection, float3 normal, float texelsPerMeter, float pixelAngle) {
     float cosTheta = max(0.25f, abs(dot(rayDirection, normal)));
@@ -1486,6 +1552,9 @@ kernel void raytracePatio(
             float lightScale = clamp(totalLights / 0.8f, 0.0f, 1.0f);
             if (isHardwareRT) {
                 accumulated += throughput * sampleEnvironment(environment, currentRay.direction, bounce > 0 ? 1.5f : 0.0f) * lightScale;
+                if (currentRay.origin.z > 17.5f) {
+                    accumulated += throughput * hallPlanets(currentRay.direction, uniforms.waterSimulation.y);
+                }
                 break;
             }
 
@@ -1556,6 +1625,9 @@ kernel void raytracePatio(
                 float totalLights = uniforms.lightStates.x + uniforms.lightStates.y + uniforms.lightStates.z + uniforms.lightStates.w;
                 float lightScale = clamp(totalLights / 0.8f, 0.0f, 1.0f);
                 accumulated += throughput * sampleEnvironment(environment, currentRay.direction, bounce > 0 ? 1.5f : 0.0f) * lightScale;
+                if (currentRay.origin.z > 17.5f) {
+                    accumulated += throughput * hallPlanets(currentRay.direction, uniforms.waterSimulation.y);
+                }
                 break;
             }
             if (bounce == 0) {
@@ -2023,13 +2095,19 @@ kernel void raytracePatio(
                 float3( 13.5f, 5.4f, 56.0f)  // Sector 4 (Violeta-Magenta + Cumbre): Cabaña SE + Santuario Central
             };
             float rainbowPhase = position.z * 0.14f + position.x * 0.08f;
-            float3 dynamicSpectrum = 0.52f + 0.48f * cos(rainbowPhase + float3(0.0f, 2.094f, 4.188f));
+            // Espectro HSV puro (saturación 100 %); el antiguo 0.52+0.48·cos tenía mucho blanco y lavaba los colores
+            float3 dynamicSpectrum = saturate(abs(fract(rainbowPhase * 0.159f + float3(0.0f, 2.0f / 3.0f, 1.0f / 3.0f)) * 6.0f - 3.0f) - 1.0f);
+            // Estilo "pista arcoíris": el color vive en los objetos y la luz es blanca y pareja.
+            // Varias luces de colores superpuestas se suman hacia gris/blanco y lavaban el salón.
+            float3 hallWhite = float3(1.0f, 0.97f, 0.92f);
             float3 rainbowCol[4] = {
-                mix(float3(1.0f, 0.22f, 0.08f), dynamicSpectrum, 0.35f),
-                mix(float3(0.18f, 1.0f, 0.35f), dynamicSpectrum, 0.35f),
-                mix(float3(0.06f, 0.72f, 1.0f), dynamicSpectrum, 0.35f),
-                mix(float3(0.92f, 0.15f, 1.0f), dynamicSpectrum, 0.45f)
+                mix(hallWhite, float3(1.0f, 0.35f, 0.25f), 0.12f),
+                mix(hallWhite, float3(0.35f, 1.0f, 0.45f), 0.12f),
+                mix(hallWhite, float3(0.30f, 0.70f, 1.0f), 0.12f),
+                mix(hallWhite, float3(0.85f, 0.40f, 1.0f), 0.12f)
             };
+            // Relleno uniforme: que todos los colores se vean aunque estés lejos de una luz
+            direct += albedo * (2.2f * lightScale) * fotofagoDrain;
             float rainbowState[4] = {
                 uniforms.lightStates.x,
                 uniforms.lightStates.y,
@@ -2044,7 +2122,7 @@ kernel void raytracePatio(
                     float3 rDir = toR / rDist;
                     float rNDotL = saturate(dot(normal, rDir));
                     if (rNDotL > 0.0f && rDist < 38.0f) {
-                        float rAtten = (68.0f * rainbowState[rIdx]) / (1.0f + rDistSq * 0.045f);
+                        float rAtten = (52.0f * rainbowState[rIdx]) / (1.0f + rDistSq * 0.022f);
                         direct += albedo * rainbowCol[rIdx] * rAtten * rNDotL * fotofagoDrain;
                         if (roughness < 0.35f) {
                             float3 rHalf = normalize(rDir - currentRay.direction);
@@ -2062,11 +2140,11 @@ kernel void raytracePatio(
             float cNDotL = saturate(dot(normal, cDir));
             if (cNDotL > 0.0f && cDist < 42.0f) {
                 float crownPower = (54.0f * lightScale) / (1.0f + cDistSq * 0.038f);
-                direct += albedo * dynamicSpectrum * crownPower * cNDotL * fotofagoDrain;
+                direct += albedo * hallWhite * crownPower * cNDotL * fotofagoDrain;
                 if (roughness < 0.35f) {
                     float3 cHalf = normalize(cDir - currentRay.direction);
                     float cGloss = pow(saturate(dot(normal, cHalf)), mix(24.0f, 180.0f, 1.0f - roughness));
-                    direct += dynamicSpectrum * crownPower * cGloss * (0.32f * (1.0f - roughness));
+                    direct += mix(hallWhite, dynamicSpectrum, 0.35f) * crownPower * cGloss * (0.32f * (1.0f - roughness));
                 }
             }
         }
@@ -2398,7 +2476,21 @@ kernel void raytracePatio(
         motionOut.write(float4(motion, 0.0f, 0.0f), tid);
     }
 
-    output.write(half4(half3(toneMap(clamp(accumulated, 0.0f, 96.0f))), half(1.0f)), tid);
+    // 🌈 Gran Salón Arcoíris: tone mapping que conserva el tono. El Reinhard por canal comprime el canal fuerte
+    // de un neón (p. ej. rojo 4.5) y deja crecer los débiles, así que los neones salían rosados/pastel
+    // mientras las paredes sí se veían saturadas. Aquí se comprime por el canal máximo y el color no se lava.
+    float3 hdrColor = clamp(accumulated, 0.0f, 96.0f);
+    float3 hallProbe = primaryOrigin + primaryDirection * min(firstSurfaceDistance, 60.0f);
+    float3 displayColor;
+    if (hallProbe.z > 17.9f && primaryOrigin.z > 17.9f) {
+        float hallLuma = dot(hdrColor, float3(0.2126f, 0.7152f, 0.0722f));
+        float3 vivid = max(hallLuma + (hdrColor - hallLuma) * 1.15f, 0.0f) * 1.28f;
+        float peak = max(vivid.r, max(vivid.g, vivid.b));
+        displayColor = pow(vivid / (1.0f + peak), float3(1.0f / 2.2f));
+    } else {
+        displayColor = toneMap(hdrColor);
+    }
+    output.write(half4(half3(displayColor), half(1.0f)), tid);
 }
 
 struct DepthCopyOut {

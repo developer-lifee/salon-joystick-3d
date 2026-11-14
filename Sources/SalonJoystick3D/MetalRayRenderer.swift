@@ -7075,16 +7075,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         // 🌈 🏎️ GRAN SALÓN ARCOÍRIS ESTILO MARIO KART (SENDA ARCOÍRIS / RAINBOW ROAD)
         // (54m x 54m, Z: 18m a 72m, X: -27m a +27m)
         // =========================================================================
-        // 1. Muros Perimetrales Monumentales de 9m de altura en Titanio Mate Cyber
-        let wallDarkMatte = RTMaterial(color: SIMD3<Float>(0.08, 0.09, 0.12), roughness: 0.65, reflectivity: 0.06)
-        // Muro Sur Final (Z = 72.0)
-        builder.addBox(center: SIMD3<Float>(0, 4.5, 72.0), size: SIMD3<Float>(54.4, 9.0, 0.4), material: wallDarkMatte)
-        // Muro Oeste (X = -27.0) y Muro Este (X = +27.0)
-        builder.addBox(center: SIMD3<Float>(-27.0, 4.5, 45.0), size: SIMD3<Float>(0.4, 9.0, 54.4), material: wallDarkMatte)
-        builder.addBox(center: SIMD3<Float>( 27.0, 4.5, 45.0), size: SIMD3<Float>(0.4, 9.0, 54.4), material: wallDarkMatte)
-        // Alas Norte que conectan el Salón de la Piscina (±17.8) con el ancho del Salón Arcoíris (±27.0) en Z = 17.8
-        builder.addBox(center: SIMD3<Float>(-22.6, 4.5, 17.8), size: SIMD3<Float>(9.2, 9.0, 0.4), material: wallDarkMatte)
-        builder.addBox(center: SIMD3<Float>( 22.6, 4.5, 17.8), size: SIMD3<Float>(9.2, 9.0, 0.4), material: wallDarkMatte)
+        // 1. Sin muros perimetrales: el salón es una plataforma flotando en el cielo con planetas (los dibuja el shader).
+        //    Las colisiones invisibles de los bordes siguen activas para que nadie se caiga.
 
         // 2. 7 Colores del Espectro Arcoíris Mario Kart:
         let rainbowColors: [(SIMD3<Float>, SIMD3<Float>)] = [
@@ -7187,17 +7179,6 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
         builder.addBox(center: SIMD3<Float>(-5.25, 2.40, 17.80), size: SIMD3<Float>(0.35, 4.80, 0.50), material: archStone)
         builder.addBox(center: SIMD3<Float>( 5.25, 2.40, 17.80), size: SIMD3<Float>(0.35, 4.80, 0.50), material: archStone)
         builder.addBox(center: SIMD3<Float>( 0.00, 4.82, 17.80), size: SIMD3<Float>(10.85, 0.28, 0.50), material: archStone)
-
-        // 4. Bandas Horizontales Arcoíris en Muros Perimetrales (Guarda-raíles estilo Mario Kart Rainbow Road)
-        for i in 0..<7 {
-            let mat = rainbowNeonMats[i]
-            let yStrip: Float = 1.20 + Float(i) * 1.05 // Alturas de 1.2m a 7.5m
-            // Muro Oeste (X = -26.78) y Muro Este (X = 26.78) a todo lo largo (54m de Z: 18 a 72)
-            builder.addBox(center: SIMD3<Float>(-26.78, yStrip, 45.0), size: SIMD3<Float>(0.06, 0.20, 54.0), material: mat)
-            builder.addBox(center: SIMD3<Float>( 26.78, yStrip, 45.0), size: SIMD3<Float>(0.06, 0.20, 54.0), material: mat)
-            // Muro Sur Final (Z = 71.78) a todo lo ancho (54m de X: -27 a +27)
-            builder.addBox(center: SIMD3<Float>(0, yStrip, 71.78), size: SIMD3<Float>(54.0, 0.20, 0.06), material: mat)
-        }
 
         // 6. Los 4 Pilones / Faroles de Luz Arcoíris Interactivos junto a las 4 Cabañas (conectados a los 4 interruptores de luz)
         let rainbowPylons: [(SIMD3<Float>, Int)] = [

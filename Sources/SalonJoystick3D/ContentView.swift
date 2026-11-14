@@ -5470,16 +5470,29 @@ final class ChiptuneAudioEngine {
     private var laserReflectionBuffer: AVAudioPCMBuffer?
     private var robloxOofBuffer: AVAudioPCMBuffer?
     private var lightsaberDefeatBuffer: AVAudioPCMBuffer?
-    private var slowMoActivationBuffer: AVAudioPCMBuffer?
     private var slowMoDeactivationBuffer: AVAudioPCMBuffer?
-    private var subterraneanPortalBuffer: AVAudioPCMBuffer?
     private var swimStrokeBuffer: AVAudioPCMBuffer?
-    private var recoveryChamberEnterBuffer: AVAudioPCMBuffer?
-    private var recoveryCompleteBuffer: AVAudioPCMBuffer?
-    private var teammateRevivePulseBuffer: AVAudioPCMBuffer?
+    // 🎼 Efectos con nota escritos en Do mayor (tonalidad del salón principal) y transpuestos a la música de cada zona:
+    // 0 = Salón principal (Do mayor), 1 = Salón Arcoíris (La mayor, −3 semitonos), 2 = Submarino (Mi♭ mayor, +3 semitonos)
+    private static let zoneTransposition: [Double] = [1.0, pow(2.0, -3.0 / 12.0), pow(2.0, 3.0 / 12.0)]
+    private var zoneIndex: Int { isInUnderwaterZone ? 2 : (isInRainbowHallZone ? 1 : 0) }
+    private func zoned(_ buffers: [AVAudioPCMBuffer], _ index: Int) -> AVAudioPCMBuffer? {
+        buffers.indices.contains(index) ? buffers[index] : buffers.first
+    }
+    private var slowMoActivationBuffers: [AVAudioPCMBuffer] = []
+    private var slowMoActivationBuffer: AVAudioPCMBuffer? { zoned(slowMoActivationBuffers, zoneIndex) }
+    private var subterraneanPortalBuffers: [AVAudioPCMBuffer] = []
+    private var subterraneanPortalBuffer: AVAudioPCMBuffer? { zoned(subterraneanPortalBuffers, 2) } // Siempre en Mi♭: suena al zambullirse hacia el Santuario Submarino
+    private var recoveryChamberEnterBuffers: [AVAudioPCMBuffer] = []
+    private var recoveryChamberEnterBuffer: AVAudioPCMBuffer? { zoned(recoveryChamberEnterBuffers, zoneIndex) }
+    private var recoveryCompleteBuffers: [AVAudioPCMBuffer] = []
+    private var recoveryCompleteBuffer: AVAudioPCMBuffer? { zoned(recoveryCompleteBuffers, zoneIndex) }
+    private var teammateRevivePulseBuffers: [AVAudioPCMBuffer] = []
+    private var teammateRevivePulseBuffer: AVAudioPCMBuffer? { zoned(teammateRevivePulseBuffers, zoneIndex) }
+    private var balloonBouncePopBuffers: [AVAudioPCMBuffer] = []
+    private var balloonBouncePopBuffer: AVAudioPCMBuffer? { zoned(balloonBouncePopBuffers, zoneIndex) }
     private var slimeDeflateBuffer: AVAudioPCMBuffer?
     private var airPumpStrokeBuffer: AVAudioPCMBuffer?
-    private var balloonBouncePopBuffer: AVAudioPCMBuffer?
     private var nextSplash = 0
     private var nextLanding = 0
     private var nodesAttached = false
@@ -5643,16 +5656,16 @@ final class ChiptuneAudioEngine {
                 laserReflectionBuffer = makeLaserReflectionBuffer()
                 robloxOofBuffer = makeRobloxOofBuffer()
                 lightsaberDefeatBuffer = makeLightsaberDefeatBuffer()
-                slowMoActivationBuffer = makeSlowMotionActivationBuffer()
+                slowMoActivationBuffers = Self.zoneTransposition.compactMap { makeSlowMotionActivationBuffer(transpose: $0) }
                 slowMoDeactivationBuffer = makeSlowMotionDeactivationBuffer()
-                subterraneanPortalBuffer = makeSubterraneanPortalBuffer()
+                subterraneanPortalBuffers = Self.zoneTransposition.compactMap { makeSubterraneanPortalBuffer(transpose: $0) }
                 swimStrokeBuffer = makeSwimStrokeBuffer()
-                recoveryChamberEnterBuffer = makeRecoveryChamberEnterBuffer()
-                recoveryCompleteBuffer = makeRecoveryCompleteBuffer()
-                teammateRevivePulseBuffer = makeTeammateRevivePulseBuffer()
+                recoveryChamberEnterBuffers = Self.zoneTransposition.compactMap { makeRecoveryChamberEnterBuffer(transpose: $0) }
+                recoveryCompleteBuffers = Self.zoneTransposition.compactMap { makeRecoveryCompleteBuffer(transpose: $0) }
+                teammateRevivePulseBuffers = Self.zoneTransposition.compactMap { makeTeammateRevivePulseBuffer(transpose: $0) }
                 slimeDeflateBuffer = makeSlimeDeflateBuffer()
                 airPumpStrokeBuffer = makeAirPumpStrokeBuffer()
-                balloonBouncePopBuffer = makeBalloonBouncePopBuffer()
+                balloonBouncePopBuffers = Self.zoneTransposition.compactMap { makeBalloonBouncePopBuffer(transpose: $0) }
             }
 
             let session = AVAudioSession.sharedInstance()
@@ -6170,7 +6183,7 @@ final class ChiptuneAudioEngine {
     }
 
     // ⚡ Modo Furia / Dead Eye / Black Ops Slow-Mo Activation Sound
-    private func makeSlowMotionActivationBuffer() -> AVAudioPCMBuffer? {
+    private func makeSlowMotionActivationBuffer(transpose: Double = 1.0) -> AVAudioPCMBuffer? {
         let duration = 1.35
         let frameCount = AVAudioFrameCount(format.sampleRate * duration)
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
@@ -6198,15 +6211,15 @@ final class ChiptuneAudioEngine {
                 whoosh = (wNoise * 0.4 + resonance * 0.6) * pow(wProgress, 2.8) * 0.70
             }
 
-            // 3. Ethereal "Dead Eye" Resonant Bell / Chime (432Hz & 864Hz harmonic ring)
+            // 3. Ethereal "Dead Eye" Resonant Bell / Chime: tónica Do5/Do6 transpuesta a la zona (antes 432 Hz, desafinada vs La 440)
             var bellL: Double = 0
             var bellR: Double = 0
             if t >= 0.08 {
                 let bt = t - 0.08
                 let bEnv = min(1.0, bt * 120.0) * exp(-bt * 3.0)
-                let bPhase1 = 2.0 * .pi * 432.0 * bt
-                let bPhase2 = 2.0 * .pi * 864.0 * bt
-                let bPhaseDetune = 2.0 * .pi * 435.5 * bt
+                let bPhase1 = 2.0 * .pi * 523.25 * transpose * bt
+                let bPhase2 = 2.0 * .pi * 1046.50 * transpose * bt
+                let bPhaseDetune = 2.0 * .pi * 527.5 * transpose * bt
                 bellL = (sin(bPhase1) * 0.60 + sin(bPhase2) * 0.25) * bEnv
                 bellR = (sin(bPhaseDetune) * 0.60 + sin(bPhase2) * 0.25) * bEnv
             }
@@ -6259,7 +6272,7 @@ final class ChiptuneAudioEngine {
     }
 
     // 🎨🌊 Entrada al Easter Egg estilo Super Mario 64: "Painting Water Ripple" + Plop Cavitación + Arpegio Mágico de Campanas
-    private func makeSubterraneanPortalBuffer() -> AVAudioPCMBuffer? {
+    private func makeSubterraneanPortalBuffer(transpose: Double = 1.0) -> AVAudioPCMBuffer? {
         let duration = 1.35
         let frameCount = AVAudioFrameCount(format.sampleRate * duration)
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
@@ -6269,7 +6282,7 @@ final class ChiptuneAudioEngine {
         buffer.frameLength = frameCount
 
         // Notas del arpegio ascendente mágico (Super Mario 64 style pentatónico brillante: C5, E5, G5, B5, D6, G6)
-        let chimeFreqs: [Double] = [523.25, 659.25, 783.99, 987.77, 1174.66, 1567.98]
+        let chimeFreqs: [Double] = [523.25, 659.25, 783.99, 987.77, 1174.66, 1567.98].map { $0 * transpose }
         let noteSpacing = 0.046 // 46ms entre notas del arpegio rápido ascendente
 
         var lpNoise = 0.0
@@ -6354,7 +6367,7 @@ final class ChiptuneAudioEngine {
         return buffer
     }
 
-    private func makeRecoveryChamberEnterBuffer() -> AVAudioPCMBuffer? {
+    private func makeRecoveryChamberEnterBuffer(transpose: Double = 1.0) -> AVAudioPCMBuffer? {
         let duration = 0.60
         let frameCount = AVAudioFrameCount(format.sampleRate * duration)
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
@@ -6371,9 +6384,9 @@ final class ChiptuneAudioEngine {
             let env = attack * decay
 
             // Tono profundo de activación de escudo stasis (D3 + A3 sin sweeps)
-            let toneD3 = sin(2.0 * .pi * 146.83 * t)
-            let toneA3 = sin(2.0 * .pi * 220.00 * t) * 0.65
-            let subBass = sin(2.0 * .pi * 73.41 * t) * 0.45
+            let toneD3 = sin(2.0 * .pi * 146.83 * transpose * t)
+            let toneA3 = sin(2.0 * .pi * 220.00 * transpose * t) * 0.65
+            let subBass = sin(2.0 * .pi * 73.41 * transpose * t) * 0.45
 
             let rawNoise = Double.random(in: -1.0...1.0)
             lpNoise = lpNoise * 0.80 + rawNoise * 0.20
@@ -6389,7 +6402,7 @@ final class ChiptuneAudioEngine {
         return buffer
     }
 
-    private func makeRecoveryCompleteBuffer() -> AVAudioPCMBuffer? {
+    private func makeRecoveryCompleteBuffer(transpose: Double = 1.0) -> AVAudioPCMBuffer? {
         let duration = 0.90
         let frameCount = AVAudioFrameCount(format.sampleRate * duration)
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
@@ -6398,7 +6411,7 @@ final class ChiptuneAudioEngine {
         }
         buffer.frameLength = frameCount
 
-        let chimeNotes: [Double] = [523.25, 659.25, 783.99, 1046.50]
+        let chimeNotes: [Double] = [523.25, 659.25, 783.99, 1046.50].map { $0 * transpose }
         let noteSpacing = 0.055
 
         for frame in 0..<Int(frameCount) {
@@ -6431,7 +6444,7 @@ final class ChiptuneAudioEngine {
         return buffer
     }
 
-    private func makeTeammateRevivePulseBuffer() -> AVAudioPCMBuffer? {
+    private func makeTeammateRevivePulseBuffer(transpose: Double = 1.0) -> AVAudioPCMBuffer? {
         let duration = 0.40
         let frameCount = AVAudioFrameCount(format.sampleRate * duration)
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
@@ -6447,8 +6460,8 @@ final class ChiptuneAudioEngine {
             let env = attack * decay
 
             // Pulso de energía médica de alta velocidad (A5 + A6)
-            let pulse = (sin(2.0 * .pi * 880.0 * t) +
-                         sin(2.0 * .pi * 1760.0 * t) * 0.45) * env
+            let pulse = (sin(2.0 * .pi * 880.0 * transpose * t) +
+                         sin(2.0 * .pi * 1760.0 * transpose * t) * 0.45) * env
             let sample = Float(tanh(pulse * 1.4) * 0.92)
             channels[0][frame] = sample
             if format.channelCount > 1 {
@@ -6521,14 +6534,14 @@ final class ChiptuneAudioEngine {
         return buffer
     }
 
-    private func makeBalloonBouncePopBuffer() -> AVAudioPCMBuffer? {
+    private func makeBalloonBouncePopBuffer(transpose: Double = 1.0) -> AVAudioPCMBuffer? {
         let duration = 0.55
         let frameCount = AVAudioFrameCount(format.sampleRate * duration)
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
               let channels = buffer.floatChannelData else { return nil }
         buffer.frameLength = frameCount
 
-        let chimes: [Double] = [523.25, 659.25, 783.99, 1046.50] // C5, E5, G5, C6
+        let chimes: [Double] = [523.25, 659.25, 783.99, 1046.50].map { $0 * transpose } // C5, E5, G5, C6 en Do mayor
         for frame in 0..<Int(frameCount) {
             let t = Double(frame) / format.sampleRate
 
@@ -8087,7 +8100,7 @@ struct GameSlang {
     var defeatVersusTitle: String {
         pick([
             "es": "CAÍSTE EN COMBATE",
-            "es-CO": "TE BAJARON DE LA NUBE, PARCE",
+            "es-CO": "TE DIERON PISO, PARCE",
             "es-MX": "TE ACABARON, CARNAL",
             "es-AR": "TE PASARON EL TRAPO, CHE",
             "es-ES": "TE HAN DADO PARA EL PELO, TÍO",
@@ -8143,7 +8156,7 @@ struct GameSlang {
     var defeatTeamTitle: String {
         pick([
             "es": "MISIÓN FALLIDA",
-            "es-CO": "NOS VOLVIERON NADA, PARCHE",
+            "es-CO": "¡NOS DIERON PISO A TODOS, PARCE!",
             "es-MX": "SE CAYÓ TODA LA BANDA",
             "es-AR": "NOS BARRIERON A TODOS, CHE",
             "es-ES": "NOS HAN FUNDIDO A TODOS",
@@ -8255,36 +8268,36 @@ struct GameSlang {
     var retryButton: String {
         pick([
             "es": "REINTENTAR",
-            "es-CO": "¡OTRA VEZ, PARCE! (REINTENTAR)",
-            "es-MX": "¡OTRA VEZ, WEY! (REINTENTAR)",
-            "es-AR": "¡OTRA VEZ, CHE! (REINTENTAR)",
-            "es-ES": "¡OTRA VEZ, TÍO! (REINTENTAR)",
-            "es-CL": "¡OTRA VEZ, PO! (REINTENTAR)",
-            "es-PE": "¡OTRA VEZ, PE! (REINTENTAR)",
-            "es-VE": "¡OTRA, CHAMO! (REINTENTAR)",
-            "es-EC": "¡OTRA, ÑAÑO! (REINTENTAR)",
-            "es-UY": "¡OTRA, BO! (REINTENTAR)",
-            "es-CU": "¡OTRA, ASERE! (REINTENTAR)",
-            "es-DO": "¡OTRA, MANITO! (REINTENTAR)",
-            "es-GT": "¡OTRA, VOS! (REINTENTAR)",
-            "es-CR": "¡OTRA, MAE! (REINTENTAR)",
-            "es-PA": "¡OTRA, LOCO! (REINTENTAR)",
-            "es-SV": "¡OTRA, CHERO! (REINTENTAR)",
-            "es-HN": "¡OTRA, MAJE! (REINTENTAR)",
-            "es-NI": "¡OTRA, CHAVALO! (REINTENTAR)",
-            "es-BO": "¡OTRA, CHANGO! (REINTENTAR)",
-            "es-PY": "¡OTRA, CHE RA'A! (REINTENTAR)",
-            "es-PR": "¡OTRA, ACHO! (REINTENTAR)",
-            "es-US": "¡OTRA, BRO! (REINTENTAR)",
-            "en": "PLAY AGAIN (RETRY)",
-            "en-US": "RUN IT BACK (RETRY)",
-            "en-GB": "GO AGAIN, MATE (RETRY)",
-            "en-AU": "HAVE ANOTHER CRACK (RETRY)",
-            "en-NZ": "GIVE IT A CRACK, BRO (RETRY)",
-            "en-IE": "GO AGAIN, LAD (RETRY)",
-            "en-IN": "EK AUR, BHAI (RETRY)",
-            "en-CA": "ONE MORE, EH (RETRY)",
-            "en-ZA": "AGAIN, BRU (RETRY)",
+            "es-CO": "¡OTRA VEZ, PARCE!",
+            "es-MX": "¡OTRA VEZ, WEY!",
+            "es-AR": "¡OTRA VEZ, CHE!",
+            "es-ES": "¡OTRA VEZ, TÍO!",
+            "es-CL": "¡OTRA VEZ, PO!",
+            "es-PE": "¡OTRA VEZ, PE!",
+            "es-VE": "¡OTRA, CHAMO!",
+            "es-EC": "¡OTRA, ÑAÑO!",
+            "es-UY": "¡OTRA, BO!",
+            "es-CU": "¡OTRA, ASERE!",
+            "es-DO": "¡OTRA, MANITO!",
+            "es-GT": "¡OTRA, VOS!",
+            "es-CR": "¡OTRA, MAE!",
+            "es-PA": "¡OTRA, LOCO!",
+            "es-SV": "¡OTRA, CHERO!",
+            "es-HN": "¡OTRA, MAJE!",
+            "es-NI": "¡OTRA, CHAVALO!",
+            "es-BO": "¡OTRA, CHANGO!",
+            "es-PY": "¡OTRA, CHE RA'A!",
+            "es-PR": "¡OTRA, ACHO!",
+            "es-US": "¡OTRA, BRO!",
+            "en": "PLAY AGAIN",
+            "en-US": "RUN IT BACK",
+            "en-GB": "GO AGAIN, MATE",
+            "en-AU": "HAVE ANOTHER CRACK",
+            "en-NZ": "GIVE IT A CRACK, BRO",
+            "en-IE": "GO AGAIN, LAD",
+            "en-IN": "EK AUR, BHAI",
+            "en-CA": "ONE MORE, EH",
+            "en-ZA": "AGAIN, BRU",
             "pt": "JOGAR DE NOVO",
             "pt-BR": "BORA DE NOVO!",
             "pt-PT": "MAIS UMA, PÁ!",
@@ -8299,12 +8312,12 @@ struct GameSlang {
             "de-CH": "NONEMOL, HOPP!",
             "it": "RIPROVA",
             "it-IT": "UN'ALTRA, DAI!",
-            "hi": "एक और, भाई! (RETRY)",
-            "ja": "もういっかい！(RETRY)",
-            "zh": "再来一把 (RETRY)",
-            "zh-TW": "再來一場啦 (RETRY)",
-            "zh-HK": "再嚟過 (RETRY)",
-            "ko": "한 판 더! (RETRY)"
+            "hi": "एक और, भाई!",
+            "ja": "もういっかい！",
+            "zh": "再来一把",
+            "zh-TW": "再來一場啦",
+            "zh-HK": "再嚟過",
+            "ko": "한 판 더!"
         ])
     }
 
@@ -8465,14 +8478,14 @@ struct GameSlang {
             "es-PR": "¡WEPA, A JUGAR!",
             "es-US": "¡VAMOS, BRO!",
             "en": "PLAY",
-            "en-US": "LET'S GOOO (PLAY)",
-            "en-GB": "LET'S GO, MATE! (PLAY)",
-            "en-AU": "LET'S GO, MATE! (PLAY)",
-            "en-NZ": "CHUR, LET'S GO! (PLAY)",
-            "en-IE": "C'MON LADS! (PLAY)",
-            "en-IN": "CHALO, BHAI! (PLAY)",
-            "en-CA": "LET'S GO, EH! (PLAY)",
-            "en-ZA": "LET'S GO, BRU! (PLAY)",
+            "en-US": "LET'S GOOO",
+            "en-GB": "LET'S GO, MATE!",
+            "en-AU": "LET'S GO, MATE!",
+            "en-NZ": "CHUR, LET'S GO!",
+            "en-IE": "C'MON LADS!",
+            "en-IN": "CHALO, BHAI!",
+            "en-CA": "LET'S GO, EH!",
+            "en-ZA": "LET'S GO, BRU!",
             "pt": "JOGAR",
             "pt-BR": "BORA JOGAR!",
             "pt-PT": "BORA LÁ, PÁ!",
@@ -8487,12 +8500,12 @@ struct GameSlang {
             "de-CH": "HOPP, LOS!",
             "it": "GIOCA",
             "it-IT": "DAI, SI GIOCA!",
-            "hi": "चलो खेलें! (PLAY)",
-            "ja": "あそぶ！(PLAY)",
-            "zh": "冲！开玩 (PLAY)",
-            "zh-TW": "開玩啦 (PLAY)",
-            "zh-HK": "開波！(PLAY)",
-            "ko": "드가자! (PLAY)"
+            "hi": "चलो खेलें!",
+            "ja": "あそぶ！",
+            "zh": "冲！开玩",
+            "zh-TW": "開玩啦",
+            "zh-HK": "開波！",
+            "ko": "드가자!"
         ])
     }
 
@@ -11627,20 +11640,24 @@ struct QuantumChestMinigameView: View {
 
     private var modeTitle: String {
         switch chestID % 6 {
-        case 0, 3: return "🎱 COFRE #\(chestID + 1) — BILLAR DE FOTONES"
-        case 1, 4: return "🌀 COFRE #\(chestID + 1) — PORTALES Y ESPEJOS"
-        case 2:    return "🌈 COFRE #\(chestID + 1) — PRISMAS RGB"
-        default:   return "🛡️ COFRE #\(chestID + 1) — REFLECTOR ACTIVO"
+        case 0:  return "🎵 COFRE #\(chestID + 1) — SIMÓN DE NEONES"
+        case 1:  return "🎨 COFRE #\(chestID + 1) — MEZCLADOR ARCOÍRIS"
+        case 2:  return "🔒 COFRE #\(chestID + 1) — 6 ANILLOS DE CERRADURA"
+        case 3:  return "💧 COFRE #\(chestID + 1) — TANQUE DE REFRACCIÓN"
+        case 4:  return "🐇 COFRE #\(chestID + 1) — SOMBRAS CHINESCAS"
+        default: return "🔭 COFRE #\(chestID + 1) — PERISCOPIO DE 6 REBOTES"
         }
     }
 
     private var modeSubtitle: String {
         if isUnlocked { return "✅ ¡CERRADURA DESBLOQUEADA!" }
         switch chestID % 6 {
-        case 0, 3: return "Arrastra para apuntar en 360° y calcula el rebote tipo Pool hacia la gema"
-        case 1, 4: return "Gira las rocas espejo para enviar el rayo por el portal azul hacia el naranja"
-        case 2:    return "Combina el rayo ROJO y el VERDE en la gema central para encenderla"
-        default:   return "Desliza el espejo inferior para rebotar 5 pulsos de luz al núcleo superior"
+        case 0:  return "Mira la secuencia de luces y repítela hasta llegar a 6"
+        case 1:  return "Mueve R, G y B para mezclar el color de luz que pide el cristal (3 colores)"
+        case 2:  return "Toca cuando el hueco de cada anillo pase por el láser de arriba"
+        case 3:  return "Sube o baja el agua: la refracción desvía el láser hacia la diana (3 dianas)"
+        case 4:  return "Gira la figura y acércala a la linterna hasta que su sombra calce (3 figuras)"
+        default: return "Toca un espejo y desliza para girarlo: el láser debe rebotar en los 6 y llegar a la lámpara"
         }
     }
 
@@ -11675,12 +11692,12 @@ struct QuantumChestMinigameView: View {
 
                 Group {
                     switch chestID % 6 {
-                    case 0, 3:
-                        PhotonPoolPuzzleView(chestID: chestID, isUnlocked: isUnlocked, onSolved: triggerWin)
-                    case 5:
-                        ActiveReflectorPuzzleView(isUnlocked: isUnlocked, onSolved: triggerWin)
-                    default:
-                        PortalMirrorGridPuzzleView(chestID: chestID, isUnlocked: isUnlocked, onSolved: triggerWin)
+                    case 0: NeonSimonPuzzleView(isUnlocked: isUnlocked, onSolved: triggerWin)
+                    case 1: RainbowMixerPuzzleView(isUnlocked: isUnlocked, onSolved: triggerWin)
+                    case 2: LockRingsPuzzleView(isUnlocked: isUnlocked, onSolved: triggerWin)
+                    case 3: RefractionTankPuzzleView(isUnlocked: isUnlocked, onSolved: triggerWin)
+                    case 4: ShadowPuppetPuzzleView(isUnlocked: isUnlocked, onSolved: triggerWin)
+                    default: PeriscopePuzzleView(isUnlocked: isUnlocked, onSolved: triggerWin)
                     }
                 }
             }
