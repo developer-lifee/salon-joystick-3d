@@ -6837,20 +6837,29 @@ final class ChiptuneAudioEngine {
             let slapDecay = exp(-t * 68.0)
             let slap = rawNoise * slapAttack * slapDecay * 0.58
 
-            // 2. Cavitación flotante ascendente ("WWOO-OOP" - elevación de tono que transmite alegría y emoción)
-            let pitchSweep = baseCavityFreq * (1.15 - 0.35 * exp(-t * 18.0) + 0.45 * sin(t * 24.0))
-            let cavityEnv = min(1.0, t * 140.0) * exp(-t * 8.5)
-            let cavityTone = sin(2.0 * .pi * pitchSweep * t) * cavityEnv * 0.72
+            // 2. "Plop" de cavidad corto y suave, sin vibrato (antes subía y ondulaba como un resorte de trampolín)
+            let plopFreq = baseCavityFreq * (1.0 + 0.12 * (1.0 - exp(-t * 30.0)))
+            let cavityEnv = min(1.0, t * 220.0) * exp(-t * 30.0)
+            let cavityTone = sin(2.0 * .pi * plopFreq * t) * cavityEnv * 0.22
 
-            // 3. Efervescencia acuosa Mario 64 (resplandor de gotas y rocío)
-            lowPass = lowPass * 0.82 + rawNoise * 0.18
-            midBand = midBand * 0.65 + (rawNoise - lowPass) * 0.35
-            let washEnv = min(1.0, t * 50.0) * exp(-t * 5.8)
-            let waterWash = (lowPass * 0.50 + midBand * 0.32) * washEnv
+            // 3. Lavado de agua (ruido filtrado): es el cuerpo real de una salpicadura
+            lowPass = lowPass * 0.80 + rawNoise * 0.20
+            midBand = midBand * 0.62 + (rawNoise - lowPass) * 0.38
+            let washEnv = min(1.0, t * 60.0) * exp(-t * 6.5)
+            let waterWash = (lowPass * 0.62 + midBand * 0.42) * washEnv
 
-            // 4. Clúster de burbujas sonoras que explotan al sumergirse
-            let b1 = sin(2.0 * .pi * (480.0 + 180.0 * sin(t * 42.0)) * t) * exp(-t * 10.0) * 0.18
-            let b2 = sin(2.0 * .pi * (720.0 + 220.0 * cos(t * 36.0)) * t) * exp(-t * 12.0) * 0.14
+            // 4. Burbujas: pops agudos y muy cortos que suben levemente de tono (resonancia de Minnaert)
+            var b1 = 0.0
+            var b2 = 0.0
+            let bubbleStarts: [Double] = variant == 0 ? [0.035, 0.09, 0.16, 0.24] : [0.05, 0.12, 0.19, 0.29]
+            let bubbleFreqs: [Double] = variant == 0 ? [880, 1240, 760, 1480] : [980, 690, 1350, 1100]
+            for (i, start) in bubbleStarts.enumerated() where t >= start {
+                let bt = t - start
+                let env = min(1.0, bt * 900.0) * exp(-bt * 70.0)
+                let f = bubbleFreqs[i] * (1.0 + bt * 3.0)
+                let pop = sin(2.0 * .pi * f * bt) * env * (0.16 - Double(i) * 0.025)
+                if i % 2 == 0 { b1 += pop } else { b2 += pop }
+            }
 
             let combined = (slap + cavityTone + waterWash + b1 + b2)
             let fadeOut = min(1.0, (1.0 - progress) * 6.5)
@@ -9616,17 +9625,29 @@ struct ContextualActionCircleButton: View {
     var body: some View {
         let hasCover = model.isNearCoverRock || model.isCoverActive
         let hasLight = model.nearbyLight != nil && !model.isDefeated && !model.isRecoveringInChamber
+        // 🎁 Junto a un cofre: abre su minijuego (tiene prioridad sobre cubrirse y las luces)
+        let chestID = model.activeChestMinigameID == nil ? model.nearbyChestID : nil
 
-        if model.isEditingHUDLayout || hasCover || hasLight {
+        if model.isEditingHUDLayout || chestID != nil || hasCover || hasLight {
             Button {
-                if hasCover {
+                if let chestID {
+                    model.activeChestMinigameID = chestID
+                } else if hasCover {
                     model.toggleCover()
                 } else if hasLight {
                     model.toggleNearbyLight()
                 }
             } label: {
                 ZStack {
-                    if hasCover {
+                    if chestID != nil {
+                        VStack(spacing: 1) {
+                            Image(systemName: "gift.fill")
+                                .font(.system(size: 16, weight: .bold))
+                            Text("COFRE")
+                                .font(.system(size: 6.5, weight: .black, design: .monospaced))
+                        }
+                        .foregroundStyle(.yellow)
+                    } else if hasCover {
                         VStack(spacing: 1) {
                             Image(systemName: model.isCoverActive ? "shield.fill" : "shield")
                                 .font(.system(size: 16, weight: .bold))
@@ -9660,6 +9681,7 @@ struct ContextualActionCircleButton: View {
                 )
                 .overlay(
                     Circle().stroke(
+                        chestID != nil ? Color.yellow.opacity(0.9) :
                         hasCover ? (model.isCoverActive ? Color.green : Color.green.opacity(0.60)) :
                         (hasLight ? Color.cyan.opacity(0.80) : Color.white.opacity(0.40)),
                         lineWidth: 1.5

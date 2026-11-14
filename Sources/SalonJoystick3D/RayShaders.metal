@@ -283,7 +283,9 @@ inline float laserBeamIntensity(
     float3 cameraDirection,
     float maximumCameraDistance,
     float3 segmentStart,
-    float3 segmentEnd) {
+    float3 segmentEnd,
+    float pixelAngle = 0.0f,
+    float softness = 1.0f) {
     float3 segment = segmentEnd - segmentStart;
     float segmentLengthSquared = length_squared(segment);
     if (segmentLengthSquared < 1e-5f) {
@@ -308,11 +310,14 @@ inline float laserBeamIntensity(
 
     float3 closestOnCameraRay = cameraOrigin + cameraDirection * cameraDistance;
     float distance = length(closestOnSegment - closestOnCameraRay);
-    float coreRadius = 0.024f + cameraDistance * 0.0022f;
-    float glowRadius = 0.095f + cameraDistance * 0.0075f;
+    // Ancho mínimo de ~1.5 px para el núcleo: si es más fino que un píxel, al caminar cae entre píxeles y titila
+    float pixelFootprint = cameraDistance * pixelAngle;
+    float coreRadius = max(0.024f + cameraDistance * 0.0022f, pixelFootprint * 1.5f) * softness;
+    float glowRadius = max(0.095f + cameraDistance * 0.0075f, pixelFootprint * 4.0f) * softness;
     float core = 1.0f - smoothstep(0.0f, coreRadius, distance);
     float glow = 1.0f - smoothstep(coreRadius, glowRadius, distance);
-    return core * 2.8f + glow * 0.75f;
+    // Los reflejos (softness > 1) son más anchos y suaves: sobre el piso con normal map un núcleo fino centellea
+    return core * (2.8f / (softness * softness)) + glow * 0.75f;
 }
 
 inline float3 mirroredLightContribution(
@@ -2237,10 +2242,10 @@ kernel void raytracePatio(
                 primaryDirection,
                 firstSurfaceDistance,
                 pStart,
-                pEndActual
+                pEndActual, pixelAngle
             );
             if (hasBounce1) {
-                primaryBeam += laserBeamIntensity(bounce1Origin, bounce1Direction, bounce1Distance, pStart, pEndActual) * bounce1Throughput.x * 1.15f;
+                primaryBeam += laserBeamIntensity(bounce1Origin, bounce1Direction, bounce1Distance, pStart, pEndActual, pixelAngle, 1.8f) * bounce1Throughput.x * 1.15f;
             }
 
             float reflectedBeam = 0.0f;
@@ -2262,10 +2267,10 @@ kernel void raytracePatio(
                         primaryDirection,
                         firstSurfaceDistance,
                         rStart,
-                        rEndActual
+                        rEndActual, pixelAngle
                     );
                     if (hasBounce1) {
-                        reflectedBeam += laserBeamIntensity(bounce1Origin, bounce1Direction, bounce1Distance, rStart, rEndActual) * bounce1Throughput.x * 1.15f;
+                        reflectedBeam += laserBeamIntensity(bounce1Origin, bounce1Direction, bounce1Distance, rStart, rEndActual, pixelAngle, 1.8f) * bounce1Throughput.x * 1.15f;
                     }
                     photonFrontPos = rEndActual;
                 }
@@ -2290,10 +2295,10 @@ kernel void raytracePatio(
             primaryDirection,
             firstSurfaceDistance,
             mStart,
-            mEnd
+            mEnd, pixelAngle
         );
         if (hasBounce1) {
-            mirrorBeam += laserBeamIntensity(bounce1Origin, bounce1Direction, bounce1Distance, mStart, mEnd) * bounce1Throughput.x * 1.15f;
+            mirrorBeam += laserBeamIntensity(bounce1Origin, bounce1Direction, bounce1Distance, mStart, mEnd, pixelAngle, 1.8f) * bounce1Throughput.x * 1.15f;
         }
         float3 hitPoint = primaryOrigin + primaryDirection * firstSurfaceDistance;
         float distToTarget = distance(hitPoint, mEnd);
@@ -2314,10 +2319,10 @@ kernel void raytracePatio(
             primaryDirection,
             firstSurfaceDistance,
             laserResult.bot0Start.xyz,
-            laserResult.bot0End.xyz
+            laserResult.bot0End.xyz, pixelAngle
         );
         if (hasBounce1) {
-            botBeam += laserBeamIntensity(bounce1Origin, bounce1Direction, bounce1Distance, laserResult.bot0Start.xyz, laserResult.bot0End.xyz) * bounce1Throughput.x * 1.15f;
+            botBeam += laserBeamIntensity(bounce1Origin, bounce1Direction, bounce1Distance, laserResult.bot0Start.xyz, laserResult.bot0End.xyz, pixelAngle, 1.8f) * bounce1Throughput.x * 1.15f;
         }
         accumulated += float3(9.5f, 0.08f, 0.02f) * (botBeam * 0.95f);
     }
@@ -2330,10 +2335,10 @@ kernel void raytracePatio(
             primaryDirection,
             firstSurfaceDistance,
             laserResult.bot1Start.xyz,
-            laserResult.bot1End.xyz
+            laserResult.bot1End.xyz, pixelAngle
         );
         if (hasBounce1) {
-            botBeam += laserBeamIntensity(bounce1Origin, bounce1Direction, bounce1Distance, laserResult.bot1Start.xyz, laserResult.bot1End.xyz) * bounce1Throughput.x * 1.15f;
+            botBeam += laserBeamIntensity(bounce1Origin, bounce1Direction, bounce1Distance, laserResult.bot1Start.xyz, laserResult.bot1End.xyz, pixelAngle, 1.8f) * bounce1Throughput.x * 1.15f;
         }
         accumulated += float3(9.5f, 0.08f, 0.02f) * (botBeam * 0.95f);
     }
@@ -2346,10 +2351,10 @@ kernel void raytracePatio(
             primaryDirection,
             firstSurfaceDistance,
             laserResult.bot2Start.xyz,
-            laserResult.bot2End.xyz
+            laserResult.bot2End.xyz, pixelAngle
         );
         if (hasBounce1) {
-            botBeam += laserBeamIntensity(bounce1Origin, bounce1Direction, bounce1Distance, laserResult.bot2Start.xyz, laserResult.bot2End.xyz) * bounce1Throughput.x * 1.15f;
+            botBeam += laserBeamIntensity(bounce1Origin, bounce1Direction, bounce1Distance, laserResult.bot2Start.xyz, laserResult.bot2End.xyz, pixelAngle, 1.8f) * bounce1Throughput.x * 1.15f;
         }
         accumulated += float3(9.2f, 0.14f, 4.5f) * (botBeam * 0.95f);
     }
@@ -2362,10 +2367,10 @@ kernel void raytracePatio(
             primaryDirection,
             firstSurfaceDistance,
             laserResult.bot3Start.xyz,
-            laserResult.bot3End.xyz
+            laserResult.bot3End.xyz, pixelAngle
         );
         if (hasBounce1) {
-            botBeam += laserBeamIntensity(bounce1Origin, bounce1Direction, bounce1Distance, laserResult.bot3Start.xyz, laserResult.bot3End.xyz) * bounce1Throughput.x * 1.15f;
+            botBeam += laserBeamIntensity(bounce1Origin, bounce1Direction, bounce1Distance, laserResult.bot3Start.xyz, laserResult.bot3End.xyz, pixelAngle, 1.8f) * bounce1Throughput.x * 1.15f;
         }
         accumulated += float3(8.5f, 0.12f, 6.2f) * (botBeam * 0.95f);
     }
@@ -2378,10 +2383,10 @@ kernel void raytracePatio(
             primaryDirection,
             firstSurfaceDistance,
             laserResult.bot4Start.xyz,
-            laserResult.bot4End.xyz
+            laserResult.bot4End.xyz, pixelAngle
         );
         if (hasBounce1) {
-            botBeam += laserBeamIntensity(bounce1Origin, bounce1Direction, bounce1Distance, laserResult.bot4Start.xyz, laserResult.bot4End.xyz) * bounce1Throughput.x * 1.15f;
+            botBeam += laserBeamIntensity(bounce1Origin, bounce1Direction, bounce1Distance, laserResult.bot4Start.xyz, laserResult.bot4End.xyz, pixelAngle, 1.8f) * bounce1Throughput.x * 1.15f;
         }
         accumulated += float3(7.5f, 0.10f, 8.8f) * (botBeam * 1.05f);
     }

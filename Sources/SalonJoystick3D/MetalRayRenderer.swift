@@ -1224,6 +1224,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
             on3DChestChallengeUpdate?(cid, remaining, active3DChestTimer)
         }
     }
+    static let chestsUseMinigames = true
     var onRainbowGateStatusUpdate: ((Bool, Int, Int) -> Void)?
     private var previousGateUnlocked: Bool = false
     var onDamageTaken: ((Float) -> Void)?
@@ -2886,7 +2887,8 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     closestChestID = chest.id
                 }
             }
-            if let cid = closestChestID, active3DChestID == nil {
+            // Los cofres ahora se abren con su minijuego (botón COFRE del HUD); el reto 3D de cristales queda desactivado
+            if Self.chestsUseMinigames == false, let cid = closestChestID, active3DChestID == nil {
                 active3DChestID = cid
                 active3DChestCrystals = [true, true, true]
                 active3DChestTimer = 20.0
