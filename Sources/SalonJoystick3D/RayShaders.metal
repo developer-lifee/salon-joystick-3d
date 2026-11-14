@@ -1611,8 +1611,12 @@ kernel void raytracePatio(
             if (bounce >= 1) {
                 // 🌌 En el reflejo del espejo norte (bounce >= 1), el Gran Portal resplandece con la magia cósmica del Salón Arcoíris en lugar de ser un vacío negro
                 float portalPhase = dot(position.xy, float2(0.35f, 0.45f)) + uniforms.waterSimulation.y * 1.6f;
-                float3 portalRainbow = 0.5f + 0.5f * cos(portalPhase * 2.2f + float3(0.0f, 2.0f, 4.0f));
-                emission = portalRainbow * 0.92f;
+                // Tono HSV puro (saturación 100 %): el antiguo 0.5+0.5·cos mezclaba mucho blanco y se veía pastel
+                float portalHue = fract(portalPhase * 0.35f);
+                float3 portalRainbow = saturate(abs(fract(portalHue + float3(0.0f, 2.0f / 3.0f, 1.0f / 3.0f)) * 6.0f - 3.0f) - 1.0f);
+                // Bandas brillantes que recorren el portal para que se sienta vivo
+                float portalBands = 0.75f + 0.25f * sin(portalPhase * 6.0f - uniforms.waterSimulation.y * 3.0f);
+                emission = portalRainbow * (1.6f * portalBands);
                 baseReflectivity = 0.04f;
             }
         } else if (kind > 2.5f && kind < 3.5f) {

@@ -591,7 +591,7 @@ struct ContentView: View {
                         HStack(spacing: 8) {
                             Image(systemName: "lock.shield.fill")
                                 .foregroundStyle(.cyan)
-                            Text("🔒 CHRONO-CORE DORMIDO: Abre cualquier Cofre del Tesoro 💎 bajo el agua para activar Slow-Mo y +50 HP.")
+                            Text("⏳ SLOW-MO SIN CARGA: ganas una cada 5.000 pts (próxima a \(model.nextSlowMoMilestone.formatted()) pts). Los Cofres 💎 bajo el agua dan una extra y +50 HP.")
                                 .font(.system(size: 11, weight: .bold))
                                 .foregroundStyle(.white)
                         }
@@ -1925,7 +1925,18 @@ final class GameModel: ObservableObject {
     @Published var shieldAngleOffset = CGVector(dx: 0, dy: 0)
     @Published private(set) var jumpRequestID = 0
     @Published private(set) var toolStatus = GameToolStatus()
-    @Published var playerScore = 0
+    @Published var playerScore = 0 {
+        didSet { updateSlowMoMilestones() }
+    }
+
+    // ⏳ Slow-Mo por cargas: se gana una cada 5.000 pts y dura unos segundos
+    static let slowMoMilestoneStep = 5000
+    static let slowMoDuration: Double = 8
+    static let slowMoMaxCharges = 3
+    @Published var slowMoCharges = 0
+    @Published var slowMoTimeRemaining: Double = 0
+    @Published var nextSlowMoMilestone = GameModel.slowMoMilestoneStep
+    private var slowMoTimer: Timer?
     @Published var isSlowMotionUnlocked: Bool = UserDefaults.standard.bool(forKey: "isSlowMotionUnlocked") {
         didSet { UserDefaults.standard.set(isSlowMotionUnlocked, forKey: "isSlowMotionUnlocked") }
     }
@@ -2370,6 +2381,7 @@ final class GameModel: ObservableObject {
         guard !isSlowMotionUnlocked else { return }
         isSlowMotionUnlocked = true
         playerHealth = maxPlayerHealth
+        slowMoCharges = min(Self.slowMoMaxCharges, slowMoCharges + 1)
         audio.playLaserIgnition()
         audio.playLanding(intensity: 1.0)
         let notif = UINotificationFeedbackGenerator()
@@ -2402,25 +2414,99 @@ final class GameModel: ObservableObject {
         }
     }
 
-    func toggleSlowMotion(fromNetwork: Bool = false) {
-        if !fromNetwork && !isSlowMotionUnlocked {
-            showsChronoLockBanner = true
-            let notif = UINotificationFeedbackGenerator()
-            notif.notificationOccurred(.warning)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 4.5) { [weak self] in
-                withAnimation {
-                    self?.showsChronoLockBanner = false
+    /// Recalcula las cargas de Slow-Mo cuando cambia el puntaje (5k, 10k, 15k…).
+    private func updateSlowMoMilestones() {
+        let step = Self.slowMoMilestoneStep
+        if playerScore < nextSlowMoMilestone - step {
+            // El puntaje bajó (nueva partida): se reinician hitos y cargas
+            nextSlowMoMilestone = (playerScore / step + 1) * step
+            slowMoCharges = 0
+            return
+        }
+        var earned = 0
+        while playerScore >= nextSlowMoMilestone {
+            earned += 1
+            nextSlowMoMilestone += step
+        }
+        guard earned > 0 else { return }
+        grantSlowMoCharges(earned, reason: "\((nextSlowMoMilestone - step).formatted()) PTS")
+    }
+
+    func grantSlowMoCharges(_ count: Int, reason: String) {
+        slowMoCharges = min(Self.slowMoMaxCharges, slowMoCharges + count)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+            chestRewardBannerText = "⏳ ¡SLOW-MO CARGADO! (\(reason)) · Tócalo para 8 s de cámara lenta"
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { [weak self] in
+            withAnimation {
+                if self?.chestRewardBannerText?.hasPrefix("⏳") == true {
+                    self?.chestRewardBannerText = nil
                 }
             }
+        }
+    }
+
+    func toggleSlowMotion(fromNetwork: Bool = false) {
+        if !fromNetwork {
+            if isSlowMotionActive {
+                // Terminarlo antes de tiempo (la carga ya se gastó)
+                setSlowMotion(false)
+                return
+            }
+            guard slowMoCharges > 0 else {
+                showsChronoLockBanner = true
+                UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 4.5) { [weak self] in
+                    withAnimation {
+                        self?.showsChronoLockBanner = false
+                    }
+                }
+                return
+            }
+            slowMoCharges -= 1
+            setSlowMotion(true)
             return
         }
 
         isSlowMotionActive.toggle()
         audio.setSlowMotion(isSlowMotionActive)
-        let impact = UIImpactFeedbackGenerator(style: isSlowMotionActive ? .heavy : .medium)
-        impact.impactOccurred()
+        UIImpactFeedbackGenerator(style: isSlowMotionActive ? .heavy : .medium).impactOccurred()
+    }
 
-        if !fromNetwork && isAnyMultiplayerConnected {
+    private func tickSlowMotion() {
+        guard isSlowMotionActive else {
+            // Lo apagó otra parte del juego (derrota, nueva partida…)
+            slowMoTimer?.invalidate()
+            slowMoTimer = nil
+            slowMoTimeRemaining = 0
+            return
+        }
+        guard gameState != .paused else { return }
+        slowMoTimeRemaining = max(0, slowMoTimeRemaining - 0.1)
+        if slowMoTimeRemaining <= 0 {
+            setSlowMotion(false)
+        }
+    }
+
+    private func setSlowMotion(_ active: Bool) {
+        isSlowMotionActive = active
+        audio.setSlowMotion(active)
+        UIImpactFeedbackGenerator(style: active ? .heavy : .medium).impactOccurred()
+
+        slowMoTimer?.invalidate()
+        slowMoTimer = nil
+        slowMoTimeRemaining = active ? Self.slowMoDuration : 0
+        if active {
+            let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
+                // El Timer corre en el RunLoop principal
+                MainActor.assumeIsolated { self?.tickSlowMotion() }
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            slowMoTimer = timer
+        }
+
+        if isAnyMultiplayerConnected {
             let pkt = LocalMatchPacket(
                 kind: .slowMotion,
                 peerID: multiplayer.localPeer.displayName,
@@ -7935,230 +8021,569 @@ struct GameSlang {
         Locale.current.region?.identifier.uppercased() ?? ""
     }
 
-    // 💀 Pantalla de Derrota (Idioma natural + guiño regional por país si aplica)
+    /// Slang automático: primero "idioma-PAÍS" (según la Región del iPhone),
+    /// luego el idioma y por último español neutro.
+    private func pick(_ table: [String: String]) -> String {
+        table["\(languageCode)-\(regionCode)"] ?? table[languageCode] ?? table["es"] ?? ""
+    }
+
+    // 💀 Pantalla de Derrota
     var defeatTitle: String {
-        switch languageCode {
-        case "en":
-            switch regionCode {
-            case "GB", "AU": return "KNOCKED OUT, MATE! 💀"
-            default: return "DEFEATED 💀"
-            }
-        case "pt": return regionCode == "BR" ? "FOI DE BASE! 💀" : "DERROTADO 💀"
-        case "fr": return "ÉLIMINÉ ! 💀"
-        case "ja": return "やられた！ 💀"
-        case "de": return "BESIEGT 💀"
-        case "hi": return "हारे गए! 💀"
-        case "it": return "SCONFITTO 💀"
-        case "zh": return "阵亡了 💀"
-        case "ko": return "쓰러졌다! 💀"
-        default:
-            switch regionCode {
-            case "CO": return "¡NOS DIERON PISO, PARCE! 💀"
-            case "MX": return "¡YA VALIÓ, WEY! 💀"
-            case "AR": return "¡QUÉ BAJÓN, CHE! 💀"
-            case "ES": return "¡CAÍSTE, TÍO! 💀"
-            default:   return "¡DERROTADO! 💀"
-            }
-        }
+        pick([
+            "es": "¡DERROTADO! 💀",
+            "es-CO": "¡NOS DIERON PISO, PARCE! 💀",
+            "es-MX": "¡YA VALIÓ, WEY! 💀",
+            "es-AR": "¡QUÉ BAJÓN, CHE! 💀",
+            "es-ES": "¡CAÍSTE, TÍO! 💀",
+            "es-PE": "¡CHUTA, YA FUIMOS! 💀",
+            "es-CL": "¡FUIMOS, PO! 💀",
+            "es-VE": "¡NOS RASPARON, CHAMO! 💀",
+            "es-EC": "¡CHUTA, ÑAÑO, PERDIMOS! 💀",
+            "es-UY": "¡FUE, BO! 💀",
+            "es-CU": "¡ASERE, NOS BARRIERON! 💀",
+            "es-DO": "¡DIANTRE, SE ACABÓ LA VAINA! 💀",
+            "es-GT": "¡NOS FUE DE LA PATADA, VOS! 💀",
+            "es-CR": "¡DIAY MAE, PERDIMOS! 💀",
+            "es-PA": "¡CHUZO, NOS DIERON! 💀",
+            "es-SV": "¡VAYA PUES, NOS BAJARON! 💀",
+            "es-HN": "¡MAJE, NOS DESPACHARON! 💀",
+            "es-NI": "¡IDIAY, NOS GANARON! 💀",
+            "es-BO": "¡QUÉ PLAGA, NOS GANARON! 💀",
+            "es-PY": "¡NDE, PERDIMOS! 💀",
+            "es-PR": "¡ACHO, NOS ESBARATARON! 💀",
+            "es-US": "¡NOS GANARON, BRO! 💀",
+            "en": "DEFEATED 💀",
+            "en-US": "WE GOT WRECKED 💀",
+            "en-GB": "KNOCKED OUT, MATE! 💀",
+            "en-AU": "CARKED IT, MATE! 💀",
+            "en-NZ": "THAT'S MUNTED, BRO! 💀",
+            "en-IE": "WE'RE BANJAXED! 💀",
+            "en-IN": "KHATAM, BHAI! 💀",
+            "en-CA": "WE GOT HOSED, EH! 💀",
+            "en-ZA": "EISH, WE LOST! 💀",
+            "pt": "DERROTADO 💀",
+            "pt-BR": "FOI DE BASE! 💀",
+            "pt-PT": "JÁ FOSTE, PÁ! 💀",
+            "fr": "ÉLIMINÉ ! 💀",
+            "fr-FR": "T'ES MORT, FRÉROT ! 💀",
+            "fr-CA": "ON S'EST FAIT PLANTER ! 💀",
+            "fr-BE": "C'EST CUIT, UNE FOIS ! 💀",
+            "fr-CH": "C'EST LA CATA ! 💀",
+            "de": "BESIEGT 💀",
+            "de-DE": "LOST GEGANGEN! 💀",
+            "de-AT": "OIDA, VERLOREN! 💀",
+            "de-CH": "UFFF, VERLORE! 💀",
+            "it": "SCONFITTO 💀",
+            "it-IT": "MORTO MALISSIMO! 💀",
+            "hi": "खतम, टाटा बाय बाय! 💀",
+            "ja": "オワタ＼(^o^)／ 💀",
+            "zh": "芭比Q了 💀",
+            "zh-TW": "GG了啦 💀",
+            "zh-HK": "玩完喇 💀",
+            "ko": "망했다! 💀"
+        ])
     }
 
     var defeatVersusTitle: String {
-        switch languageCode {
-        case "en": return "DEFEATED IN COMBAT"
-        case "pt": return "CAIU EM COMBATE"
-        case "fr": return "VAINCU AU COMBAT"
-        case "ja": return "しょうぶにまけた！"
-        case "de": return "IM KAMPF BESIEGT"
-        case "hi": return "मुकाबले में हार!"
-        case "it": return "SCONFITTO IN BATTAGLIA"
-        case "zh": return "对决落败！"
-        case "ko": return "대결 패배!"
-        default:   return "CAÍSTE EN COMBATE"
-        }
+        pick([
+            "es": "CAÍSTE EN COMBATE",
+            "es-CO": "TE BAJARON DE LA NUBE, PARCE",
+            "es-MX": "TE ACABARON, CARNAL",
+            "es-AR": "TE PASARON EL TRAPO, CHE",
+            "es-ES": "TE HAN DADO PARA EL PELO, TÍO",
+            "es-PE": "TE MANDARON A LA LONA, CAUSA",
+            "es-CL": "TE PITEARON, PO",
+            "es-VE": "TE PELARON, CHAMO",
+            "es-EC": "TE BAJARON, ÑAÑO",
+            "es-UY": "TE PASARON POR ARRIBA, BO",
+            "es-CU": "TE DIERON CANDELA, ASERE",
+            "es-DO": "TE DIERON UNA PELA, MANITO",
+            "es-GT": "TE SACARON LA CHOCOLATA, VOS",
+            "es-CR": "TE VOLARON, MAE",
+            "es-PA": "TE DIERON PALO, LOCO",
+            "es-SV": "TE DESPACHARON, CHERO",
+            "es-HN": "TE DIERON VERDURA, MAJE",
+            "es-NI": "TE VOLARON, CHAVALO",
+            "es-BO": "TE HICIERON LEÑA, CHANGO",
+            "es-PY": "TE ATROPELLARON, CHE RA'A",
+            "es-PR": "TE DIERON UNA PELA, ACHO",
+            "es-US": "TE GANARON, BRO",
+            "en": "DEFEATED IN COMBAT",
+            "en-US": "YOU GOT CLAPPED",
+            "en-GB": "YOU GOT BATTERED, MATE",
+            "en-AU": "YOU GOT SMASHED, MATE",
+            "en-NZ": "YOU GOT SMASHED, BRO",
+            "en-IE": "YOU GOT DESTROYED, LAD",
+            "en-IN": "OPPONENT WAS OP, BHAI",
+            "en-CA": "YOU GOT DANGLED, EH",
+            "en-ZA": "YOU GOT KLAPPED, BRU",
+            "pt": "CAIU EM COMBATE",
+            "pt-BR": "LEVOU UMA SURRA",
+            "pt-PT": "LEVASTE UMA TAREIA, PÁ",
+            "fr": "VAINCU AU COMBAT",
+            "fr-FR": "TU T'ES FAIT ÉCLATER",
+            "fr-CA": "TU T'ES FAIT VARGER",
+            "fr-BE": "TU T'ES FAIT RAMASSER",
+            "fr-CH": "T'AS PRIS UNE ROUSTE",
+            "de": "IM KAMPF BESIEGT",
+            "de-DE": "KOMPLETT ZERLEGT",
+            "de-AT": "ZERLEGT, OIDA",
+            "de-CH": "VOLL VERCHACHLET",
+            "it": "SCONFITTO IN BATTAGLIA",
+            "it-IT": "TI HANNO ASFALTATO",
+            "hi": "पूरा धो दिया! (DHO DIYA)",
+            "ja": "ボコボコにされた！",
+            "zh": "被打爆了！",
+            "zh-TW": "被電爆了！",
+            "zh-HK": "俾人打爆！",
+            "ko": "털렸다!"
+        ])
     }
 
     var defeatTeamTitle: String {
-        switch languageCode {
-        case "en": return "SQUAD WIPED OUT"
-        case "pt": return "ESQUADRÃO DERROTADO"
-        case "fr": return "ESCOUADE ÉLIMINÉE"
-        case "ja": return "ぜんめつ..."
-        case "de": return "TEAM BESIEGT"
-        case "hi": return "टीम हार गई!"
-        case "it": return "SQUADRA SCONFITTA!"
-        case "zh": return "全队阵亡..."
-        case "ko": return "전원 탈락..."
-        default:   return "MISIÓN FALLIDA"
-        }
+        pick([
+            "es": "MISIÓN FALLIDA",
+            "es-CO": "NOS VOLVIERON NADA, PARCHE",
+            "es-MX": "SE CAYÓ TODA LA BANDA",
+            "es-AR": "NOS BARRIERON A TODOS, CHE",
+            "es-ES": "NOS HAN FUNDIDO A TODOS",
+            "es-PE": "SE FUE TODA LA MANCHA",
+            "es-CL": "CAYÓ TODO EL PIÑO, PO",
+            "es-VE": "SE FUE TODO EL COMBO, CHAMO",
+            "es-EC": "SE FUE TODA LA JORGA",
+            "es-UY": "SE FUE TODA LA BARRA, BO",
+            "es-CU": "SE CAYÓ TODO EL PIQUETE",
+            "es-DO": "SE FUE TODO EL CORO",
+            "es-GT": "SE CAYÓ TODA LA CUADRILLA",
+            "es-CR": "SE FUE TODA LA BARRA, MAE",
+            "es-PA": "SE CAYÓ TODO EL COMBO, LOCO",
+            "es-SV": "SE FUE TODA LA PALOMILLA",
+            "es-HN": "SE FUE TODA LA MANADA, MAJE",
+            "es-NI": "SE FUE TODA LA CHAVALADA",
+            "es-BO": "SE FUE TODA LA TROPA",
+            "es-PY": "SE CAYÓ TODA LA BARRA, CHE",
+            "es-PR": "SE FUE TODO EL CORILLO",
+            "es-US": "SE CAYÓ TODO EL SQUAD",
+            "en": "SQUAD WIPED OUT",
+            "en-US": "FULL SQUAD WIPE",
+            "en-GB": "THE WHOLE LOT'S GONE, MATE",
+            "en-AU": "THE WHOLE MOB'S GONE",
+            "en-NZ": "THE WHOLE CREW'S MUNTED",
+            "en-IE": "THE LADS ARE GONE",
+            "en-IN": "PURI TEAM KHATAM",
+            "en-CA": "WHOLE CREW GOT ICED, EH",
+            "en-ZA": "WHOLE SQUAD GONE, EISH",
+            "pt": "ESQUADRÃO DERROTADO",
+            "pt-BR": "A GALERA TODA RODOU",
+            "pt-PT": "FOI A MALTA TODA",
+            "fr": "ESCOUADE ÉLIMINÉE",
+            "fr-FR": "TOUTE LA TEAM EST TOMBÉE",
+            "fr-CA": "TOUTE LA GANG EST TOMBÉE",
+            "fr-BE": "TOUTE LA BANDE EST CUITE",
+            "fr-CH": "TOUTE LA CLIQUE EST TOMBÉE",
+            "de": "TEAM BESIEGT",
+            "de-DE": "DIE GANZE CREW IST LOST",
+            "de-AT": "DIE GANZE PARTIE IST WEG",
+            "de-CH": "D'GSPÄNLI SIND ALLI WEG",
+            "it": "SQUADRA SCONFITTA!",
+            "it-IT": "TUTTA LA CIURMA È ANDATA",
+            "hi": "पूरी टीम साफ़!",
+            "ja": "ぜんめつ…チーン",
+            "zh": "团灭了…",
+            "zh-TW": "團滅了…",
+            "zh-HK": "成隊玩完…",
+            "ko": "전멸… 망했다"
+        ])
     }
 
     var defeatSubtitleReset: String {
-        switch languageCode {
-        case "en": return "BACK TO WAVE 1"
-        case "pt": return "DE VOLTA À ONDA 1"
-        case "fr": return "RETOUR À LA VAGUE 1"
-        case "ja": return "ウェーブ1へもどる"
-        case "de": return "ZURÜCK ZU WELLE 1"
-        case "hi": return "वापस वेव 1 पर"
-        case "it": return "SI RIPARTE DALL'ONDATA 1"
-        case "zh": return "从第 1 波重新开始"
-        case "ko": return "웨이브 1부터 다시 시작"
-        default:   return "VOLVIENDO A LA OLEADA 1"
-        }
+        pick([
+            "es": "VOLVIENDO A LA OLEADA 1",
+            "es-CO": "DE VUELTA A LA OLEADA 1, ¡PILAS!",
+            "es-MX": "A LA OLEADA 1 OTRA VEZ, NI MODO",
+            "es-AR": "A LA OLEADA 1 DE NUEVO, DALE",
+            "es-ES": "OTRA VEZ A LA OLEADA 1, VAYA TELA",
+            "es-PE": "DE VUELTA A LA OLEADA 1, NI MODO PE",
+            "es-CL": "A LA OLEADA 1 DE NUEVO, ¿CACHAI?",
+            "es-VE": "PA' LA OLEADA 1 OTRA VEZ, QUÉ LADILLA",
+            "es-EC": "A LA OLEADA 1 DE NUEVO, DE LEY",
+            "es-UY": "A LA OLEADA 1 DE NUEVO, TA",
+            "es-CU": "PA' LA OLEADA 1 OTRA VEZ, ¿QUÉ VOLÁ?",
+            "es-DO": "PA' LA OLEADA 1 OTRA VEZ, KLK",
+            "es-GT": "A LA OLEADA 1 DE NUEVO, NI MODO VOS",
+            "es-CR": "A LA OLEADA 1 DE NUEVO, PURA VIDA",
+            "es-PA": "A LA OLEADA 1 OTRA VEZ, ¿QUÉ XOPA?",
+            "es-SV": "A LA OLEADA 1 DE NUEVO, VAYA PUES",
+            "es-HN": "A LA OLEADA 1 DE NUEVO, MAJE",
+            "es-NI": "A LA OLEADA 1 DE NUEVO, DALE PUES",
+            "es-BO": "A LA OLEADA 1 DE NUEVO, YA PUES",
+            "es-PY": "A LA OLEADA 1 DE NUEVO, CHE",
+            "es-PR": "PA' LA OLEADA 1 OTRA VEZ, ACHO",
+            "es-US": "DE VUELTA A LA OLEADA 1, BRO",
+            "en": "BACK TO WAVE 1",
+            "en-US": "BACK TO WAVE 1, RUN IT BACK",
+            "en-GB": "BACK TO WAVE 1, INNIT",
+            "en-AU": "BACK TO WAVE 1, NO WORRIES",
+            "en-NZ": "BACK TO WAVE 1, SWEET AS",
+            "en-IE": "BACK TO WAVE 1, GRAND SO",
+            "en-IN": "BACK TO WAVE 1, CHALO",
+            "en-CA": "BACK TO WAVE 1, EH",
+            "en-ZA": "BACK TO WAVE 1, SHARP SHARP",
+            "pt": "DE VOLTA À ONDA 1",
+            "pt-BR": "BORA DE NOVO DA ONDA 1",
+            "pt-PT": "VOLTA À ONDA 1, PÁ",
+            "fr": "RETOUR À LA VAGUE 1",
+            "fr-FR": "RETOUR À LA VAGUE 1, ALLEZ",
+            "fr-CA": "RETOUR À LA VAGUE 1, LÂCHE PAS",
+            "fr-BE": "RETOUR À LA VAGUE 1, SAVEZ",
+            "fr-CH": "RETOUR À LA VAGUE 1, ÇA JOUE",
+            "de": "ZURÜCK ZU WELLE 1",
+            "de-DE": "ZURÜCK ZU WELLE 1, DIGGA",
+            "de-AT": "ZURÜCK ZU WELLE 1, PASST SCHO",
+            "de-CH": "ZRUGG ZU WELLE 1, HOPP",
+            "it": "SI RIPARTE DALL'ONDATA 1",
+            "it-IT": "SI RIPARTE DALL'ONDATA 1, DAI",
+            "hi": "वापस वेव 1 पर, चलो!",
+            "ja": "ウェーブ1からやりなおし！",
+            "zh": "从第 1 波重新开始",
+            "zh-TW": "從第 1 波重來啦",
+            "zh-HK": "由第 1 波重新嚟過",
+            "ko": "웨이브 1부터 다시, 드가자!"
+        ])
     }
 
     var retryButton: String {
-        switch languageCode {
-        case "en": return "PLAY AGAIN (RETRY)"
-        case "pt": return "JOGAR DE NOVO"
-        case "fr": return "REJOUER"
-        case "ja": return "もういちど (RETRY)"
-        case "de": return "NOCHMAL SPIELEN"
-        case "hi": return "फिर से खेलें (RETRY)"
-        case "it": return "RIPROVA"
-        case "zh": return "再来一局 (RETRY)"
-        case "ko": return "다시 하기 (RETRY)"
-        default:
-            switch regionCode {
-            case "CO": return "¡OTRA VEZ, PARCE! (REINTENTAR)"
-            case "MX": return "¡OTRA VEZ, WEY! (REINTENTAR)"
-            case "AR": return "¡OTRA VEZ, CHE! (REINTENTAR)"
-            case "ES": return "¡OTRA VEZ, TÍO! (REINTENTAR)"
-            case "CL": return "¡OTRA VEZ, PO! (REINTENTAR)"
-            default:   return "REINTENTAR"
-            }
-        }
+        pick([
+            "es": "REINTENTAR",
+            "es-CO": "¡OTRA VEZ, PARCE! (REINTENTAR)",
+            "es-MX": "¡OTRA VEZ, WEY! (REINTENTAR)",
+            "es-AR": "¡OTRA VEZ, CHE! (REINTENTAR)",
+            "es-ES": "¡OTRA VEZ, TÍO! (REINTENTAR)",
+            "es-CL": "¡OTRA VEZ, PO! (REINTENTAR)",
+            "es-PE": "¡OTRA VEZ, PE! (REINTENTAR)",
+            "es-VE": "¡OTRA, CHAMO! (REINTENTAR)",
+            "es-EC": "¡OTRA, ÑAÑO! (REINTENTAR)",
+            "es-UY": "¡OTRA, BO! (REINTENTAR)",
+            "es-CU": "¡OTRA, ASERE! (REINTENTAR)",
+            "es-DO": "¡OTRA, MANITO! (REINTENTAR)",
+            "es-GT": "¡OTRA, VOS! (REINTENTAR)",
+            "es-CR": "¡OTRA, MAE! (REINTENTAR)",
+            "es-PA": "¡OTRA, LOCO! (REINTENTAR)",
+            "es-SV": "¡OTRA, CHERO! (REINTENTAR)",
+            "es-HN": "¡OTRA, MAJE! (REINTENTAR)",
+            "es-NI": "¡OTRA, CHAVALO! (REINTENTAR)",
+            "es-BO": "¡OTRA, CHANGO! (REINTENTAR)",
+            "es-PY": "¡OTRA, CHE RA'A! (REINTENTAR)",
+            "es-PR": "¡OTRA, ACHO! (REINTENTAR)",
+            "es-US": "¡OTRA, BRO! (REINTENTAR)",
+            "en": "PLAY AGAIN (RETRY)",
+            "en-US": "RUN IT BACK (RETRY)",
+            "en-GB": "GO AGAIN, MATE (RETRY)",
+            "en-AU": "HAVE ANOTHER CRACK (RETRY)",
+            "en-NZ": "GIVE IT A CRACK, BRO (RETRY)",
+            "en-IE": "GO AGAIN, LAD (RETRY)",
+            "en-IN": "EK AUR, BHAI (RETRY)",
+            "en-CA": "ONE MORE, EH (RETRY)",
+            "en-ZA": "AGAIN, BRU (RETRY)",
+            "pt": "JOGAR DE NOVO",
+            "pt-BR": "BORA DE NOVO!",
+            "pt-PT": "MAIS UMA, PÁ!",
+            "fr": "REJOUER",
+            "fr-FR": "ON REMET ÇA !",
+            "fr-CA": "ON REMET ÇA, LÂCHE PAS !",
+            "fr-BE": "ON RECOMMENCE, UNE FOIS !",
+            "fr-CH": "ON REMET ÇA, ÇA JOUE !",
+            "de": "NOCHMAL SPIELEN",
+            "de-DE": "NOCHMAL, DIGGA!",
+            "de-AT": "NO AMOI, OIDA!",
+            "de-CH": "NONEMOL, HOPP!",
+            "it": "RIPROVA",
+            "it-IT": "UN'ALTRA, DAI!",
+            "hi": "एक और, भाई! (RETRY)",
+            "ja": "もういっかい！(RETRY)",
+            "zh": "再来一把 (RETRY)",
+            "zh-TW": "再來一場啦 (RETRY)",
+            "zh-HK": "再嚟過 (RETRY)",
+            "ko": "한 판 더! (RETRY)"
+        ])
     }
 
     var nextRoundButton: String {
-        switch languageCode {
-        case "en": return "NEXT ROUND"
-        case "pt": return "PRÓXIMO ROUND"
-        case "fr": return "MANCHE SUIVANTE"
-        case "ja": return "つぎのラウンド"
-        case "de": return "NÄCHSTE RUNDE"
-        case "hi": return "अगला राउंड"
-        case "it": return "PROSSIMO ROUND"
-        case "zh": return "下一轮"
-        case "ko": return "다음 라운드"
-        default:   return "SIGUIENTE RONDA"
-        }
+        pick([
+            "es": "SIGUIENTE RONDA",
+            "es-CO": "SIGUIENTE RONDA, ¡DE UNA!",
+            "es-MX": "SIGUIENTE RONDA, ¡ÁNDALE!",
+            "es-AR": "SIGUIENTE RONDA, ¡DALE!",
+            "es-ES": "SIGUIENTE RONDA, ¡VAMOS!",
+            "es-PE": "SIGUIENTE RONDA, ¡VAMOS CAUSA!",
+            "es-CL": "SIGUIENTE RONDA, ¡VAMOS PO!",
+            "es-VE": "SIGUIENTE RONDA, ¡DALE CHAMO!",
+            "es-EC": "SIGUIENTE RONDA, ¡DE UNA, ÑAÑO!",
+            "es-UY": "SIGUIENTE RONDA, ¡DALE BO!",
+            "es-CU": "SIGUIENTE RONDA, ¡ARRIBA ASERE!",
+            "es-DO": "SIGUIENTE RONDA, ¡VAMO' ARRIBA!",
+            "es-GT": "SIGUIENTE RONDA, ¡DALE VOS!",
+            "es-CR": "SIGUIENTE RONDA, ¡DIAY MAE!",
+            "es-PA": "SIGUIENTE RONDA, ¡VAMOS LOCO!",
+            "es-SV": "SIGUIENTE RONDA, ¡DALE CHERO!",
+            "es-HN": "SIGUIENTE RONDA, ¡DALE MAJE!",
+            "es-NI": "SIGUIENTE RONDA, ¡DALE PUES!",
+            "es-BO": "SIGUIENTE RONDA, ¡YA PUES!",
+            "es-PY": "SIGUIENTE RONDA, ¡JAHA!",
+            "es-PR": "SIGUIENTE RONDA, ¡WEPA!",
+            "es-US": "SIGUIENTE RONDA, ¡VAMOS BRO!",
+            "en": "NEXT ROUND",
+            "en-US": "NEXT ROUND, LET'S GOOO",
+            "en-GB": "NEXT ROUND, MATE",
+            "en-AU": "NEXT ROUND, MATE",
+            "en-NZ": "NEXT ROUND, CHUR",
+            "en-IE": "NEXT ROUND, LAD",
+            "en-IN": "NEXT ROUND, CHALO",
+            "en-CA": "NEXT ROUND, EH",
+            "en-ZA": "NEXT ROUND, LEKKER",
+            "pt": "PRÓXIMO ROUND",
+            "pt-BR": "PRÓXIMO ROUND, BORA!",
+            "pt-PT": "PRÓXIMA RONDA, BORA!",
+            "fr": "MANCHE SUIVANTE",
+            "fr-FR": "MANCHE SUIVANTE, GO !",
+            "fr-CA": "PROCHAINE RONDE, GO !",
+            "fr-BE": "MANCHE SUIVANTE, ALLEZ !",
+            "fr-CH": "MANCHE SUIVANTE, HOPP !",
+            "de": "NÄCHSTE RUNDE",
+            "de-DE": "NÄCHSTE RUNDE, LOS!",
+            "de-AT": "NÄCHSTE RUNDE, AUF GEHT'S!",
+            "de-CH": "NÖCHSCHTI RUNDE, HOPP!",
+            "it": "PROSSIMO ROUND",
+            "it-IT": "PROSSIMO ROUND, ANDIAMO!",
+            "hi": "अगला राउंड, चलो!",
+            "ja": "つぎのラウンドいくぞ！",
+            "zh": "下一把！冲！",
+            "zh-TW": "下一場，衝啊！",
+            "zh-HK": "下一局，衝呀！",
+            "ko": "다음 판, 드가자!"
+        ])
     }
 
     // 🎬 Lore y Prólogo
     var loreButtonTitle: String {
-        switch languageCode {
-        case "en": return "LORE: THE SECRET OF LUMI"
-        case "pt": return "LORE: O SEGREDO DE LUMI"
-        case "fr": return "LORE : LE SECRET DE LUMI"
-        case "ja": return "ストーリー：ルミのひみつ"
-        case "de": return "LORE: LUMIS GEHEIMNIS"
-        case "hi": return "कहानी: लूमी का रहस्य"
-        case "it": return "LORE: IL SEGRETO DI LUMI"
-        case "zh": return "故事背景：卢米的秘密"
-        case "ko": return "스토리: 루미의 비밀"
-        default:   return "LORE: EL SECRETO DE LUMI"
-        }
+        pick([
+            "es": "LORE: EL SECRETO DE LUMI",
+            "en": "LORE: THE SECRET OF LUMI",
+            "pt": "LORE: O SEGREDO DE LUMI",
+            "fr": "LORE : LE SECRET DE LUMI",
+            "ja": "ストーリー：ルミのひみつ",
+            "de": "LORE: LUMIS GEHEIMNIS",
+            "hi": "कहानी: लूमी का रहस्य",
+            "it": "LORE: IL SEGRETO DI LUMI",
+            "zh": "故事背景：卢米的秘密",
+            "zh-TW": "故事背景：盧米的秘密",
+            "zh-HK": "故事背景：盧米的秘密",
+            "ko": "스토리: 루미의 비밀"
+        ])
     }
 
     // 👑 Victoria
     var victoryTitle: String {
-        switch languageCode {
-        case "en":
-            switch regionCode {
-            case "GB", "AU": return "BRILLIANT VICTORY! 👑"
-            case "IN": return "BOOYAH! VICTORY! 👑"
-            default: return "VICTORY! 👑"
-            }
-        case "pt": return regionCode == "BR" ? "MANDOU MUITO! 👑" : "VITÓRIA! 👑"
-        case "fr": return "VICTOIRE ! 👑"
-        case "ja": return "しょうり！やったー！ 👑"
-        case "de": return "SIEG! 👑"
-        case "hi": return "जीत गए! शानदार! 👑"
-        case "it": return "VITTORIA! 👑"
-        case "zh": return "胜利！太强了！ 👑"
-        case "ko": return "승리! 대단해요! 👑"
-        default:
-            switch regionCode {
-            case "CO": return "¡CORONAMOS, PARCE! 👑"
-            case "MX": return "¡GANAMOS, WEY! 👑"
-            case "AR": return "¡VAMOS TODAVÍA! 👑"
-            case "ES": return "¡VICTORIA BRUTAL! 👑"
-            default:   return "¡VICTORIA! 👑"
-            }
-        }
+        pick([
+            "es": "¡VICTORIA! 👑",
+            "es-CO": "¡CORONAMOS, PARCE! 👑",
+            "es-MX": "¡GANAMOS, WEY! ¡QUÉ CHIDO! 👑",
+            "es-AR": "¡VAMOS TODAVÍA! 👑",
+            "es-ES": "¡QUÉ PASADA, TÍO! 👑",
+            "es-PE": "¡QUÉ BRAVO, CAUSA! 👑",
+            "es-CL": "¡BACÁN, GANAMOS PO! 👑",
+            "es-VE": "¡QUÉ CHÉVERE, CHAMO! 👑",
+            "es-EC": "¡DE LEY, GANAMOS! 👑",
+            "es-UY": "¡DE MÁS, BO! 👑",
+            "es-CU": "¡ESTO ESTÁ EN CANDELA, ASERE! 👑",
+            "es-DO": "¡TÁ JEVI, MANITO! 👑",
+            "es-GT": "¡QUÉ CHILERO, GANAMOS! 👑",
+            "es-CR": "¡PURA VIDA, MAE! 👑",
+            "es-PA": "¡QUÉ PRITTY, GANAMOS! 👑",
+            "es-SV": "¡QUÉ CHIVO, CHERO! 👑",
+            "es-HN": "¡MACIZO, MAJE! 👑",
+            "es-NI": "¡TUANI, GANAMOS! 👑",
+            "es-BO": "¡DE UNA, GANAMOS, CHANGO! 👑",
+            "es-PY": "¡QUÉ PORÃ, GANAMOS! 👑",
+            "es-PR": "¡WEPA, BRUTAL! 👑",
+            "es-US": "¡GANAMOS, BRO! 👑",
+            "en": "VICTORY! 👑",
+            "en-US": "W! WE'RE GOATED 👑",
+            "en-GB": "BRILLIANT VICTORY! 👑",
+            "en-AU": "RIPPER WIN, MATE! 👑",
+            "en-NZ": "SWEET AS, BRO! 👑",
+            "en-IE": "SAVAGE WIN, LADS! 👑",
+            "en-IN": "BOOYAH! VICTORY! 👑",
+            "en-CA": "BEAUTY, EH! VICTORY 👑",
+            "en-ZA": "LEKKER WIN, BRU! 👑",
+            "pt": "VITÓRIA! 👑",
+            "pt-BR": "MITOU! 👑",
+            "pt-PT": "GANHÁMOS, PÁ! 👑",
+            "fr": "VICTOIRE ! 👑",
+            "fr-FR": "MASTERCLASS ! 👑",
+            "fr-CA": "C'EST ÉCŒURANT ! 👑",
+            "fr-BE": "C'EST TOP, UNE FOIS ! 👑",
+            "fr-CH": "ÇA JOUE BIEN ! 👑",
+            "de": "SIEG! 👑",
+            "de-DE": "EHRENMANN! SIEG 👑",
+            "de-AT": "LEIWAND, GEWONNEN! 👑",
+            "de-CH": "MEGA GUET, GWUNNE! 👑",
+            "it": "VITTORIA! 👑",
+            "it-IT": "GG, SPACCATO TUTTO! 👑",
+            "hi": "एकदम OP, भाई! 👑",
+            "ja": "カチカク！やったー！ 👑",
+            "zh": "秀麻了！ 👑",
+            "zh-TW": "太神啦！ 👑",
+            "zh-HK": "勁呀！贏咗！ 👑",
+            "ko": "미쳤다! 승리! 👑"
+        ])
     }
 
     // ⚡ Menú principal y botones
     var playButton: String {
-        switch languageCode {
-        case "en":
-            switch regionCode {
-            case "GB", "AU": return "LET'S GO, MATE! (PLAY)"
-            default: return "PLAY"
-            }
-        case "pt": return regionCode == "BR" ? "BORA JOGAR!" : "JOGAR"
-        case "fr": return "JOUER"
-        case "ja": return "あそぶ (PLAY)"
-        case "de": return "SPIELEN"
-        case "hi": return "खेलें (PLAY)"
-        case "it": return "GIOCA"
-        case "zh": return "开始游戏 (PLAY)"
-        case "ko": return "플레이 (PLAY)"
-        default:
-            switch regionCode {
-            case "CO": return "¡HÁGALE PUES!"
-            case "MX": return "¡ÓRALE, A JUGAR!"
-            case "AR": return "¡DALE, A JUGAR!"
-            case "ES": return "¡VAMOS ALLÁ!"
-            default:   return "JUGAR"
-            }
-        }
+        pick([
+            "es": "JUGAR",
+            "es-CO": "¡HÁGALE PUES!",
+            "es-MX": "¡ÓRALE, A JUGAR!",
+            "es-AR": "¡DALE, A JUGAR!",
+            "es-ES": "¡VAMOS ALLÁ!",
+            "es-PE": "¡A DARLE, PE!",
+            "es-CL": "¡VAMOS, PO!",
+            "es-VE": "¡DALE, CHAMO!",
+            "es-EC": "¡DE UNA, ÑAÑO!",
+            "es-UY": "¡DALE, BO!",
+            "es-CU": "¡ARRIBA, ASERE!",
+            "es-DO": "¡KLK, A JUGAR!",
+            "es-GT": "¡DALE, VOS!",
+            "es-CR": "¡DIAY, A JUGAR!",
+            "es-PA": "¡XOPA, A JUGAR!",
+            "es-SV": "¡VAYA PUES, A JUGAR!",
+            "es-HN": "¡DALE, MAJE!",
+            "es-NI": "¡DALE PUES!",
+            "es-BO": "¡YA PUES, A JUGAR!",
+            "es-PY": "¡JAHA, A JUGAR!",
+            "es-PR": "¡WEPA, A JUGAR!",
+            "es-US": "¡VAMOS, BRO!",
+            "en": "PLAY",
+            "en-US": "LET'S GOOO (PLAY)",
+            "en-GB": "LET'S GO, MATE! (PLAY)",
+            "en-AU": "LET'S GO, MATE! (PLAY)",
+            "en-NZ": "CHUR, LET'S GO! (PLAY)",
+            "en-IE": "C'MON LADS! (PLAY)",
+            "en-IN": "CHALO, BHAI! (PLAY)",
+            "en-CA": "LET'S GO, EH! (PLAY)",
+            "en-ZA": "LET'S GO, BRU! (PLAY)",
+            "pt": "JOGAR",
+            "pt-BR": "BORA JOGAR!",
+            "pt-PT": "BORA LÁ, PÁ!",
+            "fr": "JOUER",
+            "fr-FR": "C'EST PARTI !",
+            "fr-CA": "GO, ON Y VA !",
+            "fr-BE": "ALLEZ, ON JOUE !",
+            "fr-CH": "ALLEZ HOPP !",
+            "de": "SPIELEN",
+            "de-DE": "LOS GEHT'S!",
+            "de-AT": "AUF GEHT'S, OIDA!",
+            "de-CH": "HOPP, LOS!",
+            "it": "GIOCA",
+            "it-IT": "DAI, SI GIOCA!",
+            "hi": "चलो खेलें! (PLAY)",
+            "ja": "あそぶ！(PLAY)",
+            "zh": "冲！开玩 (PLAY)",
+            "zh-TW": "開玩啦 (PLAY)",
+            "zh-HK": "開波！(PLAY)",
+            "ko": "드가자! (PLAY)"
+        ])
     }
 
     var optionsButton: String {
-        switch languageCode {
-        case "en": return "OPTIONS & SETTINGS"
-        case "pt": return "OPÇÕES E AJUSTES"
-        case "fr": return "OPTIONS ET PARAMÈTRES"
-        case "ja": return "せってい (SETTINGS)"
-        case "de": return "EINSTELLUNGEN"
-        case "hi": return "सेटिंग्स (SETTINGS)"
-        case "it": return "OPZIONI E IMPOSTAZIONI"
-        case "zh": return "系统设置 (SETTINGS)"
-        case "ko": return "설정 (SETTINGS)"
-        default:   return "OPCIONES Y AJUSTES"
-        }
+        pick([
+            "es": "OPCIONES Y AJUSTES",
+            "en": "OPTIONS & SETTINGS",
+            "pt": "OPÇÕES E AJUSTES",
+            "fr": "OPTIONS ET PARAMÈTRES",
+            "ja": "せってい (SETTINGS)",
+            "de": "EINSTELLUNGEN",
+            "hi": "सेटिंग्स (SETTINGS)",
+            "it": "OPZIONI E IMPOSTAZIONI",
+            "zh": "系统设置 (SETTINGS)",
+            "zh-TW": "系統設定 (SETTINGS)",
+            "zh-HK": "系統設定 (SETTINGS)",
+            "ko": "설정 (SETTINGS)"
+        ])
     }
 
     var multiplayerButton: String {
-        switch languageCode {
-        case "en": return "ONLINE / LOCAL MULTIPLAYER"
-        case "pt": return "MULTIJOGADOR ONLINE / LOCAL"
-        case "fr": return "MULTIJOUEUR EN LIGNE / LOCAL"
-        case "ja": return "マルチプレイ (ONLINE / LOCAL)"
-        case "de": return "MEHRSPIELER ONLINE / LOKAL"
-        case "hi": return "मल्टीप्लेयर (ONLINE / LOCAL)"
-        case "it": return "MULTIGIOCA ONLINE / LOCALE"
-        case "zh": return "联机对战 (MULTIPLAYER)"
-        case "ko": return "멀티플레이 (MULTIPLAYER)"
-        default:   return "MULTIJUGADOR ONLINE / LOCAL"
-        }
+        pick([
+            "es": "MULTIJUGADOR ONLINE / LOCAL",
+            "en": "ONLINE / LOCAL MULTIPLAYER",
+            "pt": "MULTIJOGADOR ONLINE / LOCAL",
+            "fr": "MULTIJOUEUR EN LIGNE / LOCAL",
+            "ja": "マルチプレイ (ONLINE / LOCAL)",
+            "de": "MEHRSPIELER ONLINE / LOKAL",
+            "hi": "मल्टीप्लेयर (ONLINE / LOCAL)",
+            "it": "MULTIGIOCA ONLINE / LOCALE",
+            "zh": "联机对战 (MULTIPLAYER)",
+            "zh-TW": "連線對戰 (MULTIPLAYER)",
+            "zh-HK": "連線對戰 (MULTIPLAYER)",
+            "ko": "멀티플레이 (MULTIPLAYER)"
+        ])
     }
 
     var speed2XTitle: String {
-        switch languageCode {
-        case "en": return "⚡ 2X SPEED"
-        case "pt": return "⚡ VELOCIDADE 2X"
-        case "fr": return "⚡ VITESSE 2X"
-        case "ja": return "⚡ 2X スピード"
-        case "de": return "⚡ 2X TEMPO"
-        case "hi": return "⚡ 2X स्पीड"
-        case "it": return "⚡ VELOCITÀ 2X"
-        case "zh": return "⚡ 2倍速"
-        case "ko": return "⚡ 2배속"
-        default:   return "⚡ VELOCIDAD 2X"
-        }
+        pick([
+            "es": "⚡ VELOCIDAD 2X",
+            "es-CO": "⚡ A TODA MECHA 2X",
+            "es-MX": "⚡ BIEN RECIO 2X",
+            "es-AR": "⚡ A TODO TRAPO 2X",
+            "es-ES": "⚡ A TOPE 2X",
+            "es-PE": "⚡ A TODA CASA 2X",
+            "es-CL": "⚡ AL CHANCHO 2X",
+            "es-VE": "⚡ A MIL 2X",
+            "es-EC": "⚡ A MIL, ÑAÑO 2X",
+            "es-UY": "⚡ A FULL 2X",
+            "es-CU": "⚡ A MILLA 2X",
+            "es-DO": "⚡ A TODA, MANITO 2X",
+            "es-GT": "⚡ A TODO MECATE 2X",
+            "es-CR": "⚡ A MIL, MAE 2X",
+            "es-PA": "⚡ A FULL, LOCO 2X",
+            "es-SV": "⚡ A TODO DAR 2X",
+            "es-HN": "⚡ A TODO DAR, MAJE 2X",
+            "es-NI": "⚡ A TODO PALO 2X",
+            "es-BO": "⚡ A FULL, CHANGO 2X",
+            "es-PY": "⚡ A FULL, CHE 2X",
+            "es-PR": "⚡ A MIL, ACHO 2X",
+            "es-US": "⚡ FULL SPEED 2X",
+            "en": "⚡ 2X SPEED",
+            "en-US": "⚡ SPEEDRUN 2X",
+            "en-GB": "⚡ FLAT OUT 2X",
+            "en-AU": "⚡ FLAT CHAT 2X",
+            "en-NZ": "⚡ FULL NOISE 2X",
+            "en-IE": "⚡ LIKE THE CLAPPERS 2X",
+            "en-IN": "⚡ TURBO 2X",
+            "en-CA": "⚡ GIV'ER 2X",
+            "en-ZA": "⚡ FULL BLAST 2X",
+            "pt": "⚡ VELOCIDADE 2X",
+            "pt-BR": "⚡ NO GÁS 2X",
+            "pt-PT": "⚡ A FUNDO 2X",
+            "fr": "⚡ VITESSE 2X",
+            "fr-FR": "⚡ À FOND 2X",
+            "fr-CA": "⚡ À FOND LA CAISSE 2X",
+            "fr-BE": "⚡ À FOND 2X",
+            "fr-CH": "⚡ À FOND 2X",
+            "de": "⚡ 2X TEMPO",
+            "de-DE": "⚡ VOLLGAS 2X",
+            "de-AT": "⚡ VOLLGAS 2X",
+            "de-CH": "⚡ VOLLGAS 2X",
+            "it": "⚡ VELOCITÀ 2X",
+            "it-IT": "⚡ A MANETTA 2X",
+            "hi": "⚡ 2X फुल स्पीड",
+            "ja": "⚡ 2倍速でぶっとばせ",
+            "zh": "⚡ 2倍速起飞",
+            "zh-TW": "⚡ 2倍速衝衝衝",
+            "zh-HK": "⚡ 2倍速飛起",
+            "ko": "⚡ 2배속 풀악셀"
+        ])
     }
 }
 
@@ -8686,7 +9111,7 @@ struct GameOptionsSheet: View {
 
                         Section("🎮 Slangs de Infancia & Cultura Gamer Activa") {
                             VStack(alignment: .leading, spacing: 10) {
-                                Text("¡Cero traducciones corporativas aburridas! Cada idioma tiene modismos nostálgicos de videojuegos de la infancia y cultura de internet.")
+                                Text("¡Cero traducciones corporativas aburridas! Cada idioma tiene modismos nostálgicos de videojuegos y cultura de internet, y el slang cambia solo según la Región de tu iPhone (Colombia, México, Perú, Chile, Venezuela, Cuba y +35 países).")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
 
@@ -9101,36 +9526,44 @@ struct JumpButton: View {
 struct SlowMoCircleButton: View {
     @ObservedObject var model: GameModel
 
+    private var isReady: Bool { model.slowMoCharges > 0 || model.isSlowMotionActive }
+    private var label: String {
+        if model.isSlowMotionActive { return "\(Int(ceil(model.slowMoTimeRemaining)))s" }
+        if model.slowMoCharges > 1 { return "SLOW x\(model.slowMoCharges)" }
+        if model.slowMoCharges == 1 { return "SLOW" }
+        return "\(model.nextSlowMoMilestone / 1000)K"
+    }
+
     var body: some View {
         Button {
             model.toggleSlowMotion()
         } label: {
             VStack(spacing: 1) {
-                Image(systemName: model.isSlowMotionUnlocked ? "hourglass" : "lock.fill")
+                Image(systemName: isReady ? "hourglass" : "lock.fill")
                     .font(.system(size: 15, weight: .bold))
-                Text(model.isSlowMotionUnlocked ? "SLOW" : "CHRONO")
+                Text(label)
                     .font(.system(size: 7, weight: .black, design: .monospaced))
             }
             .foregroundStyle(
-                model.isSlowMotionActive ? .black : (model.isSlowMotionUnlocked ? Color.pink : Color.cyan.opacity(0.85))
+                model.isSlowMotionActive ? .black : (isReady ? Color.pink : Color.cyan.opacity(0.85))
             )
             .frame(width: 48, height: 48)
             .background(
                 model.isSlowMotionActive
                     ? AnyShapeStyle(Color.pink)
-                    : (model.isSlowMotionUnlocked ? AnyShapeStyle(Color.black.opacity(0.65)) : AnyShapeStyle(Color.blue.opacity(0.30))),
+                    : (isReady ? AnyShapeStyle(Color.black.opacity(0.65)) : AnyShapeStyle(Color.blue.opacity(0.30))),
                 in: Circle()
             )
             .overlay(
                 Circle().stroke(
-                    model.isSlowMotionActive ? Color.pink.opacity(0.95) : (model.isSlowMotionUnlocked ? Color.pink.opacity(0.60) : Color.cyan.opacity(0.55)),
+                    model.isSlowMotionActive ? Color.pink.opacity(0.95) : (isReady ? Color.pink.opacity(0.60) : Color.cyan.opacity(0.55)),
                     lineWidth: 1.5
                 )
             )
-            .shadow(color: (model.isSlowMotionUnlocked ? Color.pink : Color.cyan).opacity(model.isSlowMotionActive ? 0.6 : 0.20), radius: 6)
+            .shadow(color: (isReady ? Color.pink : Color.cyan).opacity(model.isSlowMotionActive ? 0.6 : 0.20), radius: 6)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(model.isSlowMotionUnlocked ? "Cámara Lenta Slow Motion" : "Chrono-Core Bloqueado")
+        .accessibilityLabel(isReady ? "Cámara Lenta Slow Motion, \(model.slowMoCharges) cargas" : "Slow Motion sin carga")
     }
 }
 
