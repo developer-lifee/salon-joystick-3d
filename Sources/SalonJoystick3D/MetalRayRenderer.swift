@@ -2527,7 +2527,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     ladderClimbTimer -= dt
                     if ladderClimbTimer <= 0 {
                         // Paso suave en peldaño metálico
-                        audio.playWaterDisturbance(intensity: 0.08)
+                        audio.playLadderStep(intensity: 0.45)
                         ladderClimbTimer = 0.32
                     }
                     if playerPosition.y >= 5.50 {
@@ -2544,7 +2544,7 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                     ladderClimbTimer -= dt
                     if ladderClimbTimer <= 0 {
                         // Paso suave en peldaño metálico
-                        audio.playWaterDisturbance(intensity: 0.08)
+                        audio.playLadderStep(intensity: 0.45)
                         ladderClimbTimer = 0.32
                     }
                     if playerPosition.y <= 0.15 {
@@ -2851,8 +2851,12 @@ final class MetalRayRenderer: NSObject, MTKViewDelegate {
                 if proposed.y >= maxSubCeilingY {
                     proposed.y = maxSubCeilingY
                     if verticalVelocity > 0 {
+                        // Solo un golpe suave al chocar de verdad (no cada frame mientras la flotación empuja contra el techo)
+                        if verticalVelocity > 1.2 && characterBumpAudioCooldown <= 0 {
+                            characterBumpAudioCooldown = 0.9
+                            audio.playUnderwaterGlug(intensity: 0.2)
+                        }
                         verticalVelocity = 0
-                        audio.playWaterDisturbance(intensity: 0.35)
                     }
                 }
                 // Asistencia de orientación: si nada hacia arriba cerca del techo en la cámara 1, guiar suavemente hacia el pozo (-1.5, -1.5)

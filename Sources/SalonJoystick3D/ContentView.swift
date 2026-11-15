@@ -591,7 +591,7 @@ struct ContentView: View {
                         HStack(spacing: 8) {
                             Image(systemName: "lock.shield.fill")
                                 .foregroundStyle(.cyan)
-                            Text("⏳ SLOW-MO SIN CARGA: ganas una cada 5.000 pts (próxima a \(model.nextSlowMoMilestone.formatted()) pts). Los Cofres 💎 bajo el agua dan una extra y +50 HP.")
+                            Text("⏳ SLOW-MO SIN SEGUNDOS: ganas 8 s cada 5.000 pts (próximos a \(model.nextSlowMoMilestone.formatted()) pts) y se acumulan. Úsalos de a poquitos: tócalo otra vez para pausarlo.")
                                 .font(.system(size: 11, weight: .bold))
                                 .foregroundStyle(.white)
                         }
@@ -1931,10 +1931,11 @@ final class GameModel: ObservableObject {
 
     // ⏳ Slow-Mo por cargas: se gana una cada 5.000 pts y dura unos segundos
     static let slowMoMilestoneStep = 5000
-    static let slowMoDuration: Double = 8
-    static let slowMoMaxCharges = 3
-    @Published var slowMoCharges = 0
-    @Published var slowMoTimeRemaining: Double = 0
+    /// Segundos de cámara lenta que da cada hito (5k, 10k…). Se acumulan en una reserva y se gastan a gusto.
+    static let slowMoSecondsPerMilestone: Double = 8
+    static let slowMoMaxReserve: Double = 24
+    /// Reserva acumulada de segundos de Slow-Mo (se pausa al apagarlo y se puede volver a usar).
+    @Published var slowMoReserve: Double = 0
     @Published var nextSlowMoMilestone = GameModel.slowMoMilestoneStep
     private var slowMoTimer: Timer?
     @Published var isSlowMotionUnlocked: Bool = UserDefaults.standard.bool(forKey: "isSlowMotionUnlocked") {
@@ -2381,7 +2382,7 @@ final class GameModel: ObservableObject {
         guard !isSlowMotionUnlocked else { return }
         isSlowMotionUnlocked = true
         playerHealth = maxPlayerHealth
-        slowMoCharges = min(Self.slowMoMaxCharges, slowMoCharges + 1)
+        slowMoReserve = min(Self.slowMoMaxReserve, slowMoReserve + Self.slowMoSecondsPerMilestone)
         audio.playLaserIgnition()
         audio.playLanding(intensity: 1.0)
         let notif = UINotificationFeedbackGenerator()
@@ -2420,7 +2421,7 @@ final class GameModel: ObservableObject {
         if playerScore < nextSlowMoMilestone - step {
             // El puntaje bajó (nueva partida): se reinician hitos y cargas
             nextSlowMoMilestone = (playerScore / step + 1) * step
-            slowMoCharges = 0
+            slowMoReserve = 0
             return
         }
         var earned = 0
@@ -2433,10 +2434,10 @@ final class GameModel: ObservableObject {
     }
 
     func grantSlowMoCharges(_ count: Int, reason: String) {
-        slowMoCharges = min(Self.slowMoMaxCharges, slowMoCharges + count)
+        slowMoReserve = min(Self.slowMoMaxReserve, slowMoReserve + Double(count) * Self.slowMoSecondsPerMilestone)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-            chestRewardBannerText = "⏳ ¡SLOW-MO CARGADO! (\(reason)) · Tócalo para 8 s de cámara lenta"
+            chestRewardBannerText = "⏳ +\(Int(Self.slowMoSecondsPerMilestone) * count) s DE SLOW-MO (\(reason)) · Reserva: \(Int(self.slowMoReserve.rounded(.up))) s"
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { [weak self] in
             withAnimation {
@@ -2450,11 +2451,11 @@ final class GameModel: ObservableObject {
     func toggleSlowMotion(fromNetwork: Bool = false) {
         if !fromNetwork {
             if isSlowMotionActive {
-                // Terminarlo antes de tiempo (la carga ya se gastó)
+                // Pausarlo: los segundos que sobran quedan en la reserva
                 setSlowMotion(false)
                 return
             }
-            guard slowMoCharges > 0 else {
+            guard slowMoReserve >= 0.3 else {
                 showsChronoLockBanner = true
                 UINotificationFeedbackGenerator().notificationOccurred(.warning)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 4.5) { [weak self] in
@@ -2464,7 +2465,6 @@ final class GameModel: ObservableObject {
                 }
                 return
             }
-            slowMoCharges -= 1
             setSlowMotion(true)
             return
         }
@@ -2479,12 +2479,12 @@ final class GameModel: ObservableObject {
             // Lo apagó otra parte del juego (derrota, nueva partida…)
             slowMoTimer?.invalidate()
             slowMoTimer = nil
-            slowMoTimeRemaining = 0
             return
         }
         guard gameState != .paused else { return }
-        slowMoTimeRemaining = max(0, slowMoTimeRemaining - 0.1)
-        if slowMoTimeRemaining <= 0 {
+        slowMoReserve = max(0, slowMoReserve - 0.1)
+        if slowMoReserve <= 0.001 {
+            slowMoReserve = 0
             setSlowMotion(false)
         }
     }
@@ -2496,7 +2496,6 @@ final class GameModel: ObservableObject {
 
         slowMoTimer?.invalidate()
         slowMoTimer = nil
-        slowMoTimeRemaining = active ? Self.slowMoDuration : 0
         if active {
             let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
                 // El Timer corre en el RunLoop principal
@@ -5465,6 +5464,7 @@ final class ChiptuneAudioEngine {
     private var glideBuffer: AVAudioPCMBuffer?
     private var splashBuffers: [AVAudioPCMBuffer] = []
     private var landingBuffers: [AVAudioPCMBuffer] = []
+    private var ladderStepBuffers: [AVAudioPCMBuffer] = []
     private var laserIgnitionBuffer: AVAudioPCMBuffer?
     private var laserPlayerHitBuffer: AVAudioPCMBuffer?
     private var laserReflectionBuffer: AVAudioPCMBuffer?
@@ -5495,6 +5495,7 @@ final class ChiptuneAudioEngine {
     private var airPumpStrokeBuffer: AVAudioPCMBuffer?
     private var nextSplash = 0
     private var nextLanding = 0
+    private var nextLadderStep = 0
     private var nodesAttached = false
     private var started = false
     private var isPaused = false
@@ -5651,6 +5652,7 @@ final class ChiptuneAudioEngine {
                     makeSplashBuffer(variant: 2)
                 ].compactMap { $0 }
                 landingBuffers = [makeLandingBuffer(variant: 0), makeLandingBuffer(variant: 1)].compactMap { $0 }
+                ladderStepBuffers = (0..<4).compactMap { makeLadderStepBuffer(variant: $0) }
                 laserIgnitionBuffer = makeLaserIgnitionBuffer()
                 laserPlayerHitBuffer = makeLaserPlayerHitBuffer()
                 laserReflectionBuffer = makeLaserReflectionBuffer()
@@ -5957,6 +5959,21 @@ final class ChiptuneAudioEngine {
             // Foley de impacto de aterrizaje balanceado (-10 dB de BGM)
             self.landingNode.volume = 0.22 + max(0, min(1, intensity)) * 0.12
             self.landingNode.scheduleBuffer(self.landingBuffers[index])
+            if !self.landingNode.isPlaying {
+                self.landingNode.play()
+            }
+        }
+    }
+
+    /// 🪜 Paso en peldaño metálico: "tonk" corto de tubo hueco + roce de suela (alterna mano/pie).
+    func playLadderStep(intensity: Float = 0.5) {
+        audioQueue.async { [weak self] in
+            guard let self else { return }
+            guard self.started, self.effectsEnabled, !self.isPaused, !self.ladderStepBuffers.isEmpty else { return }
+            let index = self.nextLadderStep % self.ladderStepBuffers.count
+            self.nextLadderStep += 1
+            self.landingNode.volume = 0.16 + max(0, min(1, intensity)) * 0.10
+            self.landingNode.scheduleBuffer(self.ladderStepBuffers[index])
             if !self.landingNode.isPlaying {
                 self.landingNode.play()
             }
@@ -6915,6 +6932,45 @@ final class ChiptuneAudioEngine {
             let sample = Float(body + contact)
             channels[0][frame] = sample
             channels[1][frame] = sample * 0.92
+        }
+        return buffer
+    }
+
+    private func makeLadderStepBuffer(variant: Int) -> AVAudioPCMBuffer? {
+        let duration = 0.16
+        let frameCount = AVAudioFrameCount(format.sampleRate * duration)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
+              let channels = buffer.floatChannelData else {
+            return nil
+        }
+        buffer.frameLength = frameCount
+
+        // Tubo metálico hueco: modos inarmónicos (1 : 2.76 : 5.40) que decaen rápido, sin glissando.
+        let base = [610.0, 655.0, 590.0, 640.0][variant % 4]
+        let partials: [(ratio: Double, amp: Double, decay: Double)] = [
+            (1.00, 0.20, 34.0),
+            (2.76, 0.10, 48.0),
+            (5.40, 0.05, 70.0)
+        ]
+        let pan = variant % 2 == 0 ? 0.88 : 1.0
+        var seed = UInt32(0x1ADD_E2A5) &+ UInt32(variant * 4099)
+        var lowNoise = 0.0
+        for frame in 0..<Int(frameCount) {
+            seed = seed &* 1_664_525 &+ 1_013_904_223
+            let noise = Double(seed & 0xFFFF) / 32_767.5 - 1.0
+            lowNoise = lowNoise * 0.70 + noise * 0.30
+            let time = Double(frame) / format.sampleRate
+            let attack = min(1.0, time / 0.0015)
+            var ring = 0.0
+            for p in partials {
+                ring += sin(2 * Double.pi * base * p.ratio * time) * exp(-time * p.decay) * p.amp
+            }
+            // Golpe sordo de la suela + roce corto
+            let thud = sin(2 * Double.pi * 150.0 * time) * exp(-time * 45.0) * 0.16
+            let scuff = lowNoise * exp(-time * 60.0) * 0.20
+            let sample = Float((ring + thud + scuff) * attack)
+            channels[0][frame] = sample * Float(pan)
+            channels[1][frame] = sample * Float(1.88 - pan)
         }
         return buffer
     }
@@ -9548,11 +9604,9 @@ struct JumpButton: View {
 struct SlowMoCircleButton: View {
     @ObservedObject var model: GameModel
 
-    private var isReady: Bool { model.slowMoCharges > 0 || model.isSlowMotionActive }
+    private var isReady: Bool { model.slowMoReserve >= 0.3 || model.isSlowMotionActive }
     private var label: String {
-        if model.isSlowMotionActive { return "\(Int(ceil(model.slowMoTimeRemaining)))s" }
-        if model.slowMoCharges > 1 { return "SLOW x\(model.slowMoCharges)" }
-        if model.slowMoCharges == 1 { return "SLOW" }
+        if isReady { return "\(Int(ceil(model.slowMoReserve)))s" }
         return "\(model.nextSlowMoMilestone / 1000)K"
     }
 
@@ -9585,7 +9639,7 @@ struct SlowMoCircleButton: View {
             .shadow(color: (isReady ? Color.pink : Color.cyan).opacity(model.isSlowMotionActive ? 0.6 : 0.20), radius: 6)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(isReady ? "Cámara Lenta Slow Motion, \(model.slowMoCharges) cargas" : "Slow Motion sin carga")
+        .accessibilityLabel(isReady ? "Cámara Lenta Slow Motion, \(Int(ceil(model.slowMoReserve))) segundos" : "Slow Motion sin carga")
     }
 }
 
